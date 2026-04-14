@@ -4,7 +4,9 @@
   "description": "Backend y widget del concierge de IA para Amarte Suite",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "railway:up": "railway up",
+    "railway:logs": "railway logs"
   },
   "engines": {
     "node": ">=18.0.0"
