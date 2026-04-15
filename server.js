@@ -136,6 +136,8 @@ app.post("/chat", async (req, res) => {
     const rawText = completion.choices[0]?.message?.content ?? "";
     // Separa el texto visible y las opciones estructuradas
     const { reply, options } = parseAssistantReply(rawText);
+    // Log para depuración (ayuda mucho en Railway)
+    console.log(`IA respondió a ${safeRoom}: ${options.length} botones generados.`);
     // Devuelve JSON con reply y options al cliente
     return res.json({ reply, options });
   } catch (err) {
