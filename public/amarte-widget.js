@@ -200,6 +200,7 @@
     setTyping(true);
     sendBtn.disabled = true;
     micBtn.disabled = true;
+    inputEl.disabled = true;
 
     var roomName = document.title || "";
     var pageUrl = window.location.href || "";
