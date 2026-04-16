@@ -8,6 +8,7 @@ const {
   formatPricingForPrompt,
   formatSuiteCategoriesForPrompt,
 } = require("./amarteCatalog");
+const { loadMartinaMemoriaForPrompt } = require("./loadMemoria");
 
 /**
  * @typedef {{
@@ -40,6 +41,15 @@ function buildMartinaSystemPrompt(context) {
 
   const catalogSuites = formatSuiteCategoriesForPrompt();
   const catalogPricing = formatPricingForPrompt();
+  const memoriaMd = loadMartinaMemoriaForPrompt();
+  const memoriaBlock = memoriaMd
+    ? `## Memoria operativa (políticas y contexto)
+La siguiente información es de apoyo. **No sustituye** las tarifas del catálogo al cotizar.
+
+${memoriaMd}
+
+`
+    : "";
 
   const suiteFromUrlBlock =
     detectedSuiteLabel && detectedSuiteUrl
@@ -93,11 +103,14 @@ Pasos para reservar (${reservationFlow.note}):
 ${reservationFlow.steps.map((s, i) => `${i + 1}. ${s}`).join("\n")}
 
 Para cotizar un valor exacto necesitas al menos: tipo de suite o plan, duración (4 h, 6 h, 8 h, 12 h o día hotelero), y si la fecha es domingo–jueves o viernes–sábado (según el **día en Bogotá** de la reserva). Si falta algo, pregunta solo lo mínimo.
-Usa EXACTAMENTE las tarifas del catálogo siguiente (COP). No inventes precios ni descuentos.
+
+## Tarifas de lista (única fuente para cifras en el chat)
+Usa **EXCLUSIVAMENTE** las tarifas del catálogo siguiente (COP) cuando menciones montos al usuario. No inventes precios ni descuentos. No cites precios de landings promocionales, redes ni memoria que **difieran** de este catálogo: esas ofertas se consultan en la web (${contact.promotionsUrl}) o con el botón PROMOCIONES del chat.
+Si preguntan por una promo concreta, puedes decir que en la página de promociones ven condiciones y formulario, y ofrecer el enlace; la cotización verbal de **lista** sigue siendo la del bloque siguiente.
 
 ${catalogPricing}
 
-## Ubicación y cierre
+${memoriaBlock}## Ubicación y cierre
 - Dirección: ${location.address}
 - Mapa / ubicación: ${location.mapsUrl}
 Antes de cerrar un tema, pregunta brevemente si necesitan algo más.
@@ -116,6 +129,7 @@ Al final de CADA respuesta, después del texto para el usuario, incluye SIEMPRE 
 [OPTIONS]
 [
   {"label": "📅 Reservar ahora", "url": "${contact.reservationsUrl}"},
+  {"label": "🎁 PROMOCIONES", "url": "${contact.promotionsUrl}"},
   {"label": "💳 Pago seguro Wompi", "url": "${payment.checkoutUrl}"},
   {"label": "💬 WhatsApp", "url": "${contact.whatsappUrl}"}
 ]

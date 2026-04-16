@@ -23,6 +23,43 @@
     BACKEND_URL = window.location.origin;
   }
 
+  /** URLs de acciones rápidas (alineadas con config/amarteCatalog.js). Sustituibles vía window.* */
+  var DEFAULT_QUICK_WHATSAPP = "https://wa.me/573007416683";
+  var DEFAULT_QUICK_RESERVE = "https://amartesuite.com/suites/";
+  var DEFAULT_QUICK_PROMOS = "https://amartesuite.com/suite-jacuzzi-mejor-precio/";
+  var DEFAULT_QUICK_TEL = "tel:+573013307909";
+
+  /**
+   * @param {string} globalProp - nombre de propiedad en window
+   * @param {string} fallback
+   */
+  function pickQuickUrl(globalProp, fallback) {
+    try {
+      var g = window[globalProp];
+      if (typeof g === "string" && g.trim()) {
+        return g.trim();
+      }
+    } catch (e0) {}
+    return fallback;
+  }
+
+  /**
+   * @param {string} href
+   * @param {string} label
+   * @param {string} [extraClass]
+   */
+  function buildQuickLink(href, label, extraClass) {
+    var a = document.createElement("a");
+    a.className = "amarte-opt-link" + (extraClass ? " " + extraClass : "");
+    a.href = href;
+    if (href.indexOf("tel:") !== 0) {
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+    }
+    a.textContent = label;
+    return a;
+  }
+
   var AMARTE_CONV_ID_KEY = "amarte_conversation_id";
   var CONVERSATION_ID_RE =
     /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -217,7 +254,11 @@
       ".amarte-opt-link{display:inline-block;padding:8px 12px;border-radius:999px;border:1px solid #D81B60;" +
       "color:#1A1A3D;text-decoration:none;font-size:0.85rem;background:#fff;transition:background 0.2s,color 0.2s;}" +
       ".amarte-opt-link:hover{background:#D81B60;color:#ffffff;}" +
-      ".amarte-widget-footer{display:flex;gap:8px;padding:12px;border-top:1px solid #eee;background:#fff;}" +
+      ".amarte-widget-footer-wrap{flex-shrink:0;display:flex;flex-direction:column;border-top:1px solid #eee;background:#fff;}" +
+      ".amarte-widget-footer-row{display:flex;gap:8px;padding:12px 12px 8px;background:#fff;align-items:center;}" +
+      ".amarte-widget-quick-row{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;padding:0 12px 12px;background:#fff;}" +
+      ".amarte-widget-quick-row .amarte-opt-link{text-align:center;}" +
+      "@media (min-width:769px){.amarte-quick-call{display:none !important;}}" +
       ".amarte-widget-input{flex:1;border:1px solid #ccc;border-radius:999px;padding:10px 14px;font-size:0.95rem;outline:none;}" +
       ".amarte-widget-input:focus{border-color:#D81B60;}" +
       ".amarte-widget-mic{background:#fff;color:#1A1A3D;border:2px solid #D81B60;border-radius:999px;" +
@@ -636,9 +677,13 @@
     typingEl.textContent = "El concierge está escribiendo…";
     typingEl.style.display = "none";
 
-    // Pie con input y enviar
-    var footer = document.createElement("div");
-    footer.className = "amarte-widget-footer";
+    // Pie: fila de escritura + accesos rápidos (WhatsApp, Llamar solo móvil, Reservar, PROMOCIONES)
+    var footerWrap = document.createElement("div");
+    footerWrap.className = "amarte-widget-footer-wrap";
+
+    var footerRow = document.createElement("div");
+    footerRow.className = "amarte-widget-footer-row";
+
     inputEl = document.createElement("input");
     inputEl.type = "text";
     inputEl.className = "amarte-widget-input";
@@ -657,13 +702,31 @@
     sendBtn.className = "amarte-widget-send";
     sendBtn.textContent = "Enviar";
 
-    footer.appendChild(inputEl);
-    footer.appendChild(micBtn);
-    footer.appendChild(sendBtn);
+    footerRow.appendChild(inputEl);
+    footerRow.appendChild(micBtn);
+    footerRow.appendChild(sendBtn);
+
+    var quickRow = document.createElement("div");
+    quickRow.className = "amarte-widget-quick-row";
+
+    var urlWa = pickQuickUrl("AMARTE_QUICK_WHATSAPP_URL", DEFAULT_QUICK_WHATSAPP);
+    var urlRes = pickQuickUrl("AMARTE_QUICK_RESERVATIONS_URL", DEFAULT_QUICK_RESERVE);
+    var urlPromos = pickQuickUrl("AMARTE_PROMOCIONES_URL", DEFAULT_QUICK_PROMOS);
+    var telHref = pickQuickUrl("AMARTE_QUICK_CALL_TEL", DEFAULT_QUICK_TEL);
+
+    quickRow.appendChild(buildQuickLink(urlWa, "WhatsApp", ""));
+    var callLink = buildQuickLink(telHref, "Llamar", "amarte-quick-call");
+    callLink.setAttribute("aria-label", "Llamar por teléfono");
+    quickRow.appendChild(callLink);
+    quickRow.appendChild(buildQuickLink(urlRes, "Reservar", ""));
+    quickRow.appendChild(buildQuickLink(urlPromos, "PROMOCIONES", ""));
+
+    footerWrap.appendChild(footerRow);
+    footerWrap.appendChild(quickRow);
 
     panel.appendChild(header);
     panel.appendChild(messagesEl);
-    panel.appendChild(footer);
+    panel.appendChild(footerWrap);
 
     rootEl.appendChild(bubble);
     rootEl.appendChild(panel);
