@@ -33,7 +33,7 @@
   var typingEl = null;
 
   /**
-   * Inserta en el documento los estilos CSS del widget (tema lujo blanco/negro/dorado).
+   * Inserta en el documento los estilos CSS del widget (paleta Amarte: magenta, navy, blanco).
    */
   function injectStyles() {
     // Crea un elemento style para inyectar reglas CSS sin archivo externo
@@ -44,39 +44,42 @@
     style.textContent =
       /* CSS del widget Amarte */
       ".amarte-widget-root{font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;}" +
-      ".amarte-widget-bubble{position:fixed;right:24px;bottom:24px;width:60px;height:60px;border-radius:50%;" +
-      "background:linear-gradient(145deg,#d4af37,#b8962e);color:#1a1a1a;border:none;cursor:pointer;" +
-      "box-shadow:0 8px 24px rgba(0,0,0,0.25);z-index:99998;display:flex;align-items:center;justify-content:center;" +
-      "transition:transform 0.2s ease,box-shadow 0.2s ease;}" +
-      ".amarte-widget-bubble:hover{transform:scale(1.05);box-shadow:0 12px 28px rgba(0,0,0,0.3);}" +
-      ".amarte-widget-bubble svg{width:28px;height:28px;}" +
-      ".amarte-widget-panel{position:fixed;right:24px;bottom:96px;width:min(380px,calc(100vw - 32px));" +
+      ".amarte-widget-bubble{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);" +
+      "min-height:48px;padding:12px 22px;border-radius:8px;border:none;cursor:pointer;" +
+      "background:linear-gradient(135deg,#E91E63,#D81B60 55%,#AD1457);color:#ffffff;" +
+      "font-size:0.95rem;font-weight:600;letter-spacing:0.02em;white-space:nowrap;" +
+      "box-shadow:0 8px 24px rgba(216,27,96,0.35);z-index:99998;display:flex;align-items:center;justify-content:center;" +
+      "transition:transform 0.2s ease,box-shadow 0.2s ease,background 0.2s ease;}" +
+      "@media (max-width:400px){.amarte-widget-bubble{font-size:0.85rem;padding:10px 16px;white-space:normal;text-align:center;max-width:calc(100vw - 32px);}}" +
+      ".amarte-widget-bubble:hover{transform:translateX(-50%) scale(1.03);" +
+      "box-shadow:0 12px 32px rgba(26,26,61,0.35);background:linear-gradient(135deg,#1A1A3D,#2a2a52);color:#ffffff;}" +
+      ".amarte-widget-panel{position:fixed;left:50%;bottom:96px;width:min(380px,calc(100vw - 32px));" +
       "max-height:min(560px,calc(100vh - 120px));background:#ffffff;border:1px solid #e8e8e8;" +
       "border-radius:16px;box-shadow:0 16px 48px rgba(0,0,0,0.18);z-index:99999;display:flex;flex-direction:column;" +
-      "overflow:hidden;opacity:0;transform:translateY(12px) scale(0.98);pointer-events:none;" +
+      "overflow:hidden;opacity:0;transform:translate(-50%,12px) scale(0.98);pointer-events:none;" +
       "transition:opacity 0.25s ease,transform 0.25s ease;}" +
-      ".amarte-widget-panel.amarte-open{opacity:1;transform:translateY(0) scale(1);pointer-events:auto;}" +
-      ".amarte-widget-header{background:linear-gradient(90deg,#1a1a1a,#2a2a2a);color:#fff;padding:16px 18px;" +
-      "display:flex;align-items:center;justify-content:space-between;border-bottom:2px solid #d4af37;}" +
-      ".amarte-widget-title{font-family:Georgia,'Times New Roman',serif;font-size:1.1rem;font-weight:600;letter-spacing:0.02em;}" +
-      ".amarte-widget-sub{color:#d4af37;font-size:0.75rem;margin-top:4px;}" +
+      ".amarte-widget-panel.amarte-open{opacity:1;transform:translate(-50%,0) scale(1);pointer-events:auto;}" +
+      ".amarte-widget-header{background:linear-gradient(90deg,#1A1A3D,#2a2a52);color:#fff;padding:16px 18px;" +
+      "display:flex;align-items:center;justify-content:space-between;border-bottom:2px solid #D81B60;}" +
+      ".amarte-widget-title{font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:1.1rem;font-weight:600;letter-spacing:0.02em;}" +
+      ".amarte-widget-sub{color:rgba(255,255,255,0.88);font-size:0.75rem;margin-top:4px;}" +
       ".amarte-widget-close{background:transparent;border:none;color:#fff;cursor:pointer;padding:4px;line-height:1;}" +
       ".amarte-widget-messages{flex:1;overflow-y:auto;padding:16px;background:#fafafa;min-height:200px;}" +
       ".amarte-msg{margin-bottom:12px;display:flex;flex-direction:column;align-items:flex-start;}" +
       ".amarte-msg-user{align-items:flex-end;}" +
       ".amarte-bubble-inner{max-width:85%;padding:10px 14px;border-radius:14px;font-size:0.95rem;line-height:1.45;}" +
       ".amarte-msg-bot .amarte-bubble-inner{background:#fff;border:1px solid #e0e0e0;color:#1a1a1a;}" +
-      ".amarte-msg-user .amarte-bubble-inner{background:linear-gradient(145deg,#d4af37,#c9a227);color:#1a1a1a;}" +
+      ".amarte-msg-user .amarte-bubble-inner{background:linear-gradient(145deg,#E91E63,#D81B60);color:#ffffff;}" +
       ".amarte-typing{font-size:0.85rem;color:#666;font-style:italic;padding:4px 0 8px;}" +
       ".amarte-options{margin-top:8px;display:flex;flex-wrap:wrap;gap:8px;}" +
-      ".amarte-opt-link{display:inline-block;padding:8px 12px;border-radius:999px;border:1px solid #d4af37;" +
-      "color:#1a1a1a;text-decoration:none;font-size:0.85rem;background:#fff;transition:background 0.2s,color 0.2s;}" +
-      ".amarte-opt-link:hover{background:#d4af37;color:#1a1a1a;}" +
+      ".amarte-opt-link{display:inline-block;padding:8px 12px;border-radius:999px;border:1px solid #D81B60;" +
+      "color:#1A1A3D;text-decoration:none;font-size:0.85rem;background:#fff;transition:background 0.2s,color 0.2s;}" +
+      ".amarte-opt-link:hover{background:#D81B60;color:#ffffff;}" +
       ".amarte-widget-footer{display:flex;gap:8px;padding:12px;border-top:1px solid #eee;background:#fff;}" +
       ".amarte-widget-input{flex:1;border:1px solid #ccc;border-radius:999px;padding:10px 14px;font-size:0.95rem;outline:none;}" +
-      ".amarte-widget-input:focus{border-color:#d4af37;}" +
-      ".amarte-widget-send{background:#1a1a1a;color:#fff;border:none;border-radius:999px;padding:10px 18px;cursor:pointer;font-weight:600;}" +
-      ".amarte-widget-send:hover{background:#333;}" +
+      ".amarte-widget-input:focus{border-color:#D81B60;}" +
+      ".amarte-widget-send{background:#1A1A3D;color:#fff;border:none;border-radius:999px;padding:10px 18px;cursor:pointer;font-weight:600;}" +
+      ".amarte-widget-send:hover{background:#2a2a52;}" +
       ".amarte-widget-send:disabled{opacity:0.5;cursor:not-allowed;}";
 
     // Añade el style al head del documento
@@ -258,12 +261,8 @@
     var bubble = document.createElement("button");
     bubble.type = "button";
     bubble.className = "amarte-widget-bubble";
-    bubble.setAttribute("aria-label", "Abrir chat Amarte Suite");
-    // Icono simple de chat en SVG inline
-    bubble.innerHTML =
-      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">' +
-      '<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>' +
-      "</svg>";
+    bubble.setAttribute("aria-label", "Pregúntale a Martina — abrir chat Amarte Suite");
+    bubble.textContent = "Pregúntale a Martina";
 
     // Panel del chat (inicialmente oculto vía clase)
     var panel = document.createElement("div");
