@@ -45,15 +45,15 @@
       /* CSS del widget Amarte */
       ".amarte-widget-root{font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;}" +
       ".amarte-widget-bubble{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);" +
-      "min-height:48px;padding:12px 22px;border-radius:8px;border:none;cursor:pointer;" +
+      "min-height:72px;padding:18px 28px;border-radius:10px;border:none;cursor:pointer;" +
       "background:linear-gradient(135deg,#E91E63,#D81B60 55%,#AD1457);color:#ffffff;" +
-      "font-size:0.95rem;font-weight:600;letter-spacing:0.02em;white-space:nowrap;" +
+      "font-size:1.9rem;font-weight:600;letter-spacing:0.02em;white-space:nowrap;" +
       "box-shadow:0 8px 24px rgba(216,27,96,0.35);z-index:99998;display:flex;align-items:center;justify-content:center;" +
       "transition:transform 0.2s ease,box-shadow 0.2s ease,background 0.2s ease;}" +
-      "@media (max-width:400px){.amarte-widget-bubble{font-size:0.85rem;padding:10px 16px;white-space:normal;text-align:center;max-width:calc(100vw - 32px);}}" +
+      "@media (max-width:400px){.amarte-widget-bubble{font-size:1.7rem;padding:14px 18px;white-space:normal;text-align:center;max-width:calc(100vw - 32px);}}" +
       ".amarte-widget-bubble:hover{transform:translateX(-50%) scale(1.03);" +
       "box-shadow:0 12px 32px rgba(26,26,61,0.35);background:linear-gradient(135deg,#1A1A3D,#2a2a52);color:#ffffff;}" +
-      ".amarte-widget-panel{position:fixed;left:50%;bottom:96px;width:min(380px,calc(100vw - 32px));" +
+      ".amarte-widget-panel{position:fixed;left:50%;bottom:140px;width:min(380px,calc(100vw - 32px));" +
       "max-height:min(560px,calc(100vh - 120px));background:#ffffff;border:1px solid #e8e8e8;" +
       "border-radius:16px;box-shadow:0 16px 48px rgba(0,0,0,0.18);z-index:99999;display:flex;flex-direction:column;" +
       "overflow:hidden;opacity:0;transform:translate(-50%,12px) scale(0.98);pointer-events:none;" +
