@@ -7,6 +7,8 @@ const express = require("express");
 const cors = require("cors");
 // Importa el cliente oficial de OpenAI para llamar a la API de chat
 const OpenAI = require("openai");
+// Prompt de sistema de Martina y catálogo comercial
+const { buildMartinaSystemPrompt } = require("./config/martinaSystemPrompt");
 
 // Lee el puerto desde variables de entorno o usa 3000 por defecto
 const PORT = process.env.PORT || 3000;
@@ -104,25 +106,11 @@ app.post("/chat", async (req, res) => {
     // Texto seguro para URL de página (fallback vacío)
     const safePage =
       typeof pageUrl === "string" && pageUrl.trim() ? pageUrl.trim() : "sin especificar";
-    // Construye el prompt de sistema con el contexto solicitado
-    const systemPrompt =
-  `Eres el concierge de lujo de Amarte Suite. Eres elegante, servicial y persuasivo. 
-  El cliente está viendo la suite: ${safeRoom}. 
-  La página actual es: ${safePage}. 
-  
-  REGLAS DE ORO:
-  1. Si el cliente quiere reservar, ofrece el botón de "Reservar en Línea".
-  2. Si tiene dudas complejas, ofrece el botón de "Hablar por WhatsApp".
-  3. No menciones que eres una IA a menos que te pregunten directamente.
-  4. Mantén tus respuestas breves (máximo 3 frases) para que se lean bien en móviles.
-
-  IMPORTANTE: Al final de cada respuesta, incluye SIEMPRE el bloque [OPTIONS] con este formato:
-  [OPTIONS]
-  [
-    {"label": "📅 Reservar ahora", "url": "https://amartesuite.com/reservas"},
-    {"label": "💬 WhatsApp Directo", "url": "https://wa.me/573007416683"}
-  ]
-  [/OPTIONS]`;
+    // Construye el prompt de sistema Martina + catálogo (precios, suites, reglas)
+    const systemPrompt = buildMartinaSystemPrompt({
+      roomName: safeRoom,
+      pageUrl: safePage,
+    });
 
     // Llama al modelo de chat de OpenAI con mensajes de sistema y usuario
     const completion = await openai.chat.completions.create({

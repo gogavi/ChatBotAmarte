@@ -50,7 +50,6 @@
       "font-size:1.9rem;font-weight:600;letter-spacing:0.02em;white-space:nowrap;" +
       "box-shadow:0 8px 24px rgba(216,27,96,0.35);z-index:99998;display:flex;align-items:center;justify-content:center;" +
       "transition:transform 0.2s ease,box-shadow 0.2s ease,background 0.2s ease;}" +
-      "@media (max-width:400px){.amarte-widget-bubble{font-size:1.7rem;padding:14px 18px;white-space:normal;text-align:center;max-width:calc(100vw - 32px);}}" +
       ".amarte-widget-bubble:hover{transform:translateX(-50%) scale(1.03);" +
       "box-shadow:0 12px 32px rgba(26,26,61,0.35);background:linear-gradient(135deg,#1A1A3D,#2a2a52);color:#ffffff;}" +
       ".amarte-widget-panel{position:fixed;left:50%;bottom:140px;width:min(380px,calc(100vw - 32px));" +
@@ -80,7 +79,11 @@
       ".amarte-widget-input:focus{border-color:#D81B60;}" +
       ".amarte-widget-send{background:#1A1A3D;color:#fff;border:none;border-radius:999px;padding:10px 18px;cursor:pointer;font-weight:600;}" +
       ".amarte-widget-send:hover{background:#2a2a52;}" +
-      ".amarte-widget-send:disabled{opacity:0.5;cursor:not-allowed;}";
+      ".amarte-widget-send:disabled{opacity:0.5;cursor:not-allowed;}" +
+      "@media (max-width:768px){.amarte-widget-bubble{min-height:44px;padding:8px 14px;font-size:0.95rem;" +
+      "letter-spacing:0.01em;white-space:normal;text-align:center;line-height:1.25;max-width:min(92vw,280px);" +
+      "bottom:calc(16px + env(safe-area-inset-bottom,0px));border-radius:8px;box-shadow:0 4px 16px rgba(216,27,96,0.3);}" +
+      ".amarte-widget-panel{bottom:calc(100px + env(safe-area-inset-bottom,0px));}}";
 
     // Añade el style al head del documento
     document.head.appendChild(style);
