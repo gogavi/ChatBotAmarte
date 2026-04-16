@@ -83,7 +83,9 @@
       "@media (max-width:768px){.amarte-widget-bubble{min-height:44px;padding:8px 14px;font-size:0.95rem;" +
       "letter-spacing:0.01em;white-space:normal;text-align:center;line-height:1.25;max-width:min(92vw,280px);" +
       "bottom:calc(16px + env(safe-area-inset-bottom,0px));border-radius:8px;box-shadow:0 4px 16px rgba(216,27,96,0.3);}" +
-      ".amarte-widget-panel{bottom:calc(100px + env(safe-area-inset-bottom,0px));}}";
+      ".amarte-widget-panel{bottom:calc(100px + env(safe-area-inset-bottom,0px));}}" +
+      "@media (min-width:769px){.amarte-widget-panel{width:min(520px,calc(100vw - 48px));" +
+      "max-height:min(720px,calc(100vh - 140px));}.amarte-widget-messages{min-height:320px;}}";
 
     // Añade el style al head del documento
     document.head.appendChild(style);
