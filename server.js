@@ -11,8 +11,10 @@ const PORT = process.env.PORT || 3000;
 const app = express();
 
 const ELEVENLABS_VOICE_ID_DEFAULT = "VmejBeYhbrcTPwDniox7";
+/** Máx. caracteres enviados a ElevenLabs por respuesta (evita payloads enormes). */
 const TTS_MAX_CHARS = 2500;
 
+/** Upload de audio: límite alineado con Whisper (25 MB). El widget corta grabación ~120 s. */
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 25 * 1024 * 1024 },
