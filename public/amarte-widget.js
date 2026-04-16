@@ -68,6 +68,97 @@
     }
   }
 
+  /** Zona horaria del hotel (cotizaciones y “hoy/mañana”). */
+  var BOGOTA_TZ = "America/Bogota";
+
+  function padTimePart(n) {
+    var x = typeof n === "number" ? n : parseInt(String(n), 10);
+    if (isNaN(x)) return "00";
+    return x < 10 ? "0" + x : String(x);
+  }
+
+  /**
+   * Fecha y hora actuales en Bogotá para que el servidor interprete expresiones relativas.
+   * @returns {{ referenceDate: string; referenceTime: string; referenceWeekday: string; referenceIso: string }}
+   */
+  function getBogotaReference() {
+    var now = new Date();
+    var y = "";
+    var m = "";
+    var d = "";
+    try {
+      var fmt = new Intl.DateTimeFormat("en-CA", {
+        timeZone: BOGOTA_TZ,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      });
+      var parts = fmt.formatToParts(now);
+      for (var i = 0; i < parts.length; i++) {
+        if (parts[i].type === "year") {
+          y = parts[i].value;
+        }
+        if (parts[i].type === "month") {
+          m = parts[i].value;
+        }
+        if (parts[i].type === "day") {
+          d = parts[i].value;
+        }
+      }
+    } catch (e0) {
+      return {
+        referenceDate: "",
+        referenceTime: "",
+        referenceWeekday: "",
+        referenceIso: "",
+      };
+    }
+    var referenceDate = y + "-" + m + "-" + d;
+
+    var hh = "00";
+    var mm = "00";
+    try {
+      var tfmt = new Intl.DateTimeFormat("en-GB", {
+        timeZone: BOGOTA_TZ,
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      });
+      var tparts = tfmt.formatToParts(now);
+      for (var j = 0; j < tparts.length; j++) {
+        if (tparts[j].type === "hour") {
+          hh = padTimePart(tparts[j].value);
+        }
+        if (tparts[j].type === "minute") {
+          mm = padTimePart(tparts[j].value);
+        }
+      }
+    } catch (e1) {
+      // deja 00:00
+    }
+    var referenceTime = hh + ":" + mm;
+
+    var referenceWeekday = "";
+    try {
+      var wfmt = new Intl.DateTimeFormat("es-CO", {
+        timeZone: BOGOTA_TZ,
+        weekday: "long",
+      });
+      referenceWeekday = wfmt.format(now);
+    } catch (e2) {
+      referenceWeekday = "";
+    }
+
+    var referenceIso = referenceDate + "T" + referenceTime + ":00-05:00";
+
+    return {
+      referenceDate: referenceDate,
+      referenceTime: referenceTime,
+      referenceWeekday: referenceWeekday,
+      referenceIso: referenceIso,
+    };
+  }
+
   // Referencia al contenedor raíz del widget (se asigna al crear el DOM)
   var rootEl = null;
   // Referencia al panel de mensajes con scroll
@@ -255,6 +346,11 @@
     fd.append("roomName", roomName);
     fd.append("pageUrl", pageUrl);
     fd.append("conversationId", getConversationId());
+    var refAudio = getBogotaReference();
+    fd.append("referenceDate", refAudio.referenceDate);
+    fd.append("referenceTime", refAudio.referenceTime);
+    fd.append("referenceWeekday", refAudio.referenceWeekday);
+    fd.append("referenceIso", refAudio.referenceIso);
 
     fetch(BACKEND_URL + "/chat/audio", {
       method: "POST",
@@ -428,6 +524,7 @@
     var roomName = document.title || "";
     // URL completa de la página actual
     var pageUrl = window.location.href || "";
+    var refChat = getBogotaReference();
 
     // Construye la URL del endpoint de chat en el backend
     var url = BACKEND_URL + "/chat";
@@ -442,6 +539,10 @@
         roomName: roomName,
         pageUrl: pageUrl,
         conversationId: getConversationId(),
+        referenceDate: refChat.referenceDate,
+        referenceTime: refChat.referenceTime,
+        referenceWeekday: refChat.referenceWeekday,
+        referenceIso: refChat.referenceIso,
       }),
     })
       .then(function (res) {

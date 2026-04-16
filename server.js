@@ -7,6 +7,7 @@ const cors = require("cors");
 const multer = require("multer");
 const { OpenAI, toFile } = require("openai");
 const { buildMartinaSystemPrompt } = require("./config/martinaSystemPrompt");
+const { matchSuiteFromPageUrl } = require("./config/suitePageHints");
 const conversationStore = require("./conversationStore");
 
 const PORT = process.env.PORT || 3000;
@@ -69,6 +70,51 @@ function sanitizeConversationId(value) {
   return t;
 }
 
+function sanitizeReferenceDate(value) {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value.trim())) {
+    return "";
+  }
+  return value.trim();
+}
+
+function sanitizeReferenceTime(value) {
+  if (typeof value !== "string" || !/^\d{1,2}:\d{2}$/.test(value.trim())) {
+    return "";
+  }
+  const t = value.trim();
+  const m = t.match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return "";
+  const hh = String(Math.min(23, Math.max(0, parseInt(m[1], 10)))).padStart(2, "0");
+  const mm = String(Math.min(59, Math.max(0, parseInt(m[2], 10)))).padStart(2, "0");
+  return `${hh}:${mm}`;
+}
+
+function sanitizeReferenceWeekday(value) {
+  if (typeof value !== "string") {
+    return "";
+  }
+  return value.trim().slice(0, 48);
+}
+
+function sanitizeReferenceIso(value) {
+  if (typeof value !== "string") {
+    return "";
+  }
+  return value.trim().slice(0, 120);
+}
+
+/**
+ * @param {Record<string, unknown>} body
+ */
+function extractTemporalContext(body) {
+  return {
+    referenceDate: sanitizeReferenceDate(body.referenceDate),
+    referenceTime: sanitizeReferenceTime(body.referenceTime),
+    referenceWeekday: sanitizeReferenceWeekday(body.referenceWeekday),
+    referenceIso: sanitizeReferenceIso(body.referenceIso),
+  };
+}
+
 /**
  * Separa el texto visible para el usuario y el bloque de opciones estructuradas.
  * @param {string} rawText
@@ -113,6 +159,10 @@ function parseAssistantReply(rawText) {
  *   roomName: string;
  *   pageUrl: string;
  *   priorMessages?: Array<{ role: string; content: string }>;
+ *   referenceDate?: string;
+ *   referenceTime?: string;
+ *   referenceWeekday?: string;
+ *   referenceIso?: string;
  * }} input
  * @returns {Promise<{ reply: string; options: Array<{label:string;url:string}>; rawText: string }>}
  */
@@ -127,9 +177,17 @@ async function runChat(input) {
       ? input.pageUrl.trim()
       : "sin especificar";
 
+  const suiteMatch = matchSuiteFromPageUrl(safePage);
+
   const systemPrompt = buildMartinaSystemPrompt({
     roomName: safeRoom,
     pageUrl: safePage,
+    referenceDate: input.referenceDate || "",
+    referenceTime: input.referenceTime || "",
+    referenceWeekday: input.referenceWeekday || "",
+    referenceIso: input.referenceIso || "",
+    detectedSuiteLabel: suiteMatch ? suiteMatch.detectedSuiteLabel : null,
+    detectedSuiteUrl: suiteMatch ? suiteMatch.detectedSuiteUrl : null,
   });
 
   const prior = Array.isArray(input.priorMessages) ? input.priorMessages : [];
@@ -200,8 +258,8 @@ async function synthesizeElevenLabs(text) {
 // POST /chat — solo texto, sin audio de respuesta
 app.post("/chat", async (req, res) => {
   try {
-    const { message, roomName, pageUrl, conversationId: rawConvId } =
-      req.body || {};
+    const body = req.body || {};
+    const { message, roomName, pageUrl, conversationId: rawConvId } = body;
     if (!message || typeof message !== "string" || !message.trim()) {
       return res.status(400).json({ error: "El campo message es obligatorio" });
     }
@@ -214,11 +272,14 @@ app.post("/chat", async (req, res) => {
         ? chatHistoryStore.getPriorMessages(conversationId)
         : [];
 
+    const temporal = extractTemporalContext(body);
+
     const result = await runChat({
       message,
       roomName,
       pageUrl,
       priorMessages,
+      ...temporal,
     });
 
     if (conversationId && chatHistoryStore) {
@@ -282,11 +343,14 @@ app.post(
           ? chatHistoryStore.getPriorMessages(conversationId)
           : [];
 
+      const temporal = extractTemporalContext(req.body || {});
+
       const { reply, options, rawText } = await runChat({
         message: transcript,
         roomName,
         pageUrl,
         priorMessages,
+        ...temporal,
       });
 
       if (conversationId && chatHistoryStore) {

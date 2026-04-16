@@ -77,23 +77,23 @@ const pricing = {
   plans: {
     plan_amarte: {
       name: "Plan Amarte",
-      weekday: { h6: 180000, h12: 240000, diaHotelero: 270000 },
-      weekend: { h6: 200000, h12: 280000, diaHotelero: 320000 },
+      weekday: { h6: 210000, h12: 280000, diaHotelero: 320000 },
+      weekend: { h6: 240000, h12: 340000, diaHotelero: 380000 },
     },
     plan_cabana_movimiento: {
       name: "Plan Cabaña o Plan Cama Movimiento",
-      weekday: { h6: 200000, h12: 260000, diaHotelero: 300000 },
-      weekend: { h6: 220000, h12: 320000, diaHotelero: 370000 },
+      weekday: { h6: 220000, h12: 290000, diaHotelero: 340000 },
+      weekend: { h6: 250000, h12: 360000, diaHotelero: 420000 },
     },
     plan_humedo: {
       name: "Plan Húmedo",
-      weekday: { h6: 300000, h12: 370000, diaHotelero: 440000 },
-      weekend: { h6: 320000, h12: 420000, diaHotelero: 470000 },
+      weekday: { h6: 320000, h12: 420000, diaHotelero: 500000 },
+      weekend: { h6: 360000, h12: 480000, diaHotelero: 540000 },
     },
     plan_romantico_cumple_erotico: {
       name: "Plan Romántico / Cumpleaños / Erótico",
-      weekday: { h6: 320000, h12: 400000, diaHotelero: 470000 },
-      weekend: { h6: 370000, h12: 470000, diaHotelero: 520000 },
+      weekday: { h6: 360000, h12: 460000, diaHotelero: 540000 },
+      weekend: { h6: 420000, h12: 540000, diaHotelero: 590000 },
     },
   },
 };
@@ -136,7 +136,7 @@ const payment = {
 
 const contact = {
   whatsappUrl: "https://wa.me/573007416683",
-  reservationsUrl: "https://amartesuite.com/reservas",
+  reservationsUrl: "https://https://amartesuite.com/suites/",
 };
 
 /**
