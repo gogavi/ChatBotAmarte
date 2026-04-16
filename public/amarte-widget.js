@@ -31,6 +31,13 @@
   var inputEl = null;
   // Referencia al elemento que muestra "Escribiendo..."
   var typingEl = null;
+  // Estado de grabación de voz (MediaRecorder)
+  var voiceState = {
+    recorder: null,
+    chunks: [],
+    stream: null,
+    maxTimer: null,
+  };
 
   /**
    * Inserta en el documento los estilos CSS del widget (paleta Amarte: magenta, navy, blanco).
@@ -77,6 +84,12 @@
       ".amarte-widget-footer{display:flex;gap:8px;padding:12px;border-top:1px solid #eee;background:#fff;}" +
       ".amarte-widget-input{flex:1;border:1px solid #ccc;border-radius:999px;padding:10px 14px;font-size:0.95rem;outline:none;}" +
       ".amarte-widget-input:focus{border-color:#D81B60;}" +
+      ".amarte-widget-mic{background:#fff;color:#1A1A3D;border:2px solid #D81B60;border-radius:999px;" +
+      "padding:10px 14px;cursor:pointer;font-weight:600;flex-shrink:0;font-size:0.9rem;line-height:1;}" +
+      ".amarte-widget-mic:hover{background:#fafafa;}" +
+      ".amarte-widget-mic:disabled{opacity:0.5;cursor:not-allowed;}" +
+      ".amarte-widget-mic.amarte-recording{background:#E91E63;color:#fff;border-color:#AD1457;}" +
+      ".amarte-widget-audio{width:100%;max-width:100%;margin-top:8px;height:40px;}" +
       ".amarte-widget-send{background:#1A1A3D;color:#fff;border:none;border-radius:999px;padding:10px 18px;cursor:pointer;font-weight:600;}" +
       ".amarte-widget-send:hover{background:#2a2a52;}" +
       ".amarte-widget-send:disabled{opacity:0.5;cursor:not-allowed;}" +
@@ -108,8 +121,9 @@
    * @param {'user'|'bot'} role - Quién envía el mensaje
    * @param {string} text - Contenido de texto
    * @param {Array<{label:string,url:string}>} options - Enlaces rápidos (solo bot)
+   * @param {{audioBase64?: string, audioMimeType?: string}} [extras] - Audio de respuesta (solo bot, voz)
    */
-  function appendMessage(role, text, options) {
+  function appendMessage(role, text, options, extras) {
     // Contenedor de una fila de mensaje
     var row = document.createElement("div");
     // Clase base de mensaje
@@ -142,6 +156,25 @@
       row.appendChild(optsWrap);
     }
 
+    if (
+      role === "bot" &&
+      extras &&
+      extras.audioBase64 &&
+      extras.audioMimeType
+    ) {
+      var audioEl = document.createElement("audio");
+      audioEl.className = "amarte-widget-audio";
+      audioEl.controls = true;
+      audioEl.setAttribute(
+        "aria-label",
+        "Respuesta de voz del concierge"
+      );
+      audioEl.src =
+        "data:" + extras.audioMimeType + ";base64," + extras.audioBase64;
+      row.appendChild(audioEl);
+      audioEl.play().catch(function () {});
+    }
+
     // Inserta la fila antes del indicador de escritura si existe (para mantener el orden visual)
     if (typingEl && typingEl.parentNode === messagesEl) {
       messagesEl.insertBefore(row, typingEl);
@@ -157,6 +190,153 @@
    * Muestra u oculta el indicador de escritura del asistente.
    * @param {boolean} show - true para mostrar, false para ocultar
    */
+  /**
+   * Envía audio grabado: transcribe, chat y voz de respuesta (solo en este flujo).
+   * @param {Blob} blob
+   */
+  function sendVoiceBlob(blob) {
+    var sendBtn = rootEl.querySelector(".amarte-widget-send");
+    var micBtn = rootEl.querySelector(".amarte-widget-mic");
+    setTyping(true);
+    sendBtn.disabled = true;
+    micBtn.disabled = true;
+
+    var roomName = document.title || "";
+    var pageUrl = window.location.href || "";
+
+    var fd = new FormData();
+    fd.append("audio", blob, "recording.webm");
+    fd.append("roomName", roomName);
+    fd.append("pageUrl", pageUrl);
+
+    fetch(BACKEND_URL + "/chat/audio", {
+      method: "POST",
+      body: fd,
+    })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          if (!res.ok) {
+            throw new Error(data.error || "Error al procesar el audio");
+          }
+          return data;
+        });
+      })
+      .then(function (data) {
+        setTyping(false);
+        var transcript =
+          typeof data.transcript === "string" ? data.transcript : "";
+        appendMessage("user", transcript || "(Nota de voz)", null);
+        var reply = typeof data.reply === "string" ? data.reply : "";
+        var options = Array.isArray(data.options) ? data.options : [];
+        var extras = null;
+        if (data.audioBase64 && data.audioMimeType) {
+          extras = {
+            audioBase64: data.audioBase64,
+            audioMimeType: data.audioMimeType,
+          };
+        }
+        appendMessage("bot", reply || " ", options, extras);
+      })
+      .catch(function (err) {
+        setTyping(false);
+        appendMessage(
+          "bot",
+          "No pudimos procesar tu nota de voz. Inténtalo de nuevo o escribe tu mensaje.",
+          []
+        );
+        console.error("Amarte widget voz:", err);
+      })
+      .finally(function () {
+        sendBtn.disabled = false;
+        micBtn.disabled = false;
+        inputEl.disabled = false;
+        inputEl.focus();
+      });
+  }
+
+  /**
+   * Primer clic: grabar. Segundo clic: enviar nota de voz.
+   */
+  function toggleVoiceRecording() {
+    var micBtn = rootEl.querySelector(".amarte-widget-mic");
+    var sendBtn = rootEl.querySelector(".amarte-widget-send");
+    if (voiceState.recorder && voiceState.recorder.state === "recording") {
+      voiceState.recorder.stop();
+      return;
+    }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      appendMessage(
+        "bot",
+        "Tu navegador no permite grabar audio.",
+        []
+      );
+      return;
+    }
+    navigator.mediaDevices
+      .getUserMedia({ audio: true })
+      .then(function (stream) {
+        voiceState.stream = stream;
+        voiceState.chunks = [];
+        var mime = "";
+        if (MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) {
+          mime = "audio/webm;codecs=opus";
+        } else if (MediaRecorder.isTypeSupported("audio/webm")) {
+          mime = "audio/webm";
+        }
+        var rec = new MediaRecorder(
+          stream,
+          mime ? { mimeType: mime } : undefined
+        );
+        voiceState.recorder = rec;
+        rec.ondataavailable = function (e) {
+          if (e.data && e.data.size > 0) {
+            voiceState.chunks.push(e.data);
+          }
+        };
+        rec.onstop = function () {
+          var blobType = mime || "audio/webm";
+          var blob = new Blob(voiceState.chunks, { type: blobType });
+          if (voiceState.stream) {
+            voiceState.stream.getTracks().forEach(function (t) {
+              t.stop();
+            });
+          }
+          voiceState.stream = null;
+          voiceState.recorder = null;
+          if (voiceState.maxTimer) {
+            clearTimeout(voiceState.maxTimer);
+            voiceState.maxTimer = null;
+          }
+          micBtn.classList.remove("amarte-recording");
+          sendBtn.disabled = false;
+          inputEl.disabled = false;
+          if (blob.size > 400) {
+            sendVoiceBlob(blob);
+          }
+        };
+        rec.start();
+        sendBtn.disabled = true;
+        inputEl.disabled = true;
+        micBtn.classList.add("amarte-recording");
+        voiceState.maxTimer = setTimeout(function () {
+          if (
+            voiceState.recorder &&
+            voiceState.recorder.state === "recording"
+          ) {
+            voiceState.recorder.stop();
+          }
+        }, 120000);
+      })
+      .catch(function (err) {
+        appendMessage(
+          "bot",
+          "No pudimos usar el micrófono. Revisa permisos o que el sitio use HTTPS.",
+          []
+        );
+        console.error(err);
+      });
+  }
+
   function setTyping(show) {
     // Si no existe el nodo de typing, sale
     if (!typingEl || !messagesEl) {
@@ -191,9 +371,11 @@
     appendMessage("user", text, null);
     // Activa el estado de escritura del bot
     setTyping(true);
-    // Deshabilita el botón de enviar mientras espera respuesta
+    // Deshabilita enviar y micrófono mientras espera respuesta
     var sendBtn = rootEl.querySelector(".amarte-widget-send");
+    var micBtn = rootEl.querySelector(".amarte-widget-mic");
     sendBtn.disabled = true;
+    micBtn.disabled = true;
 
     // Título de la página como contexto de habitación/suite
     var roomName = document.title || "";
@@ -247,9 +429,8 @@
         console.error("Amarte widget:", err);
       })
       .finally(function () {
-        // Vuelve a habilitar el botón de enviar
         sendBtn.disabled = false;
-        // Devuelve el foco al campo de texto
+        micBtn.disabled = false;
         inputEl.focus();
       });
   }
@@ -315,12 +496,20 @@
     inputEl.placeholder = "Escriba su mensaje…";
     inputEl.setAttribute("autocomplete", "off");
 
+    var micBtn = document.createElement("button");
+    micBtn.type = "button";
+    micBtn.className = "amarte-widget-mic";
+    micBtn.setAttribute("aria-label", "Grabar mensaje de voz");
+    micBtn.setAttribute("title", "Mensaje de voz");
+    micBtn.textContent = "🎤";
+
     var sendBtn = document.createElement("button");
     sendBtn.type = "button";
     sendBtn.className = "amarte-widget-send";
     sendBtn.textContent = "Enviar";
 
     footer.appendChild(inputEl);
+    footer.appendChild(micBtn);
     footer.appendChild(sendBtn);
 
     panel.appendChild(header);
@@ -360,6 +549,10 @@
     // Click en enviar
     sendBtn.addEventListener("click", function () {
       sendUserMessage();
+    });
+    // Micrófono: grabar / detener y enviar
+    micBtn.addEventListener("click", function () {
+      toggleVoiceRecording();
     });
   }
 

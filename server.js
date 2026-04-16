@@ -1,75 +1,62 @@
 // Carga variables de entorno desde el archivo .env antes de leer process.env
 require("dotenv").config();
 
-// Importa express para crear el servidor HTTP y definir rutas
 const express = require("express");
-// Importa middleware CORS para restringir el origen de las peticiones del navegador
 const cors = require("cors");
-// Importa el cliente oficial de OpenAI para llamar a la API de chat
-const OpenAI = require("openai");
-// Prompt de sistema de Martina y catálogo comercial
+const multer = require("multer");
+const { OpenAI, toFile } = require("openai");
 const { buildMartinaSystemPrompt } = require("./config/martinaSystemPrompt");
 
-// Lee el puerto desde variables de entorno o usa 3000 por defecto
 const PORT = process.env.PORT || 3000;
-// Crea la instancia de la aplicación Express
 const app = express();
 
-// Middleware: permite que Express interprete el cuerpo JSON de las peticiones POST
+const ELEVENLABS_VOICE_ID_DEFAULT = "VmejBeYhbrcTPwDniox7";
+const TTS_MAX_CHARS = 2500;
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024 },
+});
+
 app.use(express.json());
 
-// Middleware CORS: solo permite peticiones desde el dominio de producción de Amarte Suite
 app.use(
   cors({
     origin: ["https://amartesuite.com", "https://www.amartesuite.com"],
     methods: ["GET", "POST"],
-    credentials: true
+    credentials: true,
   })
 );
 
-// Middleware: sirve archivos estáticos desde la carpeta public (por ejemplo amarte-widget.js)
 app.use(express.static("public"));
 
-// Crea el cliente de OpenAI usando la clave definida en OPENAI_API_KEY
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
 /**
  * Separa el texto visible para el usuario y el bloque de opciones estructuradas.
- * @param {string} rawText - Texto completo devuelto por el modelo
- * @returns {{ reply: string, options: Array<{ label: string, url: string }> }}
+ * @param {string} rawText
+ * @returns {{ reply: string, options: Array<{ label: string; url: string }> }}
  */
 function parseAssistantReply(rawText) {
-  // Si no hay texto, devolvemos respuesta vacía y sin opciones
   if (!rawText || typeof rawText !== "string") {
     return { reply: "", options: [] };
   }
-  // Marca de inicio del bloque de opciones que el modelo debe incluir
   const startTag = "[OPTIONS]";
-  // Marca de fin del bloque de opciones
   const endTag = "[/OPTIONS]";
-  // Índice donde comienza el bloque de opciones en el texto
   const startIdx = rawText.indexOf(startTag);
-  // Índice donde termina el bloque de opciones en el texto
   const endIdx = rawText.indexOf(endTag);
-  // Si no hay bloque completo de opciones, devolvemos todo el texto como reply
   if (startIdx === -1 || endIdx === -1 || endIdx <= startIdx) {
     return { reply: rawText.trim(), options: [] };
   }
-  // Extrae la parte antes del bloque de opciones como mensaje visible
   const reply = rawText.slice(0, startIdx).trim();
-  // Extrae el JSON interno entre las etiquetas de opciones
   const jsonSlice = rawText.slice(startIdx + startTag.length, endIdx).trim();
-  // Intenta parsear el JSON de opciones
   try {
-    // Convierte el texto JSON en un array de JavaScript
     const parsed = JSON.parse(jsonSlice);
-    // Verifica que sea un array para usarlo como lista de botones
     if (!Array.isArray(parsed)) {
       return { reply: reply || rawText.trim(), options: [] };
     }
-    // Normaliza cada elemento a { label, url } solo si tienen ambos campos
     const options = parsed
       .filter(
         (item) =>
@@ -80,64 +67,182 @@ function parseAssistantReply(rawText) {
       .map((item) => ({ label: item.label, url: item.url }));
     return { reply: reply || rawText.trim(), options };
   } catch {
-    // Si el JSON es inválido, devolvemos reply sin opciones
     return { reply: reply || rawText.trim(), options: [] };
   }
 }
 
-// Ruta POST /chat: recibe el mensaje del usuario y contexto de la página
+/**
+ * Núcleo del chat Martina (solo texto + opciones).
+ * @param {{ message: string; roomName: string; pageUrl: string }} input
+ * @returns {Promise<{ reply: string; options: Array<{label:string;url:string}> }>}
+ */
+async function runChat(input) {
+  const message = input.message.trim();
+  const safeRoom =
+    typeof input.roomName === "string" && input.roomName.trim()
+      ? input.roomName.trim()
+      : "sin especificar";
+  const safePage =
+    typeof input.pageUrl === "string" && input.pageUrl.trim()
+      ? input.pageUrl.trim()
+      : "sin especificar";
+
+  const systemPrompt = buildMartinaSystemPrompt({
+    roomName: safeRoom,
+    pageUrl: safePage,
+  });
+
+  const completion = await openai.chat.completions.create({
+    model: "gpt-4o-mini",
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: message },
+    ],
+  });
+
+  const rawText = completion.choices[0]?.message?.content ?? "";
+  const { reply, options } = parseAssistantReply(rawText);
+  console.log(`IA respondió a ${safeRoom}: ${options.length} botones generados.`);
+  return { reply, options };
+}
+
+/**
+ * Sintetiza voz con ElevenLabs (voz Lina por defecto).
+ * @param {string} text
+ * @returns {Promise<Buffer>}
+ */
+async function synthesizeElevenLabs(text) {
+  const apiKey = process.env.ELEVENLABS_API_KEY;
+  if (!apiKey) {
+    throw new Error("ELEVENLABS_API_KEY no configurada");
+  }
+  const voiceId =
+    process.env.ELEVENLABS_VOICE_ID || ELEVENLABS_VOICE_ID_DEFAULT;
+  const safeText =
+    text.length > TTS_MAX_CHARS ? text.slice(0, TTS_MAX_CHARS) : text;
+
+  const url = `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "xi-api-key": apiKey,
+      "Content-Type": "application/json",
+      Accept: "audio/mpeg",
+    },
+    body: JSON.stringify({
+      text: safeText,
+      model_id: "eleven_multilingual_v2",
+    }),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text().catch(() => "");
+    throw new Error(
+      `ElevenLabs ${res.status}: ${errText.slice(0, 200)}`
+    );
+  }
+
+  const ab = await res.arrayBuffer();
+  return Buffer.from(ab);
+}
+
+// POST /chat — solo texto, sin audio de respuesta
 app.post("/chat", async (req, res) => {
   try {
-    // Extrae campos del cuerpo JSON de la petición
     const { message, roomName, pageUrl } = req.body || {};
-    // Valida que exista un mensaje de usuario (no vacío)
     if (!message || typeof message !== "string" || !message.trim()) {
-      // Responde con error 400 si falta el mensaje
       return res.status(400).json({ error: "El campo message es obligatorio" });
     }
-    // Verifica que la clave de OpenAI esté configurada en el entorno
     if (!process.env.OPENAI_API_KEY) {
-      // Responde con error 500 si falta configuración
       return res.status(500).json({ error: "El servidor no está configurado correctamente" });
     }
-    // Texto seguro para nombre de habitación o página (fallback vacío)
-    const safeRoom =
-      typeof roomName === "string" && roomName.trim() ? roomName.trim() : "sin especificar";
-    // Texto seguro para URL de página (fallback vacío)
-    const safePage =
-      typeof pageUrl === "string" && pageUrl.trim() ? pageUrl.trim() : "sin especificar";
-    // Construye el prompt de sistema Martina + catálogo (precios, suites, reglas)
-    const systemPrompt = buildMartinaSystemPrompt({
-      roomName: safeRoom,
-      pageUrl: safePage,
+    const result = await runChat({
+      message,
+      roomName,
+      pageUrl,
     });
-
-    // Llama al modelo de chat de OpenAI con mensajes de sistema y usuario
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: message.trim() },
-      ],
-    });
-    // Obtiene el texto de la primera opción de la respuesta del modelo
-    const rawText = completion.choices[0]?.message?.content ?? "";
-    // Separa el texto visible y las opciones estructuradas
-    const { reply, options } = parseAssistantReply(rawText);
-    // Log para depuración (ayuda mucho en Railway)
-    console.log(`IA respondió a ${safeRoom}: ${options.length} botones generados.`);
-    // Devuelve JSON con reply y options al cliente
-    return res.json({ reply, options });
+    return res.json({ reply: result.reply, options: result.options });
   } catch (err) {
-    // Registra el error en consola para depuración en servidor
     console.error("Error en /chat:", err);
-    // Devuelve error genérico al cliente sin filtrar detalles internos
     return res.status(500).json({ error: "No se pudo procesar la conversación" });
   }
 });
 
-// Inicia el servidor escuchando en el puerto configurado
+// POST /chat/audio — audio del usuario: Whisper → chat → ElevenLabs
+app.post(
+  "/chat/audio",
+  upload.single("audio"),
+  async (req, res) => {
+    try {
+      if (!process.env.OPENAI_API_KEY) {
+        return res.status(500).json({ error: "El servidor no está configurado correctamente" });
+      }
+      const file = req.file;
+      if (!file || !file.buffer) {
+        return res.status(400).json({ error: "Se requiere un archivo de audio (campo audio)" });
+      }
+
+      const roomName =
+        typeof req.body.roomName === "string" ? req.body.roomName : "";
+      const pageUrl =
+        typeof req.body.pageUrl === "string" ? req.body.pageUrl : "";
+
+      const audioFile = await toFile(
+        file.buffer,
+        file.originalname || "audio.webm",
+        { type: file.mimetype || "audio/webm" }
+      );
+
+      const transcription = await openai.audio.transcriptions.create({
+        file: audioFile,
+        model: "whisper-1",
+        language: "es",
+      });
+
+      const transcript =
+        typeof transcription.text === "string" ? transcription.text.trim() : "";
+      if (!transcript) {
+        return res.status(400).json({
+          error: "No se pudo transcribir el audio. Intente de nuevo.",
+          transcript: "",
+        });
+      }
+
+      const { reply, options } = await runChat({
+        message: transcript,
+        roomName,
+        pageUrl,
+      });
+
+      let audioBase64 = null;
+      let audioMimeType = "audio/mpeg";
+
+      if (process.env.ELEVENLABS_API_KEY) {
+        try {
+          const audioBuf = await synthesizeElevenLabs(reply);
+          audioBase64 = audioBuf.toString("base64");
+        } catch (ttsErr) {
+          console.error("ElevenLabs TTS:", ttsErr);
+        }
+      } else {
+        console.warn("ELEVENLABS_API_KEY ausente: respuesta sin audio");
+      }
+
+      return res.json({
+        reply,
+        options,
+        transcript,
+        ...(audioBase64
+          ? { audioBase64, audioMimeType }
+          : {}),
+      });
+    } catch (err) {
+      console.error("Error en /chat/audio:", err);
+      return res.status(500).json({ error: "No se pudo procesar el audio" });
+    }
+  }
+);
+
 app.listen(PORT, () => {
-  // Mensaje de confirmación en consola
   console.log(`Servidor Amarte escuchando en http://localhost:${PORT}`);
 });
