@@ -1,11 +1,13 @@
 // Carga variables de entorno desde el archivo .env antes de leer process.env
 require("dotenv").config();
 
+const path = require("path");
 const express = require("express");
 const cors = require("cors");
 const multer = require("multer");
 const { OpenAI, toFile } = require("openai");
 const { buildMartinaSystemPrompt } = require("./config/martinaSystemPrompt");
+const conversationStore = require("./conversationStore");
 
 const PORT = process.env.PORT || 3000;
 const app = express();
@@ -13,6 +15,10 @@ const app = express();
 const ELEVENLABS_VOICE_ID_DEFAULT = "VmejBeYhbrcTPwDniox7";
 /** Máx. caracteres enviados a ElevenLabs por respuesta (evita payloads enormes). */
 const TTS_MAX_CHARS = 2500;
+
+/** UUID v4 — identificador de conversación enviado por el widget. */
+const CONVERSATION_ID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 /** Upload de audio: límite alineado con Whisper (25 MB). El widget corta grabación ~120 s. */
 const upload = multer({
@@ -35,6 +41,33 @@ app.use(express.static("public"));
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
+
+let chatHistoryStore = null;
+try {
+  const dbPath =
+    process.env.CHAT_DB_PATH ||
+    path.join(__dirname, "data", "conversations.sqlite");
+  conversationStore.initConversationStore(dbPath);
+  chatHistoryStore = conversationStore;
+  console.log(`Historial de chat: SQLite (${dbPath})`);
+} catch (e) {
+  console.warn("Historial de chat deshabilitado:", e.message);
+}
+
+/**
+ * @param {unknown} value
+ * @returns {string | null}
+ */
+function sanitizeConversationId(value) {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const t = value.trim();
+  if (t.length > 64 || !CONVERSATION_ID_RE.test(t)) {
+    return null;
+  }
+  return t;
+}
 
 /**
  * Separa el texto visible para el usuario y el bloque de opciones estructuradas.
@@ -74,9 +107,14 @@ function parseAssistantReply(rawText) {
 }
 
 /**
- * Núcleo del chat Martina (solo texto + opciones).
- * @param {{ message: string; roomName: string; pageUrl: string }} input
- * @returns {Promise<{ reply: string; options: Array<{label:string;url:string}> }>}
+ * Núcleo del chat Martina (texto + opciones + texto crudo para historial).
+ * @param {{
+ *   message: string;
+ *   roomName: string;
+ *   pageUrl: string;
+ *   priorMessages?: Array<{ role: string; content: string }>;
+ * }} input
+ * @returns {Promise<{ reply: string; options: Array<{label:string;url:string}>; rawText: string }>}
  */
 async function runChat(input) {
   const message = input.message.trim();
@@ -94,10 +132,21 @@ async function runChat(input) {
     pageUrl: safePage,
   });
 
+  const prior = Array.isArray(input.priorMessages) ? input.priorMessages : [];
+  const historyForApi = prior
+    .filter(
+      (m) =>
+        m &&
+        (m.role === "user" || m.role === "assistant") &&
+        typeof m.content === "string"
+    )
+    .map((m) => ({ role: m.role, content: m.content }));
+
   const completion = await openai.chat.completions.create({
     model: "gpt-4o-mini",
     messages: [
       { role: "system", content: systemPrompt },
+      ...historyForApi,
       { role: "user", content: message },
     ],
   });
@@ -105,7 +154,7 @@ async function runChat(input) {
   const rawText = completion.choices[0]?.message?.content ?? "";
   const { reply, options } = parseAssistantReply(rawText);
   console.log(`IA respondió a ${safeRoom}: ${options.length} botones generados.`);
-  return { reply, options };
+  return { reply, options, rawText };
 }
 
 /**
@@ -151,18 +200,35 @@ async function synthesizeElevenLabs(text) {
 // POST /chat — solo texto, sin audio de respuesta
 app.post("/chat", async (req, res) => {
   try {
-    const { message, roomName, pageUrl } = req.body || {};
+    const { message, roomName, pageUrl, conversationId: rawConvId } =
+      req.body || {};
     if (!message || typeof message !== "string" || !message.trim()) {
       return res.status(400).json({ error: "El campo message es obligatorio" });
     }
     if (!process.env.OPENAI_API_KEY) {
       return res.status(500).json({ error: "El servidor no está configurado correctamente" });
     }
+    const conversationId = sanitizeConversationId(rawConvId);
+    const priorMessages =
+      conversationId && chatHistoryStore
+        ? chatHistoryStore.getPriorMessages(conversationId)
+        : [];
+
     const result = await runChat({
       message,
       roomName,
       pageUrl,
+      priorMessages,
     });
+
+    if (conversationId && chatHistoryStore) {
+      const assistantToStore =
+        typeof result.rawText === "string" && result.rawText.trim()
+          ? result.rawText
+          : result.reply || "";
+      chatHistoryStore.appendTurn(conversationId, message.trim(), assistantToStore);
+    }
+
     return res.json({ reply: result.reply, options: result.options });
   } catch (err) {
     console.error("Error en /chat:", err);
@@ -188,6 +254,7 @@ app.post(
         typeof req.body.roomName === "string" ? req.body.roomName : "";
       const pageUrl =
         typeof req.body.pageUrl === "string" ? req.body.pageUrl : "";
+      const conversationId = sanitizeConversationId(req.body.conversationId);
 
       const audioFile = await toFile(
         file.buffer,
@@ -210,21 +277,39 @@ app.post(
         });
       }
 
-      const { reply, options } = await runChat({
+      const priorMessages =
+        conversationId && chatHistoryStore
+          ? chatHistoryStore.getPriorMessages(conversationId)
+          : [];
+
+      const { reply, options, rawText } = await runChat({
         message: transcript,
         roomName,
         pageUrl,
+        priorMessages,
       });
+
+      if (conversationId && chatHistoryStore) {
+        const assistantToStore =
+          typeof rawText === "string" && rawText.trim()
+            ? rawText
+            : reply || "";
+        chatHistoryStore.appendTurn(conversationId, transcript, assistantToStore);
+      }
 
       let audioBase64 = null;
       let audioMimeType = "audio/mpeg";
+      /** @type {"ok"|"missing_api_key"|"error"} */
+      let ttsStatus = "missing_api_key";
 
       if (process.env.ELEVENLABS_API_KEY) {
         try {
           const audioBuf = await synthesizeElevenLabs(reply);
           audioBase64 = audioBuf.toString("base64");
+          ttsStatus = "ok";
         } catch (ttsErr) {
           console.error("ElevenLabs TTS:", ttsErr);
+          ttsStatus = "error";
         }
       } else {
         console.warn("ELEVENLABS_API_KEY ausente: respuesta sin audio");
@@ -234,6 +319,7 @@ app.post(
         reply,
         options,
         transcript,
+        ttsStatus,
         ...(audioBase64
           ? { audioBase64, audioMimeType }
           : {}),

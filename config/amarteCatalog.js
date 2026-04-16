@@ -55,23 +55,23 @@ const pricing = {
   suites: {
     suite_amarte: {
       name: "Suite Amarte",
-      weekday: { h4: 78000, h8: 100000, h12: 134000, diaHotelero: 165000 },
-      weekend: { h4: 100000, h8: 134000, h12: 180000, diaHotelero: 220000 },
+      weekday: { h4: 90000, h8: 120000, h12: 160000, diaHotelero: 200000 },
+      weekend: { h4: 120000, h8: 160000, h12: 220000, diaHotelero: 260000 },
     },
     suite_cabana_o_movimiento: {
       name: "Suite Cabaña o Suite Movimiento",
-      weekday: { h4: 100000, h8: 130000, h12: 160000, diaHotelero: 200000 },
-      weekend: { h4: 120000, h8: 150000, h12: 220000, diaHotelero: 270000 },
+      weekday: { h4: 120000, h8: 160000, h12: 190000, diaHotelero: 240000 },
+      weekend: { h4: 150000, h8: 180000, h12: 260000, diaHotelero: 320000 },
     },
     suite_jacuzzi: {
-      name: "Suite Jacuzzi",
-      weekday: { h4: 175000, h8: 200000, h12: 250000, diaHotelero: 320000 },
-      weekend: { h4: 200000, h8: 240000, h12: 300000, diaHotelero: 350000 },
+      name: "Suite VIP Jacuzzi",
+      weekday: { h4: 200000, h8: 240000, h12: 300000, diaHotelero: 380000 },
+      weekend: { h4: 240000, h8: 290000, h12: 360000, diaHotelero: 420000 },
     },
     suites_deluxe_tematicas: {
-      name: "Suites Deluxe / Temáticas",
-      weekday: { h4: 200000, h8: 230000, h12: 280000, diaHotelero: 350000 },
-      weekend: { h4: 250000, h8: 290000, h12: 350000, diaHotelero: 390000 },
+      name: "Suite Temática (Jacuzzi + Sauna)",
+      weekday: { h4: 240000, h8: 280000, h12: 340000, diaHotelero: 420000 },
+      weekend: { h4: 300000, h8: 350000, h12: 420000, diaHotelero: 470000 },
     },
   },
   plans: {

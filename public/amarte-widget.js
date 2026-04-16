@@ -23,6 +23,51 @@
     BACKEND_URL = window.location.origin;
   }
 
+  var AMARTE_CONV_ID_KEY = "amarte_conversation_id";
+  var CONVERSATION_ID_RE =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+  function randomUuidV4() {
+    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(
+      /[xy]/g,
+      function (c) {
+        var r = (Math.random() * 16) | 0;
+        var v = c === "x" ? r : (r & 0x3) | 0x8;
+        return v.toString(16);
+      }
+    );
+  }
+
+  /**
+   * Identificador estable de conversación para historial en servidor (UUID v4).
+   */
+  function getConversationId() {
+    try {
+      var existing = localStorage.getItem(AMARTE_CONV_ID_KEY);
+      if (existing && CONVERSATION_ID_RE.test(existing)) {
+        return existing;
+      }
+      var id =
+        typeof crypto !== "undefined" && crypto.randomUUID
+          ? crypto.randomUUID()
+          : randomUuidV4();
+      localStorage.setItem(AMARTE_CONV_ID_KEY, id);
+      return id;
+    } catch (e1) {
+      try {
+        var s = sessionStorage.getItem(AMARTE_CONV_ID_KEY);
+        if (s && CONVERSATION_ID_RE.test(s)) {
+          return s;
+        }
+        var nid = randomUuidV4();
+        sessionStorage.setItem(AMARTE_CONV_ID_KEY, nid);
+        return nid;
+      } catch (e2) {
+        return randomUuidV4();
+      }
+    }
+  }
+
   // Referencia al contenedor raíz del widget (se asigna al crear el DOM)
   var rootEl = null;
   // Referencia al panel de mensajes con scroll
@@ -209,6 +254,7 @@
     fd.append("audio", blob, "recording.webm");
     fd.append("roomName", roomName);
     fd.append("pageUrl", pageUrl);
+    fd.append("conversationId", getConversationId());
 
     fetch(BACKEND_URL + "/chat/audio", {
       method: "POST",
@@ -395,6 +441,7 @@
         message: text,
         roomName: roomName,
         pageUrl: pageUrl,
+        conversationId: getConversationId(),
       }),
     })
       .then(function (res) {
