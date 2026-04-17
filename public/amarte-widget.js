@@ -196,6 +196,86 @@
     };
   }
 
+  /**
+   * Codifica un valor para usarlo de forma segura en atributo HTML (p. ej. href).
+   */
+  function attrEncode(s) {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/"/g, "&quot;");
+  }
+
+  /**
+   * Escapa HTML en texto plano.
+   */
+  function escapeHtml(s) {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  /**
+   * En segmentos de texto ya escapado (sin etiquetas), convierte URLs http(s) en enlaces.
+   */
+  function autolinkPlainSegments(html) {
+    var parts = html.split(/(<[^>]+>)/);
+    var idx;
+    for (idx = 0; idx < parts.length; idx++) {
+      if (idx % 2 !== 0) {
+        continue;
+      }
+      parts[idx] = parts[idx].replace(
+        /\b(https?:\/\/[^\s<]+)/gi,
+        function (full) {
+          var u = full;
+          while (u.length > 10 && /[.,;:!?…)\]]$/i.test(u)) {
+            u = u.slice(0, -1);
+          }
+          if (!/^https?:\/\//i.test(u)) {
+            return full;
+          }
+          var tail = full.slice(u.length);
+          return (
+            '<a href="' +
+            attrEncode(u) +
+            '" class="amarte-inline-link" target="_blank" rel="noopener noreferrer">' +
+            u +
+            "</a>" +
+            tail
+          );
+        }
+      );
+    }
+    return parts.join("");
+  }
+
+  /**
+   * Markdown ligero del mensaje del bot → HTML seguro (negrita, cursiva, enlaces, saltos).
+   */
+  function renderBotMessageHtml(raw) {
+    var t = escapeHtml(String(raw || ""));
+    // Enlaces Markdown [etiqueta](https://...)
+    t = t.replace(
+      /\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,
+      function (_, label, url) {
+        return (
+          '<a href="' +
+          attrEncode(url) +
+          '" class="amarte-inline-link" target="_blank" rel="noopener noreferrer">' +
+          label +
+          "</a>"
+        );
+      }
+    );
+    t = t.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+    t = t.replace(/_([^_\n]+)_/g, "<em>$1</em>");
+    t = autolinkPlainSegments(t);
+    t = t.replace(/\n/g, "<br>");
+    return t;
+  }
+
   // Referencia al contenedor raíz del widget (se asigna al crear el DOM)
   var rootEl = null;
   // Referencia al panel de mensajes con scroll
@@ -246,7 +326,10 @@
       ".amarte-widget-messages{flex:1;overflow-y:auto;padding:16px;background:#fafafa;min-height:200px;}" +
       ".amarte-msg{margin-bottom:12px;display:flex;flex-direction:column;align-items:flex-start;}" +
       ".amarte-msg-user{align-items:flex-end;}" +
-      ".amarte-bubble-inner{max-width:85%;padding:10px 14px;border-radius:14px;font-size:0.95rem;line-height:1.45;}" +
+      ".amarte-bubble-inner{max-width:85%;padding:10px 14px;border-radius:14px;font-size:0.95rem;line-height:1.45;" +
+      "word-break:break-word;font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI','Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji',sans-serif;}" +
+      ".amarte-msg-bot .amarte-inline-link{color:#AD1457;text-decoration:underline;font-weight:600;}" +
+      ".amarte-msg-bot .amarte-inline-link:hover{color:#1A1A3D;}" +
       ".amarte-msg-bot .amarte-bubble-inner{background:#fff;border:1px solid #e0e0e0;color:#1a1a1a;}" +
       ".amarte-msg-user .amarte-bubble-inner{background:linear-gradient(145deg,#E91E63,#D81B60);color:#ffffff;}" +
       ".amarte-typing{font-size:0.85rem;color:#666;font-style:italic;padding:4px 0 8px;}" +
@@ -309,8 +392,11 @@
     // Burbuja interior con el texto
     var bubble = document.createElement("div");
     bubble.className = "amarte-bubble-inner";
-    // Asigna el texto del mensaje de forma segura (solo texto, sin HTML)
-    bubble.textContent = text;
+    if (role === "bot") {
+      bubble.innerHTML = renderBotMessageHtml(text);
+    } else {
+      bubble.textContent = text;
+    }
     row.appendChild(bubble);
 
     // Si hay opciones y es mensaje del bot, crea enlaces debajo

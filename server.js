@@ -216,6 +216,21 @@ async function runChat(input) {
 }
 
 /**
+ * Quita Markdown ligero antes de TTS (evita leer asteriscos o sintaxis de enlaces).
+ * @param {string} text
+ */
+function stripMarkdownForTts(text) {
+  if (!text || typeof text !== "string") {
+    return "";
+  }
+  let s = text;
+  s = s.replace(/\[([^\]]+)\]\([^)]*\)/g, "$1");
+  s = s.replace(/\*\*([^*]+)\*\*/g, "$1");
+  s = s.replace(/_([^_\n]+)_/g, "$1");
+  return s.trim();
+}
+
+/**
  * Sintetiza voz con ElevenLabs (voz Lina por defecto).
  * @param {string} text
  * @returns {Promise<Buffer>}
@@ -227,8 +242,11 @@ async function synthesizeElevenLabs(text) {
   }
   const voiceId =
     process.env.ELEVENLABS_VOICE_ID || ELEVENLABS_VOICE_ID_DEFAULT;
+  const stripped = stripMarkdownForTts(text);
   const safeText =
-    text.length > TTS_MAX_CHARS ? text.slice(0, TTS_MAX_CHARS) : text;
+    stripped.length > TTS_MAX_CHARS
+      ? stripped.slice(0, TTS_MAX_CHARS)
+      : stripped;
 
   const url = `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`;
   const res = await fetch(url, {
