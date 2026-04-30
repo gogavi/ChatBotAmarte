@@ -252,6 +252,22 @@
   }
 
   /**
+   * Aplica Markdown inline solo sobre texto, sin tocar atributos de etiquetas ya generadas.
+   */
+  function renderInlineMarkdownPlainSegments(html) {
+    var parts = html.split(/(<[^>]+>)/);
+    var idx;
+    for (idx = 0; idx < parts.length; idx++) {
+      if (idx % 2 !== 0) {
+        continue;
+      }
+      parts[idx] = parts[idx].replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+      parts[idx] = parts[idx].replace(/_([^_\n]+)_/g, "<em>$1</em>");
+    }
+    return parts.join("");
+  }
+
+  /**
    * Markdown ligero del mensaje del bot → HTML seguro (negrita, cursiva, enlaces, saltos).
    */
   function renderBotMessageHtml(raw) {
@@ -269,8 +285,7 @@
         );
       }
     );
-    t = t.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
-    t = t.replace(/_([^_\n]+)_/g, "<em>$1</em>");
+    t = renderInlineMarkdownPlainSegments(t);
     t = autolinkPlainSegments(t);
     t = t.replace(/\n/g, "<br>");
     return t;
