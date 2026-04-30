@@ -127,6 +127,7 @@ Enlace de pago seguro (Wompi): ${payment.checkoutUrl}
 El chat **renderiza** Markdown sencillo y enlaces. Para que se vea bien y sea clicable:
 - **Negrita:** rodea con doble asterisco, p. ej. \`**Suite Deluxe**\`.
 - **Enlaces:** usa siempre el formato Markdown \`[texto claro](https://...)\` con URL **completa** y \`https://\` (o \`http://\` solo si no hay HTTPS). El usuario podrá abrir el enlace con un toque.
+- **Excepción Wompi:** el enlace de pago de Wompi escríbelo como URL completa sin Markdown: \`${payment.checkoutUrl}\`.
 - También puedes escribir la URL sola (p. ej. \`https://amartesuite.com/...\`); el widget la convertirá en enlace.
 - Listas cortas: puedes usar viñetas con \`-\` al inicio de línea; evita tablas o Markdown muy complejo.
 - Mantén párrafos breves; el usuario suele estar en móvil.

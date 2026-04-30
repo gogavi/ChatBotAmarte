@@ -9,6 +9,10 @@ const { OpenAI, toFile } = require("openai");
 const { buildMartinaSystemPrompt } = require("./config/martinaSystemPrompt");
 const { matchSuiteFromPageUrl } = require("./config/suitePageHints");
 const conversationStore = require("./conversationStore");
+const {
+  normalizeAssistantPaymentLinks,
+  normalizePaymentOptionUrl,
+} = require("./paymentLinks");
 
 const PORT = process.env.PORT || 3000;
 const app = express();
@@ -145,7 +149,10 @@ function parseAssistantReply(rawText) {
           typeof item.label === "string" &&
           typeof item.url === "string"
       )
-      .map((item) => ({ label: item.label, url: item.url }));
+      .map((item) => ({
+        label: item.label,
+        url: normalizePaymentOptionUrl(item.url),
+      }));
     return { reply: reply || rawText.trim(), options };
   } catch {
     return { reply: reply || rawText.trim(), options: [] };
@@ -198,7 +205,10 @@ async function runChat(input) {
         (m.role === "user" || m.role === "assistant") &&
         typeof m.content === "string"
     )
-    .map((m) => ({ role: m.role, content: m.content }));
+    .map((m) => ({
+      role: m.role,
+      content: normalizeAssistantPaymentLinks(m.content),
+    }));
 
   const completion = await openai.chat.completions.create({
     model: "gpt-4o-mini",
@@ -209,7 +219,9 @@ async function runChat(input) {
     ],
   });
 
-  const rawText = completion.choices[0]?.message?.content ?? "";
+  const rawText = normalizeAssistantPaymentLinks(
+    completion.choices[0]?.message?.content ?? ""
+  );
   const { reply, options } = parseAssistantReply(rawText);
   console.log(`IA respondió a ${safeRoom}: ${options.length} botones generados.`);
   return { reply, options, rawText };
