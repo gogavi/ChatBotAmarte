@@ -14,6 +14,13 @@ assert.strictEqual(
 
 assert.strictEqual(
   normalizeAssistantPaymentLinks(
+    "Puedes pagar aquí: [Pago seguro Wompi](https://checkout.wompi.co/l/enlace-roto)"
+  ),
+  `Puedes pagar aquí: Pago seguro Wompi: ${PAYMENT_CHECKOUT_URL}`
+);
+
+assert.strictEqual(
+  normalizeAssistantPaymentLinks(
     "Paga en https://checkout.wompi.co/l/VPOS%3Cem%3ERXJqnz"
   ),
   `Paga en ${PAYMENT_CHECKOUT_URL}`

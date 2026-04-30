@@ -216,6 +216,10 @@
     return String(value).replace(WOMPI_CHECKOUT_RE, WOMPI_CHECKOUT_URL);
   }
 
+  function isWompiCheckoutLabel(label) {
+    return /pago\s+seguro\s+wompi/i.test(String(label || ""));
+  }
+
   /**
    * Escapa HTML en texto plano.
    */
@@ -288,7 +292,9 @@
     t = t.replace(
       /\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,
       function (_, label, url) {
-        var safeUrl = normalizeWompiCheckoutUrl(url);
+        var safeUrl = isWompiCheckoutLabel(label)
+          ? WOMPI_CHECKOUT_URL
+          : normalizeWompiCheckoutUrl(url);
         return (
           '<a href="' +
           attrEncode(safeUrl) +
