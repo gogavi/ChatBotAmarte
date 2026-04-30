@@ -205,6 +205,17 @@
       .replace(/"/g, "&quot;");
   }
 
+  var WOMPI_CHECKOUT_URL = "https://checkout.wompi.co/l/VPOS_RXJqnz";
+  var WOMPI_CHECKOUT_RE =
+    /https:\/\/checkout\.wompi\.co\/l\/VPOS(?:_|%3[Cc]em%3[Ee]|%3[Cc]\/em%3[Ee]|<\/?em>|&lt;\/?em&gt;|&amp;lt;\/?em&amp;gt;)*RXJqnz(?:%3[Cc]\/em%3[Ee]|<\/em>|&lt;\/em&gt;|&amp;lt;\/em&amp;gt;)*/gi;
+
+  /**
+   * Corrige variantes generadas por Markdown/caché para el checkout de Wompi.
+   */
+  function normalizeWompiCheckoutUrl(value) {
+    return String(value).replace(WOMPI_CHECKOUT_RE, WOMPI_CHECKOUT_URL);
+  }
+
   /**
    * Escapa HTML en texto plano.
    */
@@ -236,12 +247,13 @@
           if (!/^https?:\/\//i.test(u)) {
             return full;
           }
+          var safeUrl = normalizeWompiCheckoutUrl(u);
           var tail = full.slice(u.length);
           return (
             '<a href="' +
-            attrEncode(u) +
+            attrEncode(safeUrl) +
             '" class="amarte-inline-link" target="_blank" rel="noopener noreferrer">' +
-            u +
+            safeUrl +
             "</a>" +
             tail
           );
@@ -276,9 +288,10 @@
     t = t.replace(
       /\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,
       function (_, label, url) {
+        var safeUrl = normalizeWompiCheckoutUrl(url);
         return (
           '<a href="' +
-          attrEncode(url) +
+          attrEncode(safeUrl) +
           '" class="amarte-inline-link" target="_blank" rel="noopener noreferrer">' +
           label +
           "</a>"
