@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Demo widget Amarte</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        max-width: 720px;
+        margin: 2rem auto;
+        padding: 0 1rem;
+        line-height: 1.5;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Demo widget Amarte</h1>
+    <p>
+      Página de prueba local/producción. El botón flotante debe aparecer abajo.
+      Prueba escribir <strong>enlace de pago</strong>.
+    </p>
+    <script>
+      window.AMARTE_CHATBOT_URL = window.location.origin;
+    </script>
+    <script src="/amarte-widget.js"></script>
+  </body>
+</html>

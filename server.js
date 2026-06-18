@@ -41,7 +41,46 @@ app.use(
   })
 );
 
-app.use(express.static("public"));
+app.use(
+  express.static("public", {
+    setHeaders(res, filePath) {
+      if (filePath.endsWith("amarte-widget.js")) {
+        res.setHeader("Cache-Control", "no-cache, must-revalidate");
+      }
+    },
+  })
+);
+
+app.get("/health", (_req, res) => {
+  res.json({
+    ok: true,
+    service: "amarte-chatbot",
+    openaiConfigured: Boolean(process.env.OPENAI_API_KEY),
+    elevenLabsConfigured: Boolean(process.env.ELEVENLABS_API_KEY),
+    chatHistoryEnabled: Boolean(chatHistoryStore),
+  });
+});
+
+app.get("/", (_req, res) => {
+  res.type("html").send(`<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Amarte Chatbot</title>
+</head>
+<body style="font-family:system-ui,sans-serif;max-width:720px;margin:2rem auto;padding:0 1rem;line-height:1.5;">
+  <h1>Amarte Chatbot</h1>
+  <p>Backend activo. Endpoints: <code>/chat</code>, <code>/chat/audio</code>, <code>/health</code>.</p>
+  <p>Widget: <a href="/amarte-widget.js">/amarte-widget.js</a> · Demo: <a href="/embed-demo.html">/embed-demo.html</a></p>
+  <h2>Embed en amartesuite.com</h2>
+  <pre style="background:#f4f4f4;padding:1rem;overflow:auto;border-radius:8px;"><code>&lt;script&gt;
+  window.AMARTE_CHATBOT_URL = "https://chatbotamarte-production.up.railway.app";
+&lt;/script&gt;
+&lt;script src="https://chatbotamarte-production.up.railway.app/amarte-widget.js?v=690f9f4"&gt;&lt;/script&gt;</code></pre>
+</body>
+</html>`);
+});
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
