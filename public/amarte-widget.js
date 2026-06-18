@@ -25,7 +25,7 @@
 
   /** URLs de acciones rápidas (alineadas con config/amarteCatalog.js). Sustituibles vía window.* */
   var DEFAULT_QUICK_WHATSAPP = "https://wa.me/573007416683";
-  var DEFAULT_QUICK_RESERVE = "https://amartesuite.com/suites/";
+  var DEFAULT_QUICK_RESERVE = "https://amartesuite.com/formulario-reservas-amarte-suite/";
   var DEFAULT_QUICK_PROMOS = "https://amartesuite.com/suite-jacuzzi-mejor-precio/";
   var DEFAULT_QUICK_TEL = "tel:+573013307909";
 

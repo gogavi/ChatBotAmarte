@@ -136,7 +136,7 @@ const payment = {
 
 const contact = {
   whatsappUrl: "https://wa.me/573007416683",
-  reservationsUrl: "https://amartesuite.com/suites/",
+  reservationsUrl: "https://amartesuite.com/formulario-reservas-amarte-suite/",
   /** Landing principal de campañas / promociones (botón PROMOCIONES en el widget). */
   promotionsUrl: "https://amartesuite.com/suite-jacuzzi-mejor-precio/",
 };
