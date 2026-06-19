@@ -338,26 +338,29 @@
     style.textContent =
       /* CSS del widget Amarte */
       ".amarte-widget-root{font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;}" +
-      ".amarte-widget-bubble{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);" +
-      "min-height:60px;padding:14px 22px;border-radius:10px;border:none;cursor:pointer;" +
-      "background:linear-gradient(135deg,#E91E63,#D81B60 55%,#AD1457);color:#ffffff;" +
-      "font-size:1.5rem;font-weight:600;letter-spacing:0.02em;white-space:nowrap;" +
-      "box-shadow:0 8px 24px rgba(216,27,96,0.35);z-index:99998;display:flex;align-items:center;justify-content:center;" +
-      "transition:transform 0.2s ease,box-shadow 0.2s ease,background 0.2s ease;}" +
-      ".amarte-widget-bubble:hover{transform:translateX(-50%) scale(1.03);" +
-      "box-shadow:0 12px 32px rgba(26,26,61,0.35);background:linear-gradient(135deg,#1A1A3D,#2a2a52);color:#ffffff;}" +
-      ".amarte-widget-panel{position:fixed;left:50%;bottom:140px;width:min(380px,calc(100vw - 32px));" +
-      "max-height:min(560px,calc(100vh - 120px));background:#ffffff;border:1px solid #e8e8e8;" +
-      "border-radius:16px;box-shadow:0 16px 48px rgba(0,0,0,0.18);z-index:99999;display:flex;flex-direction:column;" +
-      "overflow:hidden;opacity:0;transform:translate(-50%,12px) scale(0.98);pointer-events:none;" +
+      ".amarte-widget-bubble{position:fixed;right:24px;left:auto;bottom:calc(24px + env(safe-area-inset-bottom,0px));" +
+      "width:56px;height:56px;padding:0;border:none;border-radius:50%;cursor:pointer;" +
+      "background:#D81B60;color:#ffffff;z-index:99998;display:flex;align-items:center;justify-content:center;" +
+      "box-shadow:0 8px 24px rgba(216,27,96,0.35);" +
+      "transition:opacity 0.25s ease,visibility 0.25s ease,transform 0.25s ease,box-shadow 0.2s ease;}" +
+      ".amarte-widget-bubble:hover{transform:scale(1.05);box-shadow:0 12px 32px rgba(216,27,96,0.45);}" +
+      ".amarte-widget-root.amarte-chat-open .amarte-widget-bubble{opacity:0;visibility:hidden;pointer-events:none;transform:scale(0.85);}" +
+      ".amarte-widget-panel{position:fixed;right:24px;left:auto;bottom:96px;width:min(380px,calc(100vw - 32px));" +
+      "max-height:min(560px,calc(100vh - 120px));background:rgba(255,255,255,0.75);border:1px solid #fff;" +
+      "border-radius:25px;box-shadow:0 12px 40px rgba(0,0,0,0.1);backdrop-filter:blur(15px);-webkit-backdrop-filter:blur(15px);" +
+      "z-index:99999;display:flex;flex-direction:column;overflow:hidden;opacity:0;" +
+      "transform:translateY(12px) scale(0.98);pointer-events:none;" +
       "transition:opacity 0.25s ease,transform 0.25s ease;}" +
-      ".amarte-widget-panel.amarte-open{opacity:1;transform:translate(-50%,0) scale(1);pointer-events:auto;}" +
-      ".amarte-widget-header{background:linear-gradient(90deg,#1A1A3D,#2a2a52);color:#fff;padding:16px 18px;" +
-      "display:flex;align-items:center;justify-content:space-between;border-bottom:2px solid #D81B60;}" +
-      ".amarte-widget-title{font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:1.1rem;font-weight:600;letter-spacing:0.02em;}" +
-      ".amarte-widget-sub{color:rgba(255,255,255,0.88);font-size:0.75rem;margin-top:4px;}" +
-      ".amarte-widget-close{background:transparent;border:none;color:#fff;cursor:pointer;padding:4px;line-height:1;}" +
-      ".amarte-widget-messages{flex:1;overflow-y:auto;padding:16px;background:#fafafa;min-height:200px;}" +
+      ".amarte-widget-panel.amarte-open{opacity:1;transform:translateY(0) scale(1);pointer-events:auto;}" +
+      ".amarte-widget-header{background:transparent;padding:16px 18px 12px;" +
+      "display:flex;align-items:center;justify-content:space-between;}" +
+      ".amarte-widget-title{font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;" +
+      "font-size:1.1rem;font-weight:600;letter-spacing:0.02em;color:#D81B60;}" +
+      ".amarte-widget-sub{color:#9e9e9e;font-size:0.75rem;margin-top:4px;}" +
+      ".amarte-widget-close{background:transparent;border:none;color:#9e9e9e;cursor:pointer;" +
+      "padding:4px;line-height:1;font-size:1.5rem;}" +
+      ".amarte-widget-close:hover{color:#D81B60;}" +
+      ".amarte-widget-messages{flex:1;overflow-y:auto;padding:16px;background:transparent;min-height:200px;}" +
       ".amarte-msg{margin-bottom:12px;display:flex;flex-direction:column;align-items:flex-start;}" +
       ".amarte-msg-user{align-items:flex-end;}" +
       ".amarte-bubble-inner{max-width:85%;padding:10px 14px;border-radius:14px;font-size:0.95rem;line-height:1.45;" +
@@ -368,30 +371,35 @@
       ".amarte-msg-user .amarte-bubble-inner{background:linear-gradient(145deg,#E91E63,#D81B60);color:#ffffff;}" +
       ".amarte-typing{font-size:0.85rem;color:#666;font-style:italic;padding:4px 0 8px;}" +
       ".amarte-options{margin-top:8px;display:flex;flex-wrap:wrap;gap:8px;}" +
-      ".amarte-opt-link{display:inline-block;padding:8px 12px;border-radius:999px;border:1px solid #D81B60;" +
-      "color:#1A1A3D;text-decoration:none;font-size:0.85rem;background:#fff;transition:background 0.2s,color 0.2s;}" +
-      ".amarte-opt-link:hover{background:#D81B60;color:#ffffff;}" +
-      ".amarte-widget-footer-wrap{flex-shrink:0;display:flex;flex-direction:column;border-top:1px solid #eee;background:#fff;}" +
-      ".amarte-widget-footer-row{display:flex;gap:8px;padding:12px 12px 8px;background:#fff;align-items:center;}" +
-      ".amarte-widget-quick-row{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;padding:0 12px 12px;background:#fff;}" +
+      ".amarte-opt-link{display:inline-block;padding:10px 16px;border-radius:30px;border:none;" +
+      "color:#fff;text-decoration:none;font-size:0.85rem;font-weight:600;background:#D81B60;" +
+      "transition:background 0.2s ease,transform 0.15s ease;}" +
+      ".amarte-opt-link:hover{background:#AD1457;color:#fff;}" +
+      ".amarte-widget-footer-wrap{flex-shrink:0;display:flex;flex-direction:column;background:transparent;}" +
+      ".amarte-widget-footer-row{display:flex;gap:8px;padding:12px 16px 8px;background:transparent;align-items:center;}" +
+      ".amarte-widget-quick-row{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;" +
+      "padding:0 16px 16px;background:transparent;margin-top:12px;}" +
       ".amarte-widget-quick-row .amarte-opt-link{text-align:center;}" +
       "@media (min-width:769px){.amarte-quick-call{display:none !important;}}" +
-      ".amarte-widget-input{flex:1;border:1px solid #ccc;border-radius:999px;padding:10px 14px;font-size:0.95rem;outline:none;}" +
+      ".amarte-widget-input{flex:1;border:1px solid rgba(0,0,0,0.12);border-radius:999px;" +
+      "padding:12px 16px;font-size:0.95rem;outline:none;background:rgba(255,255,255,0.9);box-shadow:none;}" +
       ".amarte-widget-input:focus{border-color:#D81B60;}" +
-      ".amarte-widget-mic{background:#fff;color:#1A1A3D;border:2px solid #D81B60;border-radius:999px;" +
-      "padding:10px 14px;cursor:pointer;font-weight:600;flex-shrink:0;font-size:0.9rem;line-height:1;}" +
-      ".amarte-widget-mic:hover{background:#fafafa;}" +
+      ".amarte-widget-mic{background:transparent;color:#D81B60;border:none;border-radius:50%;" +
+      "width:40px;height:40px;padding:0;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;}" +
+      ".amarte-widget-mic:hover{background:rgba(216,27,96,0.08);}" +
       ".amarte-widget-mic:disabled{opacity:0.5;cursor:not-allowed;}" +
-      ".amarte-widget-mic.amarte-recording{background:#E91E63;color:#fff;border-color:#AD1457;}" +
+      ".amarte-widget-mic.amarte-recording{background:#D81B60;color:#fff;}" +
       ".amarte-widget-audio{width:100%;max-width:100%;margin-top:8px;height:40px;}" +
-      ".amarte-widget-send{background:#1A1A3D;color:#fff;border:none;border-radius:999px;padding:10px 18px;cursor:pointer;font-weight:600;}" +
-      ".amarte-widget-send:hover{background:#2a2a52;}" +
+      ".amarte-widget-send{width:44px;height:44px;min-width:44px;padding:0;border:none;border-radius:50%;" +
+      "background:#D81B60;color:#fff;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;" +
+      "box-shadow:0 4px 12px rgba(216,27,96,0.35);transition:background 0.2s ease,transform 0.15s ease;}" +
+      ".amarte-widget-send:hover{background:#AD1457;transform:scale(1.05);}" +
       ".amarte-widget-send:disabled{opacity:0.5;cursor:not-allowed;}" +
-      "@media (max-width:768px){.amarte-widget-bubble{min-height:35px;padding:6px 11px;font-size:0.76rem;" +
-      "letter-spacing:0.01em;white-space:normal;text-align:center;line-height:1.25;max-width:min(92vw,280px);" +
-      "bottom:calc(16px + env(safe-area-inset-bottom,0px));border-radius:8px;box-shadow:0 4px 16px rgba(216,27,96,0.3);}" +
-      ".amarte-widget-panel{bottom:calc(100px + env(safe-area-inset-bottom,0px));}}" +
-      "@media (min-width:769px){.amarte-widget-panel{width:min(520px,calc(100vw - 48px));" +
+      "@media (max-width:768px){.amarte-widget-bubble{width:48px;height:48px;right:16px;" +
+      "bottom:calc(16px + env(safe-area-inset-bottom,0px));}" +
+      ".amarte-widget-bubble svg{width:22px;height:22px;}" +
+      ".amarte-widget-panel{right:16px;bottom:calc(80px + env(safe-area-inset-bottom,0px));}}" +
+      "@media (min-width:769px){.amarte-widget-panel{width:min(420px,calc(100vw - 48px));" +
       "max-height:min(720px,calc(100vh - 140px));}.amarte-widget-messages{min-height:320px;}}";
 
     // Añade el style al head del documento
@@ -753,12 +761,17 @@
     rootEl = document.createElement("div");
     rootEl.className = "amarte-widget-root";
 
-    // Botón flotante (burbuja) para abrir/cerrar
+    // FAB circular para abrir/cerrar el chat
     var bubble = document.createElement("button");
     bubble.type = "button";
     bubble.className = "amarte-widget-bubble";
-    bubble.setAttribute("aria-label", "Pregúntale a Martina — abrir chat Amarte Suite");
-    bubble.textContent = "Pregúntale a Martina";
+    bubble.setAttribute("aria-label", "Abrir chat Amarte Suite");
+    bubble.setAttribute("aria-expanded", "false");
+    bubble.innerHTML =
+      '<svg aria-hidden="true" viewBox="0 0 24 24" width="26" height="26" fill="none" ' +
+      'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+      '<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>' +
+      "</svg>";
 
     // Panel del chat (inicialmente oculto vía clase)
     var panel = document.createElement("div");
@@ -815,12 +828,22 @@
     micBtn.className = "amarte-widget-mic";
     micBtn.setAttribute("aria-label", "Grabar mensaje de voz");
     micBtn.setAttribute("title", "Mensaje de voz");
-    micBtn.textContent = "🎤";
+    micBtn.innerHTML =
+      '<svg aria-hidden="true" viewBox="0 0 24 24" width="22" height="22" fill="none" ' +
+      'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+      '<path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>' +
+      '<path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8"/>' +
+      "</svg>";
 
     var sendBtn = document.createElement("button");
     sendBtn.type = "button";
     sendBtn.className = "amarte-widget-send";
-    sendBtn.textContent = "Enviar";
+    sendBtn.setAttribute("aria-label", "Enviar");
+    sendBtn.innerHTML =
+      '<svg aria-hidden="true" viewBox="0 0 24 24" width="20" height="20" fill="none" ' +
+      'stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">' +
+      '<path d="M5 12h14M13 6l6 6-6 6"/>' +
+      "</svg>";
 
     footerRow.appendChild(inputEl);
     footerRow.appendChild(micBtn);
@@ -855,6 +878,7 @@
     // Alterna la clase que abre/cierra el panel
     function togglePanel() {
       var isOpen = panel.classList.toggle("amarte-open");
+      rootEl.classList.toggle("amarte-chat-open", isOpen);
       bubble.setAttribute("aria-expanded", isOpen ? "true" : "false");
       if (isOpen) {
         inputEl.focus();
@@ -869,6 +893,7 @@
     // Click en cerrar: quita clase abierta
     closeBtn.addEventListener("click", function () {
       panel.classList.remove("amarte-open");
+      rootEl.classList.remove("amarte-chat-open");
       bubble.setAttribute("aria-expanded", "false");
     });
     // Enter en el input envía mensaje
