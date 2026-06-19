@@ -24,7 +24,10 @@
   }
 
   /** URLs de acciones rápidas (alineadas con config/amarteCatalog.js). Sustituibles vía window.* */
-  var DEFAULT_QUICK_WHATSAPP = "https://wa.me/573007416683";
+  var DEFAULT_WHATSAPP_MESSAGE =
+    "Hola, estuve navegando en la página web y descubrí habitaciones muy interesantes. ¿Me ayudas con más información?";
+  var DEFAULT_QUICK_WHATSAPP =
+    "https://wa.me/573007416683?text=" + encodeURIComponent(DEFAULT_WHATSAPP_MESSAGE);
   var DEFAULT_QUICK_RESERVE = "https://amartesuite.com/formulario-reservas-amarte-suite/";
   var DEFAULT_QUICK_PROMOS = "https://amartesuite.com/suite-jacuzzi-mejor-precio/";
   var DEFAULT_QUICK_TEL = "tel:+573013307909";
@@ -338,13 +341,17 @@
     style.textContent =
       /* CSS del widget Amarte */
       ".amarte-widget-root{font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;}" +
-      ".amarte-widget-bubble{position:fixed;right:24px;left:auto;bottom:calc(24px + env(safe-area-inset-bottom,0px));" +
-      "width:56px;height:56px;padding:0;border:none;border-radius:50%;cursor:pointer;" +
-      "background:#D81B60;color:#ffffff;z-index:99998;display:flex;align-items:center;justify-content:center;" +
+      ".amarte-widget-launcher{position:fixed;right:24px;left:auto;bottom:calc(24px + env(safe-area-inset-bottom,0px));" +
+      "display:flex;align-items:center;gap:10px;padding:8px 8px 8px 18px;border:none;border-radius:999px;" +
+      "background:#D81B60;color:#ffffff;cursor:pointer;z-index:99998;" +
+      "font-size:0.95rem;font-weight:600;letter-spacing:0.01em;white-space:nowrap;" +
       "box-shadow:0 8px 24px rgba(216,27,96,0.35);" +
       "transition:opacity 0.25s ease,visibility 0.25s ease,transform 0.25s ease,box-shadow 0.2s ease;}" +
-      ".amarte-widget-bubble:hover{transform:scale(1.05);box-shadow:0 12px 32px rgba(216,27,96,0.45);}" +
-      ".amarte-widget-root.amarte-chat-open .amarte-widget-bubble{opacity:0;visibility:hidden;pointer-events:none;transform:scale(0.85);}" +
+      ".amarte-widget-launcher:hover{transform:scale(1.02);box-shadow:0 12px 32px rgba(216,27,96,0.45);}" +
+      ".amarte-widget-launcher-label{line-height:1.2;}" +
+      ".amarte-widget-launcher-icon{width:44px;height:44px;border-radius:50%;flex-shrink:0;" +
+      "background:rgba(255,255,255,0.15);display:flex;align-items:center;justify-content:center;}" +
+      ".amarte-widget-root.amarte-chat-open .amarte-widget-launcher{opacity:0;visibility:hidden;pointer-events:none;transform:scale(0.92);}" +
       ".amarte-widget-panel{position:fixed;right:24px;left:auto;bottom:96px;width:min(380px,calc(100vw - 32px));" +
       "max-height:min(560px,calc(100vh - 120px));background:rgba(255,255,255,0.75);border:1px solid #fff;" +
       "border-radius:25px;box-shadow:0 12px 40px rgba(0,0,0,0.1);backdrop-filter:blur(15px);-webkit-backdrop-filter:blur(15px);" +
@@ -395,9 +402,10 @@
       "box-shadow:0 4px 12px rgba(216,27,96,0.35);transition:background 0.2s ease,transform 0.15s ease;}" +
       ".amarte-widget-send:hover{background:#AD1457;transform:scale(1.05);}" +
       ".amarte-widget-send:disabled{opacity:0.5;cursor:not-allowed;}" +
-      "@media (max-width:768px){.amarte-widget-bubble{width:48px;height:48px;right:16px;" +
-      "bottom:calc(16px + env(safe-area-inset-bottom,0px));}" +
-      ".amarte-widget-bubble svg{width:22px;height:22px;}" +
+      "@media (max-width:768px){.amarte-widget-launcher{right:16px;font-size:0.82rem;padding:6px 6px 6px 14px;" +
+      "bottom:calc(16px + env(safe-area-inset-bottom,0px));max-width:min(92vw,320px);}" +
+      ".amarte-widget-launcher-icon{width:40px;height:40px;}" +
+      ".amarte-widget-launcher-icon svg{width:20px;height:20px;}" +
       ".amarte-widget-panel{right:16px;bottom:calc(80px + env(safe-area-inset-bottom,0px));}}" +
       "@media (min-width:769px){.amarte-widget-panel{width:min(420px,calc(100vw - 48px));" +
       "max-height:min(720px,calc(100vh - 140px));}.amarte-widget-messages{min-height:320px;}}";
@@ -761,17 +769,28 @@
     rootEl = document.createElement("div");
     rootEl.className = "amarte-widget-root";
 
-    // FAB circular para abrir/cerrar el chat
-    var bubble = document.createElement("button");
-    bubble.type = "button";
-    bubble.className = "amarte-widget-bubble";
-    bubble.setAttribute("aria-label", "Abrir chat Amarte Suite");
-    bubble.setAttribute("aria-expanded", "false");
-    bubble.innerHTML =
-      '<svg aria-hidden="true" viewBox="0 0 24 24" width="26" height="26" fill="none" ' +
+    // Lanzador: píldora con título + icono circular
+    var launcher = document.createElement("button");
+    launcher.type = "button";
+    launcher.className = "amarte-widget-launcher";
+    launcher.setAttribute("aria-label", "Pregúntale a Martina — abrir chat Amarte Suite");
+    launcher.setAttribute("aria-expanded", "false");
+
+    var launcherLabel = document.createElement("span");
+    launcherLabel.className = "amarte-widget-launcher-label";
+    launcherLabel.textContent = "Pregúntale a Martina";
+
+    var launcherIcon = document.createElement("span");
+    launcherIcon.className = "amarte-widget-launcher-icon";
+    launcherIcon.setAttribute("aria-hidden", "true");
+    launcherIcon.innerHTML =
+      '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" ' +
       'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
       '<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>' +
       "</svg>";
+
+    launcher.appendChild(launcherLabel);
+    launcher.appendChild(launcherIcon);
 
     // Panel del chat (inicialmente oculto vía clase)
     var panel = document.createElement("div");
@@ -871,7 +890,7 @@
     panel.appendChild(messagesEl);
     panel.appendChild(footerWrap);
 
-    rootEl.appendChild(bubble);
+    rootEl.appendChild(launcher);
     rootEl.appendChild(panel);
     document.body.appendChild(rootEl);
 
@@ -879,22 +898,22 @@
     function togglePanel() {
       var isOpen = panel.classList.toggle("amarte-open");
       rootEl.classList.toggle("amarte-chat-open", isOpen);
-      bubble.setAttribute("aria-expanded", isOpen ? "true" : "false");
+      launcher.setAttribute("aria-expanded", isOpen ? "true" : "false");
       if (isOpen) {
         inputEl.focus();
         scrollMessagesToBottom();
       }
     }
 
-    // Click en burbuja: abre o cierra
-    bubble.addEventListener("click", function () {
+    // Click en lanzador: abre o cierra
+    launcher.addEventListener("click", function () {
       togglePanel();
     });
     // Click en cerrar: quita clase abierta
     closeBtn.addEventListener("click", function () {
       panel.classList.remove("amarte-open");
       rootEl.classList.remove("amarte-chat-open");
-      bubble.setAttribute("aria-expanded", "false");
+      launcher.setAttribute("aria-expanded", "false");
     });
     // Enter en el input envía mensaje
     inputEl.addEventListener("keydown", function (e) {

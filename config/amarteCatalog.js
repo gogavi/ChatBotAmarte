@@ -134,8 +134,20 @@ const payment = {
   checkoutUrl: "https://checkout.wompi.co/l/VPOS_RXJqnz",
 };
 
+const WHATSAPP_PHONE = "573007416683";
+const whatsappDefaultMessage =
+  "Hola, estuve navegando en la página web y descubrí habitaciones muy interesantes. ¿Me ayudas con más información?";
+
+/**
+ * @param {string} [message]
+ */
+function buildWhatsAppUrl(message) {
+  const text = message || whatsappDefaultMessage;
+  return `https://wa.me/${WHATSAPP_PHONE}?text=${encodeURIComponent(text)}`;
+}
+
 const contact = {
-  whatsappUrl: "https://wa.me/573007416683",
+  whatsappUrl: buildWhatsAppUrl(),
   reservationsUrl: "https://amartesuite.com/formulario-reservas-amarte-suite/",
   /** Landing principal de campañas / promociones (botón PROMOCIONES en el widget). */
   promotionsUrl: "https://amartesuite.com/suite-jacuzzi-mejor-precio/",
@@ -208,6 +220,8 @@ module.exports = {
   location,
   payment,
   contact,
+  buildWhatsAppUrl,
+  whatsappDefaultMessage,
   formatCop,
   formatPricingForPrompt,
   formatSuiteCategoriesForPrompt,
