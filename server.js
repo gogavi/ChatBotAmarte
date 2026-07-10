@@ -1,7 +1,6 @@
 // Carga variables de entorno desde el archivo .env antes de leer process.env
 require("dotenv").config();
 
-const path = require("path");
 const express = require("express");
 const cors = require("cors");
 const multer = require("multer");
@@ -12,10 +11,14 @@ const {
   MARTINA_REPLY_JSON_SCHEMA,
   buildAssistantResponse,
   stripOptionsBlock,
+  resolveChatActions,
 } = require("./config/chatActions");
 const conversationStore = require("./conversationStore");
 const { normalizeAssistantPaymentLinks } = require("./paymentLinks");
 const { normalizeTextForTts } = require("./ttsNormalize");
+const {
+  createPendingReservation,
+} = require("./reservationService");
 
 const PORT = process.env.PORT || 3000;
 const app = express();
@@ -61,6 +64,9 @@ app.get("/health", (_req, res) => {
     openaiConfigured: Boolean(process.env.OPENAI_API_KEY),
     elevenLabsConfigured: Boolean(process.env.ELEVENLABS_API_KEY),
     chatHistoryEnabled: Boolean(chatHistoryStore),
+    supabaseConfigured: Boolean(
+      process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
+    ),
   });
 });
 
@@ -91,12 +97,9 @@ const openai = new OpenAI({
 
 let chatHistoryStore = null;
 try {
-  const dbPath =
-    process.env.CHAT_DB_PATH ||
-    path.join(__dirname, "data", "conversations.sqlite");
-  conversationStore.initConversationStore(dbPath);
+  conversationStore.initConversationStore();
   chatHistoryStore = conversationStore;
-  console.log(`Historial de chat: SQLite (${dbPath})`);
+  console.log("Historial de chat: Supabase (chatbot_conversations / chatbot_messages)");
 } catch (e) {
   console.warn("Historial de chat deshabilitado:", e.message);
 }
@@ -175,13 +178,19 @@ function sanitizeHistoryContent(content) {
  *   message: string;
  *   roomName: string;
  *   pageUrl: string;
+ *   conversationId?: string | null;
  *   priorMessages?: Array<{ role: string; content: string }>;
  *   referenceDate?: string;
  *   referenceTime?: string;
  *   referenceWeekday?: string;
  *   referenceIso?: string;
  * }} input
- * @returns {Promise<{ reply: string; options: Array<{label:string;url:string}>; rawText: string }>}
+ * @returns {Promise<{
+ *   reply: string;
+ *   options: Array<{label:string;url:string}>;
+ *   rawText: string;
+ *   reservationId?: string | null;
+ * }>}
  */
 async function runChat(input) {
   const message = input.message.trim();
@@ -193,6 +202,8 @@ async function runChat(input) {
     typeof input.pageUrl === "string" && input.pageUrl.trim()
       ? input.pageUrl.trim()
       : "sin especificar";
+  const conversationId =
+    typeof input.conversationId === "string" ? input.conversationId : null;
 
   const suiteMatch = matchSuiteFromPageUrl(safePage);
 
@@ -235,14 +246,51 @@ async function runChat(input) {
 
   const modelContent = completion.choices[0]?.message?.content ?? "";
   const built = buildAssistantResponse(modelContent);
-  const reply = normalizeAssistantPaymentLinks(built.reply);
-  const options = built.options;
+  let reply = normalizeAssistantPaymentLinks(built.reply);
+  let options = built.options;
+  let reservationId = null;
+
+  const existingReservationId =
+    conversationId && chatHistoryStore
+      ? await chatHistoryStore.getLinkedReservationId(conversationId)
+      : null;
+
+  if (
+    built.pendingReservation &&
+    !existingReservationId &&
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+  ) {
+    const created = await createPendingReservation(built.pendingReservation, {
+      conversationId,
+    });
+    if (created.ok) {
+      reservationId = created.id;
+      if (conversationId && chatHistoryStore) {
+        await chatHistoryStore.linkReservation(conversationId, created.id);
+      }
+      const confirmLine = `\n\n✅ Dejé tu prerreserva pendiente de pago en nuestro sistema (**${created.row.tipo}**, ${created.row.fecha_reserva} ${created.row.hora_reserva}, ${created.row.pack_tiempo}). Un asesor la verá en el panel. Puedes abonar con Wompi o continuar por WhatsApp.`;
+      if (!reply.includes("prerreserva")) {
+        reply = `${reply.trim()}${confirmLine}`;
+      }
+      options = resolveChatActions(["wompi", "whatsapp"]);
+      console.log(`Prerreserva creada: ${created.id} (${created.row.tipo})`);
+    } else {
+      console.warn("No se creó prerreserva:", created.error);
+      reply = `${reply.trim()}\n\nAún no pude registrar la prerreserva automáticamente (${created.error}). Puedes usar el formulario o WhatsApp y un asesor te ayuda.`;
+      options = resolveChatActions(["reserve", "whatsapp", "wompi"]);
+    }
+  } else if (built.pendingReservation && existingReservationId) {
+    console.log(
+      `Prerreserva omitida: ya existe ${existingReservationId} para ${conversationId}`
+    );
+  }
+
   // Historial: solo el texto visible (sin JSON ni URLs de botones).
   const rawText = reply;
   console.log(
     `IA respondió a ${safeRoom}: ${options.length} botones (${built.actionTypes.join(", ")}).`
   );
-  return { reply, options, rawText };
+  return { reply, options, rawText, reservationId };
 }
 
 /**
@@ -317,7 +365,7 @@ app.post("/chat", async (req, res) => {
     const conversationId = sanitizeConversationId(rawConvId);
     const priorMessages =
       conversationId && chatHistoryStore
-        ? chatHistoryStore.getPriorMessages(conversationId)
+        ? await chatHistoryStore.getPriorMessages(conversationId)
         : [];
 
     const temporal = extractTemporalContext(body);
@@ -326,6 +374,7 @@ app.post("/chat", async (req, res) => {
       message,
       roomName,
       pageUrl,
+      conversationId,
       priorMessages,
       ...temporal,
     });
@@ -335,10 +384,23 @@ app.post("/chat", async (req, res) => {
         typeof result.rawText === "string" && result.rawText.trim()
           ? result.rawText
           : result.reply || "";
-      chatHistoryStore.appendTurn(conversationId, message.trim(), assistantToStore);
+      try {
+        await chatHistoryStore.appendTurn(
+          conversationId,
+          message.trim(),
+          assistantToStore,
+          { pageUrl, roomName }
+        );
+      } catch (histErr) {
+        console.warn("appendTurn:", histErr.message || histErr);
+      }
     }
 
-    return res.json({ reply: result.reply, options: result.options });
+    return res.json({
+      reply: result.reply,
+      options: result.options,
+      ...(result.reservationId ? { reservationId: result.reservationId } : {}),
+    });
   } catch (err) {
     console.error("Error en /chat:", err);
     return res.status(500).json({ error: "No se pudo procesar la conversación" });
@@ -388,15 +450,16 @@ app.post(
 
       const priorMessages =
         conversationId && chatHistoryStore
-          ? chatHistoryStore.getPriorMessages(conversationId)
+          ? await chatHistoryStore.getPriorMessages(conversationId)
           : [];
 
       const temporal = extractTemporalContext(req.body || {});
 
-      const { reply, options, rawText } = await runChat({
+      const { reply, options, rawText, reservationId } = await runChat({
         message: transcript,
         roomName,
         pageUrl,
+        conversationId,
         priorMessages,
         ...temporal,
       });
@@ -406,7 +469,16 @@ app.post(
           typeof rawText === "string" && rawText.trim()
             ? rawText
             : reply || "";
-        chatHistoryStore.appendTurn(conversationId, transcript, assistantToStore);
+        try {
+          await chatHistoryStore.appendTurn(
+            conversationId,
+            transcript,
+            assistantToStore,
+            { pageUrl, roomName }
+          );
+        } catch (histErr) {
+          console.warn("appendTurn:", histErr.message || histErr);
+        }
       }
 
       let audioBase64 = null;
@@ -432,6 +504,7 @@ app.post(
         options,
         transcript,
         ttsStatus,
+        ...(reservationId ? { reservationId } : {}),
         ...(audioBase64
           ? { audioBase64, audioMimeType }
           : {}),

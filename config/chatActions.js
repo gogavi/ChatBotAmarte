@@ -40,6 +40,61 @@ const ACTION_TYPE_SET = new Set(CHAT_ACTION_TYPES);
  * Schema JSON estricto para Chat Completions (Structured Outputs).
  * El modelo solo elige tipos; el servidor resuelve label + URL.
  */
+/** Campos de prerreserva (null = aún no crear en el SaaS). */
+const PENDING_RESERVATION_SCHEMA = {
+  anyOf: [
+    { type: "null" },
+    {
+      type: "object",
+      properties: {
+        nombre: { type: "string" },
+        whatsapp: { type: "string" },
+        correo: { type: "string" },
+        documento: { type: "string" },
+        tipo: {
+          type: "string",
+          description:
+            "Nombre exacto de suite/plan del catálogo SaaS, p.ej. Suite Diamante o Suite Jacuzzi",
+        },
+        fecha_reserva: {
+          type: "string",
+          description: "Fecha de ingreso YYYY-MM-DD (Bogotá)",
+        },
+        hora_reserva: {
+          type: "string",
+          description: "Hora de ingreso, p.ej. 2:00 PM o 14:00",
+        },
+        pack_tiempo: {
+          type: "string",
+          description:
+            "Pack 4 horas | Pack 6 horas | Pack 8 horas | Pack 12 horas | Día Hotelero",
+        },
+        precio: {
+          type: "string",
+          description: "Precio total cotizado en COP (solo dígitos o con formato)",
+        },
+        abono: {
+          type: "string",
+          description: "Abono sugerido (50%); vacío si el servidor debe calcularlo",
+        },
+      },
+      required: [
+        "nombre",
+        "whatsapp",
+        "correo",
+        "documento",
+        "tipo",
+        "fecha_reserva",
+        "hora_reserva",
+        "pack_tiempo",
+        "precio",
+        "abono",
+      ],
+      additionalProperties: false,
+    },
+  ],
+};
+
 const MARTINA_REPLY_JSON_SCHEMA = {
   name: "martina_reply",
   strict: true,
@@ -60,8 +115,9 @@ const MARTINA_REPLY_JSON_SCHEMA = {
           enum: [...CHAT_ACTION_TYPES],
         },
       },
+      pendingReservation: PENDING_RESERVATION_SCHEMA,
     },
-    required: ["message", "actionTypes"],
+    required: ["message", "actionTypes", "pendingReservation"],
     additionalProperties: false,
   },
 };
@@ -135,6 +191,10 @@ function tryParseStructuredMartinaReply(content) {
     return {
       message: parsed.message,
       actionTypes: parsed.actionTypes,
+      pendingReservation:
+        parsed.pendingReservation === undefined
+          ? null
+          : parsed.pendingReservation,
     };
   } catch {
     return null;
@@ -184,7 +244,12 @@ function parseLegacyOptionsReply(rawText) {
 /**
  * Interpreta la salida del modelo y siempre devuelve botones con URLs del catálogo.
  * @param {string} modelContent
- * @returns {{ reply: string; options: ChatOption[]; actionTypes: ChatActionType[] }}
+ * @returns {{
+ *   reply: string;
+ *   options: ChatOption[];
+ *   actionTypes: ChatActionType[];
+ *   pendingReservation: unknown;
+ * }}
  */
 function buildAssistantResponse(modelContent) {
   const structured = tryParseStructuredMartinaReply(modelContent);
@@ -200,6 +265,7 @@ function buildAssistantResponse(modelContent) {
       reply: stripOptionsBlock(structured.message),
       options,
       actionTypes: actionTypes.length ? actionTypes : [...DEFAULT_ACTION_TYPES],
+      pendingReservation: structured.pendingReservation ?? null,
     };
   }
 
@@ -210,6 +276,7 @@ function buildAssistantResponse(modelContent) {
     reply: legacy.reply,
     options,
     actionTypes: [...DEFAULT_ACTION_TYPES],
+    pendingReservation: null,
   };
 }
 

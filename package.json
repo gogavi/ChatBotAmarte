@@ -5,7 +5,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node tests/paymentLinks.test.js && node tests/chatActions.test.js && node tests/ttsNormalize.test.js",
+    "test": "node tests/paymentLinks.test.js && node tests/chatActions.test.js && node tests/ttsNormalize.test.js && node tests/reservationService.test.js",
     "verify:prod": "powershell -ExecutionPolicy Bypass -File scripts/verify-production.ps1",
     "railway:up": "railway up",
     "railway:logs": "railway logs"
@@ -21,7 +21,7 @@
   ],
   "license": "UNLICENSED",
   "dependencies": {
-    "better-sqlite3": "^11.8.1",
+    "@supabase/supabase-js": "^2.110.2",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.21.0",

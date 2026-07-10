@@ -41,15 +41,18 @@ const structured = tryParseStructuredMartinaReply(
   JSON.stringify({
     message: "La Suite VIP Jacuzzi está disponible.",
     actionTypes: ["reserve", "wompi"],
+    pendingReservation: null,
   })
 );
 assert.ok(structured);
 assert.strictEqual(structured.message, "La Suite VIP Jacuzzi está disponible.");
+assert.strictEqual(structured.pendingReservation, null);
 
 const built = buildAssistantResponse(
   JSON.stringify({
     message: "Cotización lista.",
     actionTypes: ["reserve"],
+    pendingReservation: null,
   })
 );
 assert.strictEqual(built.reply, "Cotización lista.");
