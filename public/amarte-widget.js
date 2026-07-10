@@ -384,8 +384,10 @@
       ".amarte-opt-link:hover{background:#AD1457;color:#fff;}" +
       ".amarte-widget-footer-wrap{flex-shrink:0;display:flex;flex-direction:column;background:transparent;}" +
       ".amarte-widget-footer-row{display:flex;gap:8px;padding:12px 16px 8px;background:transparent;align-items:center;}" +
+      ".amarte-widget-mic-hint{margin:0;padding:0 16px 8px;font-size:0.75rem;line-height:1.35;" +
+      "color:rgba(0,0,0,0.55);text-align:center;}" +
       ".amarte-widget-quick-row{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;" +
-      "padding:0 16px 16px;background:transparent;margin-top:12px;}" +
+      "padding:0 16px 16px;background:transparent;margin-top:4px;}" +
       ".amarte-widget-quick-row .amarte-opt-link{text-align:center;}" +
       "@media (min-width:769px){.amarte-quick-call{display:none !important;}}" +
       ".amarte-widget-input{flex:1;border:1px solid rgba(0,0,0,0.12);border-radius:999px;" +
@@ -868,6 +870,11 @@
     footerRow.appendChild(micBtn);
     footerRow.appendChild(sendBtn);
 
+    var micHint = document.createElement("p");
+    micHint.className = "amarte-widget-mic-hint";
+    micHint.textContent =
+      "Presiona el micrófono para hablar y nuevamente para finalizar";
+
     var quickRow = document.createElement("div");
     quickRow.className = "amarte-widget-quick-row";
 
@@ -884,6 +891,7 @@
     quickRow.appendChild(buildQuickLink(urlPromos, "PROMOCIONES", ""));
 
     footerWrap.appendChild(footerRow);
+    footerWrap.appendChild(micHint);
     footerWrap.appendChild(quickRow);
 
     panel.appendChild(header);

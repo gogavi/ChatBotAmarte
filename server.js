@@ -63,7 +63,7 @@ app.get("/health", (_req, res) => {
     service: "amarte-chatbot",
     openaiConfigured: Boolean(process.env.OPENAI_API_KEY),
     elevenLabsConfigured: Boolean(process.env.ELEVENLABS_API_KEY),
-    chatHistoryEnabled: Boolean(chatHistoryStore),
+    chatHistoryEnabled: Boolean(getChatHistoryStore()),
     supabaseConfigured: Boolean(
       process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
     ),
@@ -96,12 +96,37 @@ const openai = new OpenAI({
 });
 
 let chatHistoryStore = null;
-try {
-  conversationStore.initConversationStore();
-  chatHistoryStore = conversationStore;
-  console.log("Historial de chat: Supabase (chatbot_conversations / chatbot_messages)");
-} catch (e) {
-  console.warn("Historial de chat deshabilitado:", e.message);
+
+function enableChatHistoryStore(reason) {
+  try {
+    conversationStore.initConversationStore();
+    chatHistoryStore = conversationStore;
+    console.log(
+      `Historial de chat: Supabase (chatbot_conversations / chatbot_messages)${reason ? ` [${reason}]` : ""}`
+    );
+    return true;
+  } catch (e) {
+    chatHistoryStore = null;
+    console.warn("Historial de chat deshabilitado:", e.message);
+    return false;
+  }
+}
+
+enableChatHistoryStore("startup");
+
+/**
+ * Asegura store de historial antes de leer/escribir (reintento lazy).
+ */
+function getChatHistoryStore() {
+  if (chatHistoryStore && conversationStore.isStoreReady()) {
+    return chatHistoryStore;
+  }
+  if (conversationStore.ensureStoreReady()) {
+    chatHistoryStore = conversationStore;
+    console.log("Historial de chat: Supabase habilitado (lazy)");
+    return chatHistoryStore;
+  }
+  return null;
 }
 
 /**
@@ -250,9 +275,10 @@ async function runChat(input) {
   let options = built.options;
   let reservationId = null;
 
+  const histForLink = getChatHistoryStore();
   const existingReservationId =
-    conversationId && chatHistoryStore
-      ? await chatHistoryStore.getLinkedReservationId(conversationId)
+    conversationId && histForLink
+      ? await histForLink.getLinkedReservationId(conversationId)
       : null;
 
   if (
@@ -265,8 +291,8 @@ async function runChat(input) {
     });
     if (created.ok) {
       reservationId = created.id;
-      if (conversationId && chatHistoryStore) {
-        await chatHistoryStore.linkReservation(conversationId, created.id);
+      if (conversationId && histForLink) {
+        await histForLink.linkReservation(conversationId, created.id);
       }
       const confirmLine = `\n\n✅ Dejé tu prerreserva pendiente de pago en nuestro sistema (**${created.row.tipo}**, ${created.row.fecha_reserva} ${created.row.hora_reserva}, ${created.row.pack_tiempo}). Un asesor la verá en el panel. Puedes abonar con Wompi o continuar por WhatsApp.`;
       if (!reply.includes("prerreserva")) {
@@ -363,10 +389,16 @@ app.post("/chat", async (req, res) => {
       return res.status(500).json({ error: "El servidor no está configurado correctamente" });
     }
     const conversationId = sanitizeConversationId(rawConvId);
+    const histStore = getChatHistoryStore();
     const priorMessages =
-      conversationId && chatHistoryStore
-        ? await chatHistoryStore.getPriorMessages(conversationId)
+      conversationId && histStore
+        ? await histStore.getPriorMessages(conversationId)
         : [];
+    if (conversationId) {
+      console.log(
+        `Historial ${conversationId.slice(0, 8)}…: ${priorMessages.length} msgs (store=${Boolean(histStore)})`
+      );
+    }
 
     const temporal = extractTemporalContext(body);
 
@@ -379,13 +411,13 @@ app.post("/chat", async (req, res) => {
       ...temporal,
     });
 
-    if (conversationId && chatHistoryStore) {
+    if (conversationId && histStore) {
       const assistantToStore =
         typeof result.rawText === "string" && result.rawText.trim()
           ? result.rawText
           : result.reply || "";
       try {
-        await chatHistoryStore.appendTurn(
+        await histStore.appendTurn(
           conversationId,
           message.trim(),
           assistantToStore,
@@ -448,9 +480,10 @@ app.post(
         });
       }
 
+      const histStoreAudio = getChatHistoryStore();
       const priorMessages =
-        conversationId && chatHistoryStore
-          ? await chatHistoryStore.getPriorMessages(conversationId)
+        conversationId && histStoreAudio
+          ? await histStoreAudio.getPriorMessages(conversationId)
           : [];
 
       const temporal = extractTemporalContext(req.body || {});
@@ -464,13 +497,13 @@ app.post(
         ...temporal,
       });
 
-      if (conversationId && chatHistoryStore) {
+      if (conversationId && histStoreAudio) {
         const assistantToStore =
           typeof rawText === "string" && rawText.trim()
             ? rawText
             : reply || "";
         try {
-          await chatHistoryStore.appendTurn(
+          await histStoreAudio.appendTurn(
             conversationId,
             transcript,
             assistantToStore,

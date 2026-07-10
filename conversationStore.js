@@ -6,10 +6,13 @@ const DEFAULT_HISTORY_LIMIT = 40;
 let ready = false;
 
 /**
- * Inicializa el store de historial (Supabase).
+ * Inicializa el store de historial (Supabase). Idempotente.
  * @returns {boolean}
  */
 function initConversationStore() {
+  if (ready && getSupabase()) {
+    return true;
+  }
   if (!isSupabaseConfigured()) {
     throw new Error(
       "SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY no configuradas"
@@ -21,6 +24,21 @@ function initConversationStore() {
   }
   ready = true;
   return true;
+}
+
+/**
+ * Intenta habilitar el store si aún no lo está (p.ej. env disponible más tarde).
+ * @returns {boolean}
+ */
+function ensureStoreReady() {
+  if (ready && getSupabase()) {
+    return true;
+  }
+  try {
+    return initConversationStore();
+  } catch {
+    return false;
+  }
 }
 
 function isStoreReady() {
@@ -162,6 +180,7 @@ async function getLinkedReservationId(conversationId) {
 
 module.exports = {
   initConversationStore,
+  ensureStoreReady,
   isStoreReady,
   getPriorMessages,
   appendTurn,

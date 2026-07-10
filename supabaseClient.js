@@ -4,6 +4,22 @@ const { createClient } = require("@supabase/supabase-js");
 let client = null;
 
 /**
+ * @param {unknown} value
+ * @returns {string}
+ */
+function trimEnv(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function getSupabaseUrl() {
+  return trimEnv(process.env.SUPABASE_URL);
+}
+
+function getSupabaseServiceKey() {
+  return trimEnv(process.env.SUPABASE_SERVICE_ROLE_KEY);
+}
+
+/**
  * Cliente Supabase con service role (solo backend).
  * @returns {import("@supabase/supabase-js").SupabaseClient | null}
  */
@@ -11,8 +27,8 @@ function getSupabase() {
   if (client) {
     return client;
   }
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const url = getSupabaseUrl();
+  const key = getSupabaseServiceKey();
   if (!url || !key) {
     return null;
   }
@@ -26,12 +42,16 @@ function getSupabase() {
 }
 
 function isSupabaseConfigured() {
-  return Boolean(
-    process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
-  );
+  return Boolean(getSupabaseUrl() && getSupabaseServiceKey());
+}
+
+/** Reinicia el cliente (p.ej. tras cambiar env en tests). */
+function resetSupabaseClient() {
+  client = null;
 }
 
 module.exports = {
   getSupabase,
   isSupabaseConfigured,
+  resetSupabaseClient,
 };
