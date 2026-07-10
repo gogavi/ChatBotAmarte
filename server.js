@@ -15,6 +15,7 @@ const {
 } = require("./config/chatActions");
 const conversationStore = require("./conversationStore");
 const { normalizeAssistantPaymentLinks } = require("./paymentLinks");
+const { normalizeTextForTts } = require("./ttsNormalize");
 
 const PORT = process.env.PORT || 3000;
 const app = express();
@@ -220,7 +221,7 @@ async function runChat(input) {
     }));
 
   const completion = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
+    model: "gpt-5.4-mini",
     messages: [
       { role: "system", content: systemPrompt },
       ...historyForApi,
@@ -271,7 +272,7 @@ async function synthesizeElevenLabs(text) {
   }
   const voiceId =
     process.env.ELEVENLABS_VOICE_ID || ELEVENLABS_VOICE_ID_DEFAULT;
-  const stripped = stripMarkdownForTts(text);
+  const stripped = normalizeTextForTts(stripMarkdownForTts(text));
   const safeText =
     stripped.length > TTS_MAX_CHARS
       ? stripped.slice(0, TTS_MAX_CHARS)
@@ -372,7 +373,7 @@ app.post(
 
       const transcription = await openai.audio.transcriptions.create({
         file: audioFile,
-        model: "whisper-1",
+        model: "gpt-4o-mini-transcribe",
         language: "es",
       });
 
