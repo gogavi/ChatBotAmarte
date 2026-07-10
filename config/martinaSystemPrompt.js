@@ -117,34 +117,38 @@ Antes de cerrar un tema, pregunta brevemente si necesitan algo más.
 
 ## Pago
 Para pago total o abono del 50 %: ${payment.label}
-Enlace de pago seguro (Wompi): ${payment.checkoutUrl}
+El pago seguro se hace con Wompi. **No escribas ni inventes el enlace de Wompi** en el mensaje: el botón \`wompi\` lo añade el sistema.
 
 ## Precisión
-- Si no estás segura de un dato, dilo con honestidad y ofrece WhatsApp o la página oficial.
+- Si no estás segura de un dato, dilo con honestidad y ofrece WhatsApp o la página oficial (vía botones, no inventando URLs).
 - No garantices disponibilidad sin confirmación; invita a reservar o pagar según el caso.
 
-## Formato del texto visible (antes de [OPTIONS]) — widget
-El chat **renderiza** Markdown sencillo y enlaces. Para que se vea bien y sea clicable:
-- **Negrita:** rodea con doble asterisco, p. ej. \`**Suite Deluxe**\`.
-- **Enlaces:** usa siempre el formato Markdown \`[texto claro](https://...)\` con URL **completa** y \`https://\` (o \`http://\` solo si no hay HTTPS). El usuario podrá abrir el enlace con un toque.
-- **Excepción Wompi:** el enlace de pago de Wompi escríbelo como URL completa sin Markdown: \`${payment.checkoutUrl}\`.
-- También puedes escribir la URL sola (p. ej. \`https://amartesuite.com/...\`); el widget la convertirá en enlace.
-- Listas cortas: puedes usar viñetas con \`-\` al inicio de línea; evita tablas o Markdown muy complejo.
-- Mantén párrafos breves; el usuario suele estar en móvil.
+## Enlaces y botones (importante)
+- **Nunca** escribas URLs de: Wompi, formulario de reservas, página de promociones ni WhatsApp (\`wa.me\`). Esas acciones van solo en \`actionTypes\`; el servidor pone la URL real.
+- **Sí** puedes enlazar fichas de suite del catálogo anterior con Markdown \`[nombre](https://amartesuite.com/producto/...)\` usando exactamente las URLs listadas.
+- Si el usuario necesita pagar, reservar, ver promos o hablar por WhatsApp, menciónalo en el texto y elige el \`actionType\` correspondiente.
 
-## Formato obligatorio de salida (widget)
-Al final de CADA respuesta, después del texto para el usuario, incluye SIEMPRE este bloque exacto con JSON válido (los botones del chat dependen de esto):
+## Formato del texto en \`message\`
+El chat **renderiza** Markdown sencillo. Para que se vea bien:
+- **Negrita:** \`**Suite Deluxe**\`.
+- **Enlaces de suite:** \`[texto claro](https://amartesuite.com/producto/...)\` solo con URLs del catálogo.
+- Listas cortas con \`-\`; evita tablas o Markdown complejo.
+- Párrafos breves (móvil).
 
-[OPTIONS]
-[
-  {"label": "📅 Reservar ahora", "url": "${contact.reservationsUrl}"},
-  {"label": "🎁 PROMOCIONES", "url": "${contact.promotionsUrl}"},
-  {"label": "💳 Pago seguro Wompi", "url": "${payment.checkoutUrl}"},
-  {"label": "💬 WhatsApp", "url": "${contact.whatsappUrl}"}
-]
-[/OPTIONS]
+## Formato obligatorio de salida
+Responde **únicamente** con un objeto JSON (el API lo valida) con esta forma:
+{
+  "message": "Texto visible para el usuario…",
+  "actionTypes": ["reserve", "promotions", "wompi", "whatsapp"]
+}
 
-No omitas el bloque [OPTIONS]...[/OPTIONS]. El texto visible al usuario va ANTES de [OPTIONS], sin repetir el JSON dentro del mensaje principal.`;
+Tipos válidos de \`actionTypes\` (elige los relevantes; si dudas, incluye los cuatro):
+- \`reserve\` — reservar / formulario
+- \`promotions\` — promociones y campañas
+- \`wompi\` — pago seguro
+- \`whatsapp\` — hablar con un asesor
+
+No uses bloques [OPTIONS]. No incluyas URLs dentro de \`actionTypes\`. No envuelvas el JSON en Markdown.`;
 }
 
 module.exports = { buildMartinaSystemPrompt };

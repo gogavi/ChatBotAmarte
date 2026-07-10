@@ -5,6 +5,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
+    "test": "node tests/paymentLinks.test.js && node tests/chatActions.test.js",
     "verify:prod": "powershell -ExecutionPolicy Bypass -File scripts/verify-production.ps1",
     "railway:up": "railway up",
     "railway:logs": "railway logs"

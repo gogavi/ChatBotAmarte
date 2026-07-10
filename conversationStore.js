@@ -55,7 +55,7 @@ function getPriorMessages(conversationId, limit = DEFAULT_HISTORY_LIMIT) {
 /**
  * @param {string} conversationId
  * @param {string} userContent
- * @param {string} assistantRawContent - Respuesta completa del modelo (incluye [OPTIONS] si aplica)
+ * @param {string} assistantRawContent - Texto visible del asistente (sin bloque de botones)
  */
 function appendTurn(conversationId, userContent, assistantRawContent) {
   if (!db || !conversationId) {

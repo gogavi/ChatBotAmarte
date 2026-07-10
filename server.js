@@ -8,11 +8,13 @@ const multer = require("multer");
 const { OpenAI, toFile } = require("openai");
 const { buildMartinaSystemPrompt } = require("./config/martinaSystemPrompt");
 const { matchSuiteFromPageUrl } = require("./config/suitePageHints");
-const conversationStore = require("./conversationStore");
 const {
-  normalizeAssistantPaymentLinks,
-  normalizePaymentOptionUrl,
-} = require("./paymentLinks");
+  MARTINA_REPLY_JSON_SCHEMA,
+  buildAssistantResponse,
+  stripOptionsBlock,
+} = require("./config/chatActions");
+const conversationStore = require("./conversationStore");
+const { normalizeAssistantPaymentLinks } = require("./paymentLinks");
 
 const PORT = process.env.PORT || 3000;
 const app = express();
@@ -159,47 +161,15 @@ function extractTemporalContext(body) {
 }
 
 /**
- * Separa el texto visible para el usuario y el bloque de opciones estructuradas.
- * @param {string} rawText
- * @returns {{ reply: string, options: Array<{ label: string; url: string }> }}
+ * Limpia contenido de historial (legado [OPTIONS] + Wompi corrupto) antes de reenviarlo al modelo.
+ * @param {string} content
  */
-function parseAssistantReply(rawText) {
-  if (!rawText || typeof rawText !== "string") {
-    return { reply: "", options: [] };
-  }
-  const startTag = "[OPTIONS]";
-  const endTag = "[/OPTIONS]";
-  const startIdx = rawText.indexOf(startTag);
-  const endIdx = rawText.indexOf(endTag);
-  if (startIdx === -1 || endIdx === -1 || endIdx <= startIdx) {
-    return { reply: rawText.trim(), options: [] };
-  }
-  const reply = rawText.slice(0, startIdx).trim();
-  const jsonSlice = rawText.slice(startIdx + startTag.length, endIdx).trim();
-  try {
-    const parsed = JSON.parse(jsonSlice);
-    if (!Array.isArray(parsed)) {
-      return { reply: reply || rawText.trim(), options: [] };
-    }
-    const options = parsed
-      .filter(
-        (item) =>
-          item &&
-          typeof item.label === "string" &&
-          typeof item.url === "string"
-      )
-      .map((item) => ({
-        label: item.label,
-        url: normalizePaymentOptionUrl(item.url),
-      }));
-    return { reply: reply || rawText.trim(), options };
-  } catch {
-    return { reply: reply || rawText.trim(), options: [] };
-  }
+function sanitizeHistoryContent(content) {
+  return stripOptionsBlock(normalizeAssistantPaymentLinks(content));
 }
 
 /**
- * Núcleo del chat Martina (texto + opciones + texto crudo para historial).
+ * Núcleo del chat Martina (texto + opciones + texto para historial).
  * @param {{
  *   message: string;
  *   roomName: string;
@@ -246,7 +216,7 @@ async function runChat(input) {
     )
     .map((m) => ({
       role: m.role,
-      content: normalizeAssistantPaymentLinks(m.content),
+      content: sanitizeHistoryContent(m.content),
     }));
 
   const completion = await openai.chat.completions.create({
@@ -256,13 +226,21 @@ async function runChat(input) {
       ...historyForApi,
       { role: "user", content: message },
     ],
+    response_format: {
+      type: "json_schema",
+      json_schema: MARTINA_REPLY_JSON_SCHEMA,
+    },
   });
 
-  const rawText = normalizeAssistantPaymentLinks(
-    completion.choices[0]?.message?.content ?? ""
+  const modelContent = completion.choices[0]?.message?.content ?? "";
+  const built = buildAssistantResponse(modelContent);
+  const reply = normalizeAssistantPaymentLinks(built.reply);
+  const options = built.options;
+  // Historial: solo el texto visible (sin JSON ni URLs de botones).
+  const rawText = reply;
+  console.log(
+    `IA respondió a ${safeRoom}: ${options.length} botones (${built.actionTypes.join(", ")}).`
   );
-  const { reply, options } = parseAssistantReply(rawText);
-  console.log(`IA respondió a ${safeRoom}: ${options.length} botones generados.`);
   return { reply, options, rawText };
 }
 
