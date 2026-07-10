@@ -19,6 +19,14 @@ const { normalizeTextForTts } = require("./ttsNormalize");
 const {
   createPendingReservation,
 } = require("./reservationService");
+const {
+  isLiveVoiceEnabled,
+  isElevenLabsAgentConfigured,
+} = require("./liveVoiceConfig");
+const widgetConfigRouter = require("./routes/widgetConfig");
+const elevenlabsTokenRouter = require("./routes/elevenlabsToken");
+const agentToolsRouter = require("./routes/agentTools");
+const elevenlabsPostCallRouter = require("./routes/elevenlabsPostCall");
 
 const PORT = process.env.PORT || 3000;
 const app = express();
@@ -37,25 +45,48 @@ const upload = multer({
   limits: { fileSize: 25 * 1024 * 1024 },
 });
 
-app.use(express.json());
+const corsOrigins = [
+  "https://amartesuite.com",
+  "https://www.amartesuite.com",
+];
+if (process.env.NODE_ENV !== "production") {
+  corsOrigins.push(
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:5500",
+    "http://127.0.0.1:5500"
+  );
+}
 
 app.use(
   cors({
-    origin: ["https://amartesuite.com", "https://www.amartesuite.com"],
+    origin: corsOrigins,
     methods: ["GET", "POST"],
     credentials: true,
   })
 );
 
+// Webhook post-call: cuerpo crudo ANTES de express.json()
+app.use("/api", elevenlabsPostCallRouter);
+
+app.use(express.json({ limit: "256kb" }));
+
 app.use(
   express.static("public", {
     setHeaders(res, filePath) {
-      if (filePath.endsWith("amarte-widget.js")) {
+      if (
+        filePath.endsWith("amarte-widget.js") ||
+        filePath.endsWith("amarte-live-agent.bundle.js")
+      ) {
         res.setHeader("Cache-Control", "no-cache, must-revalidate");
       }
     },
   })
 );
+
+app.use("/api", widgetConfigRouter);
+app.use("/api", elevenlabsTokenRouter);
+app.use("/api/agent-tools", agentToolsRouter);
 
 app.get("/health", (_req, res) => {
   res.json({
@@ -63,6 +94,8 @@ app.get("/health", (_req, res) => {
     service: "amarte-chatbot",
     openaiConfigured: Boolean(process.env.OPENAI_API_KEY),
     elevenLabsConfigured: Boolean(process.env.ELEVENLABS_API_KEY),
+    elevenLabsAgentConfigured: isElevenLabsAgentConfigured(),
+    liveVoiceEnabled: isLiveVoiceEnabled(),
     chatHistoryEnabled: Boolean(getChatHistoryStore()),
     supabaseConfigured: Boolean(
       process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -80,8 +113,8 @@ app.get("/", (_req, res) => {
 </head>
 <body style="font-family:system-ui,sans-serif;max-width:720px;margin:2rem auto;padding:0 1rem;line-height:1.5;">
   <h1>Amarte Chatbot</h1>
-  <p>Backend activo. Endpoints: <code>/chat</code>, <code>/chat/audio</code>, <code>/health</code>.</p>
-  <p>Widget: <a href="/amarte-widget.js">/amarte-widget.js</a> · Demo: <a href="/embed-demo.html">/embed-demo.html</a></p>
+  <p>Backend activo. Endpoints: <code>/chat</code>, <code>/chat/audio</code>, <code>/api/widget-config</code>, <code>/health</code>.</p>
+  <p>Widget: <a href="/amarte-widget.js">/amarte-widget.js</a> · Live: <a href="/amarte-live-agent.bundle.js">/amarte-live-agent.bundle.js</a> · Demo: <a href="/embed-demo.html">/embed-demo.html</a></p>
   <h2>Embed en amartesuite.com</h2>
   <pre style="background:#f4f4f4;padding:1rem;overflow:auto;border-radius:8px;"><code>&lt;script&gt;
   window.AMARTE_CHATBOT_URL = "https://chatbotamarte-production.up.railway.app";

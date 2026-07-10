@@ -1,0 +1,106 @@
+/**
+ * Configuración del modo “Hablar en vivo con Martina” (ElevenLabs Agents).
+ * Secretos nunca se exportan al navegador.
+ */
+
+const ALLOWED_PAGE_HOSTS = new Set(["amartesuite.com", "www.amartesuite.com"]);
+
+/** Rate limit del endpoint de token WebRTC. */
+const TOKEN_RATE_LIMIT = Object.freeze({
+  windowMs: 10 * 60 * 1000,
+  max: 5,
+});
+
+/** Timeout para llamadas a la API de ElevenLabs (ms). */
+const ELEVENLABS_FETCH_TIMEOUT_MS = 15000;
+
+/** Límites de longitud de campos del body. */
+const FIELD_LIMITS = Object.freeze({
+  conversationId: 64,
+  pageUrl: 2000,
+  roomName: 500,
+});
+
+/**
+ * @returns {boolean}
+ */
+function isLiveVoiceEnabled() {
+  const raw = String(process.env.ELEVENLABS_LIVE_ENABLED || "")
+    .trim()
+    .toLowerCase();
+  if (raw === "false" || raw === "0" || raw === "no" || raw === "off") {
+    return false;
+  }
+  // Por defecto activo solo si hay Agent ID + API key (evita botón muerto).
+  if (raw === "true" || raw === "1" || raw === "yes" || raw === "on") {
+    return true;
+  }
+  return Boolean(
+    process.env.ELEVENLABS_API_KEY && process.env.ELEVENLABS_AGENT_ID
+  );
+}
+
+/**
+ * @returns {boolean}
+ */
+function isElevenLabsAgentConfigured() {
+  return Boolean(
+    process.env.ELEVENLABS_API_KEY && process.env.ELEVENLABS_AGENT_ID
+  );
+}
+
+/**
+ * @returns {string}
+ */
+function getElevenLabsEnvironment() {
+  const env = String(process.env.ELEVENLABS_ENVIRONMENT || "production").trim();
+  return env || "production";
+}
+
+/**
+ * ¿Se permiten hosts locales para pageUrl? (demo / desarrollo).
+ * @returns {boolean}
+ */
+function allowLocalPageHosts() {
+  if (process.env.ELEVENLABS_ALLOW_LOCAL_PAGE_HOSTS === "true") {
+    return true;
+  }
+  return process.env.NODE_ENV !== "production";
+}
+
+/**
+ * @param {string} hostname
+ * @returns {boolean}
+ */
+function isAllowedPageHost(hostname) {
+  const host = String(hostname || "")
+    .trim()
+    .toLowerCase();
+  if (!host) {
+    return false;
+  }
+  if (ALLOWED_PAGE_HOSTS.has(host)) {
+    return true;
+  }
+  if (allowLocalPageHosts()) {
+    return (
+      host === "localhost" ||
+      host === "127.0.0.1" ||
+      host === "[::1]" ||
+      host.endsWith(".localhost")
+    );
+  }
+  return false;
+}
+
+module.exports = {
+  ALLOWED_PAGE_HOSTS,
+  TOKEN_RATE_LIMIT,
+  ELEVENLABS_FETCH_TIMEOUT_MS,
+  FIELD_LIMITS,
+  isLiveVoiceEnabled,
+  isElevenLabsAgentConfigured,
+  getElevenLabsEnvironment,
+  allowLocalPageHosts,
+  isAllowedPageHost,
+};

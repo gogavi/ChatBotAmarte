@@ -178,6 +178,193 @@ async function getLinkedReservationId(conversationId) {
   return data.reservation_id || null;
 }
 
+/**
+ * Crea o actualiza una fila de conversación en vivo (idempotente por elevenlabs id).
+ * @param {{
+ *   localConversationId?: string|null;
+ *   elevenlabsConversationId: string;
+ *   agentId?: string|null;
+ *   status?: string|null;
+ *   suiteContext?: string|null;
+ * }} data
+ */
+async function createLiveConversation(data) {
+  const sb = getSupabase();
+  if (!sb || !data?.elevenlabsConversationId) {
+    return null;
+  }
+  const row = {
+    elevenlabs_conversation_id: String(data.elevenlabsConversationId).slice(
+      0,
+      200
+    ),
+    updated_at: new Date().toISOString(),
+  };
+  if (data.localConversationId) {
+    row.local_conversation_id = String(data.localConversationId).slice(0, 64);
+  }
+  if (data.agentId) {
+    row.agent_id = String(data.agentId).slice(0, 200);
+  }
+  if (data.status) {
+    row.status = String(data.status).slice(0, 100);
+  }
+  if (data.suiteContext) {
+    row.suite_context = String(data.suiteContext).slice(0, 500);
+  }
+  const { data: upserted, error } = await sb
+    .from("live_conversations")
+    .upsert(row, { onConflict: "elevenlabs_conversation_id" })
+    .select("*")
+    .maybeSingle();
+  if (error) {
+    console.warn("createLiveConversation:", error.message);
+    return null;
+  }
+  return upserted;
+}
+
+/**
+ * Actualiza campos de una conversación en vivo.
+ * @param {string} elevenlabsConversationId
+ * @param {Record<string, unknown>} patch
+ */
+async function updateLiveConversation(elevenlabsConversationId, patch = {}) {
+  const sb = getSupabase();
+  if (!sb || !elevenlabsConversationId) {
+    return null;
+  }
+  const row = {
+    updated_at: new Date().toISOString(),
+  };
+  if (patch.localConversationId != null) {
+    row.local_conversation_id = String(patch.localConversationId).slice(0, 64);
+  }
+  if (patch.agentId != null) {
+    row.agent_id = String(patch.agentId).slice(0, 200);
+  }
+  if (patch.status != null) {
+    row.status = String(patch.status).slice(0, 100);
+  }
+  if (patch.durationSeconds != null && Number.isFinite(patch.durationSeconds)) {
+    row.duration_seconds = Math.round(Number(patch.durationSeconds));
+  }
+  if (patch.summary != null) {
+    row.summary = String(patch.summary).slice(0, 20000);
+  }
+  if (patch.transcript != null) {
+    row.transcript_json = patch.transcript;
+  }
+  if (patch.analysis != null) {
+    row.analysis_json = patch.analysis;
+  }
+  if (patch.suiteContext != null) {
+    row.suite_context = String(patch.suiteContext).slice(0, 500);
+  }
+  if (patch.bookingIntent != null) {
+    row.booking_intent = Boolean(patch.bookingIntent);
+  }
+
+  const { data, error } = await sb
+    .from("live_conversations")
+    .update(row)
+    .eq("elevenlabs_conversation_id", String(elevenlabsConversationId))
+    .select("*")
+    .maybeSingle();
+  if (error) {
+    console.warn("updateLiveConversation:", error.message);
+    return null;
+  }
+  return data;
+}
+
+/**
+ * Upsert idempotente con datos del webhook post-call.
+ * @param {{
+ *   localConversationId?: string|null;
+ *   elevenlabsConversationId: string;
+ *   agentId?: string|null;
+ *   status?: string|null;
+ *   durationSeconds?: number|null;
+ *   summary?: string|null;
+ *   transcript?: unknown;
+ *   analysis?: unknown;
+ *   suiteContext?: string|null;
+ *   bookingIntent?: boolean;
+ * }} data
+ */
+async function savePostCallData(data) {
+  const sb = getSupabase();
+  if (!sb || !data?.elevenlabsConversationId) {
+    return null;
+  }
+  const row = {
+    elevenlabs_conversation_id: String(data.elevenlabsConversationId).slice(
+      0,
+      200
+    ),
+    updated_at: new Date().toISOString(),
+  };
+  if (data.localConversationId) {
+    row.local_conversation_id = String(data.localConversationId).slice(0, 64);
+  }
+  if (data.agentId) {
+    row.agent_id = String(data.agentId).slice(0, 200);
+  }
+  if (data.status) {
+    row.status = String(data.status).slice(0, 100);
+  }
+  if (data.durationSeconds != null && Number.isFinite(data.durationSeconds)) {
+    row.duration_seconds = Math.round(Number(data.durationSeconds));
+  }
+  if (data.summary != null) {
+    row.summary = String(data.summary).slice(0, 20000);
+  }
+  if (data.transcript != null) {
+    row.transcript_json = data.transcript;
+  }
+  if (data.analysis != null) {
+    row.analysis_json = data.analysis;
+  }
+  if (data.suiteContext != null) {
+    row.suite_context = String(data.suiteContext).slice(0, 500);
+  }
+  if (data.bookingIntent != null) {
+    row.booking_intent = Boolean(data.bookingIntent);
+  }
+
+  const { data: upserted, error } = await sb
+    .from("live_conversations")
+    .upsert(row, { onConflict: "elevenlabs_conversation_id" })
+    .select("*")
+    .maybeSingle();
+  if (error) {
+    console.warn("savePostCallData:", error.message);
+    return null;
+  }
+  return upserted;
+}
+
+/**
+ * @param {string} elevenlabsConversationId
+ */
+async function getLiveConversation(elevenlabsConversationId) {
+  const sb = getSupabase();
+  if (!sb || !elevenlabsConversationId) {
+    return null;
+  }
+  const { data, error } = await sb
+    .from("live_conversations")
+    .select("*")
+    .eq("elevenlabs_conversation_id", String(elevenlabsConversationId))
+    .maybeSingle();
+  if (error) {
+    console.warn("getLiveConversation:", error.message);
+    return null;
+  }
+  return data;
+}
+
 module.exports = {
   initConversationStore,
   ensureStoreReady,
@@ -187,4 +374,8 @@ module.exports = {
   linkReservation,
   getLinkedReservationId,
   ensureConversation,
+  createLiveConversation,
+  updateLiveConversation,
+  savePostCallData,
+  getLiveConversation,
 };

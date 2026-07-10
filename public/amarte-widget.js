@@ -329,6 +329,398 @@
     maxTimer: null,
   };
 
+  /** Estado del modo “Hablar en vivo”. */
+  var liveState = {
+    enabled: false,
+    bundleLoaded: false,
+    loadingBundle: false,
+    active: false,
+    muted: false,
+    startedAt: 0,
+    durationTimer: null,
+    statusEl: null,
+    metaEl: null,
+    panelEl: null,
+    overlayEl: null,
+    liveBtn: null,
+    muteBtn: null,
+    unmuteBtn: null,
+    endBtn: null,
+  };
+
+  var LIVE_ACTION_URLS = {
+    reservation: DEFAULT_QUICK_RESERVE,
+    reserve: DEFAULT_QUICK_RESERVE,
+    promotions: DEFAULT_QUICK_PROMOS,
+    whatsapp: DEFAULT_QUICK_WHATSAPP,
+    payment: "https://checkout.wompi.co/l/VPOS_RXJqnz",
+    wompi: "https://checkout.wompi.co/l/VPOS_RXJqnz",
+  };
+
+  /** Duración máxima de la conversación en vivo con Martina. */
+  var LIVE_MAX_MS = 2 * 60 * 1000;
+
+  /**
+   * Analítica ligera (consola en no-producción; hook global opcional).
+   * @param {string} name
+   * @param {object} [props]
+   */
+  function trackLiveEvent(name, props) {
+    var payload = {
+      event: name,
+      props: props || {},
+      ts: new Date().toISOString(),
+    };
+    try {
+      if (typeof window.__amarteAnalyticsTrack === "function") {
+        window.__amarteAnalyticsTrack(payload);
+        return;
+      }
+    } catch (e0) {}
+    try {
+      if (
+        typeof location !== "undefined" &&
+        (location.hostname === "localhost" ||
+          location.hostname === "127.0.0.1")
+      ) {
+        console.debug("[amarte-analytics]", payload.event, payload.props);
+      }
+    } catch (e1) {}
+  }
+
+  /**
+   * Carga el bundle de voz en vivo una sola vez.
+   * @returns {Promise<void>}
+   */
+  function loadLiveAgentBundle() {
+    if (liveState.bundleLoaded && window.AmarteLiveAgent) {
+      return Promise.resolve();
+    }
+    if (liveState.loadingBundle) {
+      return new Promise(function (resolve, reject) {
+        var tries = 0;
+        var t = setInterval(function () {
+          tries += 1;
+          if (window.AmarteLiveAgent) {
+            clearInterval(t);
+            resolve();
+          } else if (tries > 80) {
+            clearInterval(t);
+            reject(new Error("Timeout cargando agente en vivo"));
+          }
+        }, 100);
+      });
+    }
+    liveState.loadingBundle = true;
+    return new Promise(function (resolve, reject) {
+      var s = document.createElement("script");
+      s.src = BACKEND_URL + "/amarte-live-agent.bundle.js";
+      s.async = true;
+      s.onload = function () {
+        liveState.bundleLoaded = true;
+        liveState.loadingBundle = false;
+        if (!window.AmarteLiveAgent) {
+          reject(new Error("AmarteLiveAgent no disponible"));
+          return;
+        }
+        resolve();
+      };
+      s.onerror = function () {
+        liveState.loadingBundle = false;
+        reject(new Error("No se pudo cargar el agente en vivo"));
+      };
+      document.head.appendChild(s);
+    });
+  }
+
+  /**
+   * @param {string} status
+   */
+  function setLiveUiStatus(status) {
+    if (!liveState.statusEl) return;
+    var label = "Conectando con Martina…";
+    liveState.statusEl.classList.remove(
+      "amarte-listening",
+      "amarte-speaking",
+      "amarte-muted"
+    );
+    if (status === "connecting") label = "Conectando con Martina…";
+    else if (status === "connected" || status === "listening") {
+      label = "Martina está escuchando";
+      liveState.statusEl.classList.add("amarte-listening");
+    } else if (status === "speaking") {
+      label = "Martina está hablando";
+      liveState.statusEl.classList.add("amarte-speaking");
+    } else if (status === "thinking") label = "Martina está pensando";
+    else if (status === "muted") {
+      label = "Micrófono silenciado";
+      liveState.statusEl.classList.add("amarte-muted");
+    } else if (status === "disconnected") label = "Conversación finalizada";
+    else if (status === "error") label = "Error en la conversación en vivo";
+    if (liveState.muted && liveState.active) {
+      label = "Micrófono silenciado";
+      liveState.statusEl.classList.add("amarte-muted");
+    }
+    liveState.statusEl.lastChild
+      ? (liveState.statusEl.lastChild.textContent = label)
+      : null;
+    var textNode = liveState.statusEl.querySelector(".amarte-live-status-text");
+    if (textNode) textNode.textContent = label;
+  }
+
+  function formatLiveDuration(ms) {
+    var sec = Math.max(0, Math.floor(ms / 1000));
+    var m = Math.floor(sec / 60);
+    var s = sec % 60;
+    return (m < 10 ? "0" + m : String(m)) + ":" + (s < 10 ? "0" + s : String(s));
+  }
+
+  function startLiveDurationTimer() {
+    stopLiveDurationTimer();
+    liveState.startedAt = Date.now();
+    liveState.durationTimer = setInterval(function () {
+      if (!liveState.metaEl) return;
+      var elapsed = Date.now() - liveState.startedAt;
+      var remaining = Math.max(0, LIVE_MAX_MS - elapsed);
+      liveState.metaEl.textContent =
+        "Duración " +
+        formatLiveDuration(elapsed) +
+        " · quedan " +
+        formatLiveDuration(remaining);
+      if (elapsed >= LIVE_MAX_MS) {
+        endLiveSession("time_limit");
+        appendMessage(
+          "bot",
+          "La conversación en vivo tiene un límite de 2 minutos. Puedes seguir escribiendo o enviar una nota de voz.",
+          []
+        );
+      }
+    }, 1000);
+  }
+
+  function stopLiveDurationTimer() {
+    if (liveState.durationTimer) {
+      clearInterval(liveState.durationTimer);
+      liveState.durationTimer = null;
+    }
+  }
+
+  /**
+   * Muestra fallback cuando falla el modo en vivo.
+   */
+  function showLiveFallback() {
+    var wa = pickQuickUrl("AMARTE_QUICK_WHATSAPP_URL", DEFAULT_QUICK_WHATSAPP);
+    appendMessage(
+      "bot",
+      "No fue posible iniciar la conversación en vivo. Puedes escribirle a Martina o enviar una nota de voz.",
+      [
+        { label: "💬 WhatsApp", url: wa },
+      ]
+    );
+    trackLiveEvent("live_voice_error", { reason: "fallback_shown" });
+  }
+
+  /**
+   * @param {string[]} actions
+   */
+  function showLiveActionButtons(actions) {
+    var map = {
+      reservation: {
+        label: "📅 Reservar ahora",
+        url: pickQuickUrl("AMARTE_QUICK_RESERVATIONS_URL", DEFAULT_QUICK_RESERVE),
+        event: "live_voice_reservation_clicked",
+      },
+      reserve: {
+        label: "📅 Reservar ahora",
+        url: pickQuickUrl("AMARTE_QUICK_RESERVATIONS_URL", DEFAULT_QUICK_RESERVE),
+        event: "live_voice_reservation_clicked",
+      },
+      promotions: {
+        label: "🎁 PROMOCIONES",
+        url: pickQuickUrl("AMARTE_PROMOCIONES_URL", DEFAULT_QUICK_PROMOS),
+        event: null,
+      },
+      whatsapp: {
+        label: "💬 WhatsApp",
+        url: pickQuickUrl("AMARTE_QUICK_WHATSAPP_URL", DEFAULT_QUICK_WHATSAPP),
+        event: "live_voice_whatsapp_clicked",
+      },
+      payment: {
+        label: "💳 Pago seguro Wompi",
+        url: WOMPI_CHECKOUT_URL,
+        event: null,
+      },
+      wompi: {
+        label: "💳 Pago seguro Wompi",
+        url: WOMPI_CHECKOUT_URL,
+        event: null,
+      },
+    };
+    var options = [];
+    var list = Array.isArray(actions) ? actions : [];
+    for (var i = 0; i < list.length; i++) {
+      var key = String(list[i] || "").toLowerCase();
+      if (map[key]) {
+        options.push({ label: map[key].label, url: map[key].url, _evt: map[key].event });
+      }
+    }
+    if (!options.length) return;
+    appendMessage("bot", "Aquí tienes los enlaces oficiales:", options.map(function (o) {
+      return { label: o.label, url: o.url };
+    }));
+    // Track clicks via delegated listener once
+    if (!rootEl.__amarteLiveActionTracked) {
+      rootEl.__amarteLiveActionTracked = true;
+      rootEl.addEventListener("click", function (ev) {
+        var t = ev.target;
+        if (!t || !t.classList || !t.classList.contains("amarte-opt-link")) return;
+        var href = t.getAttribute("href") || "";
+        if (href.indexOf("wa.me") !== -1) {
+          trackLiveEvent("live_voice_whatsapp_clicked", {});
+        } else if (href.indexOf("formulario-reservas") !== -1) {
+          trackLiveEvent("live_voice_reservation_clicked", {});
+        }
+      });
+    }
+  }
+
+  function openLiveConsent() {
+    trackLiveEvent("live_voice_button_clicked", {});
+    if (liveState.overlayEl) {
+      liveState.overlayEl.classList.add("amarte-open");
+    }
+  }
+
+  function closeLiveConsent() {
+    if (liveState.overlayEl) {
+      liveState.overlayEl.classList.remove("amarte-open");
+    }
+  }
+
+  function setLivePanelOpen(open) {
+    if (!liveState.panelEl) return;
+    if (open) liveState.panelEl.classList.add("amarte-open");
+    else liveState.panelEl.classList.remove("amarte-open");
+  }
+
+  function updateLiveControlButtons() {
+    if (liveState.muteBtn) liveState.muteBtn.disabled = !liveState.active || liveState.muted;
+    if (liveState.unmuteBtn) liveState.unmuteBtn.disabled = !liveState.active || !liveState.muted;
+    if (liveState.endBtn) liveState.endBtn.disabled = !liveState.active;
+    if (liveState.liveBtn) liveState.liveBtn.disabled = liveState.active;
+  }
+
+  function endLiveSession(reason) {
+    var wasActive = liveState.active;
+    var durationMs = liveState.startedAt ? Date.now() - liveState.startedAt : 0;
+    liveState.active = false;
+    liveState.muted = false;
+    stopLiveDurationTimer();
+    setLiveUiStatus("disconnected");
+    updateLiveControlButtons();
+    setLivePanelOpen(false);
+    var done = Promise.resolve();
+    try {
+      if (window.AmarteLiveAgent && typeof window.AmarteLiveAgent.stop === "function") {
+        done = Promise.resolve(window.AmarteLiveAgent.stop()).catch(function () {});
+      }
+    } catch (e0) {}
+    if (wasActive) {
+      trackLiveEvent("live_voice_disconnected", { reason: reason || "user" });
+      trackLiveEvent("live_voice_duration", {
+        seconds: Math.round(durationMs / 1000),
+      });
+    }
+    return done;
+  }
+
+  function beginLiveConversation() {
+    closeLiveConsent();
+    loadLiveAgentBundle()
+      .then(function () {
+        if (
+          !window.AmarteLiveAgent ||
+          (window.AmarteLiveAgent.isWebRtcSupported &&
+            !window.AmarteLiveAgent.isWebRtcSupported())
+        ) {
+          showLiveFallback();
+          return null;
+        }
+
+        setLivePanelOpen(true);
+        setLiveUiStatus("connecting");
+        liveState.active = true;
+        liveState.muted = false;
+        updateLiveControlButtons();
+        startLiveDurationTimer();
+
+        return window.AmarteLiveAgent.start({
+          backendUrl: BACKEND_URL,
+          conversationId: getConversationId(),
+          pageUrl: window.location.href || "",
+          roomName: document.title || "",
+          onUiStatus: function (status) {
+            setLiveUiStatus(status);
+          },
+          onTranscript: function (payload) {
+            if (!payload || !payload.text) return;
+            if (payload.role === "user") {
+              appendMessage("user", payload.text, null);
+            } else {
+              appendMessage("bot", payload.text, []);
+            }
+          },
+          onShowActions: function (actions) {
+            showLiveActionButtons(actions);
+          },
+          onConnected: function () {
+            trackLiveEvent("live_voice_connected", {});
+            trackLiveEvent("live_voice_permission_granted", {});
+            setLiveUiStatus("listening");
+          },
+          onDisconnected: function () {
+            endLiveSession("remote");
+          },
+          onError: function () {
+            trackLiveEvent("live_voice_error", {});
+            endLiveSession("error");
+            showLiveFallback();
+          },
+        });
+      })
+      .catch(function (errStart) {
+        var msg = errStart && errStart.message ? String(errStart.message) : "";
+        if (/permis|NotAllowed|Permission|denied/i.test(msg)) {
+          trackLiveEvent("live_voice_permission_denied", {});
+        } else {
+          trackLiveEvent("live_voice_error", { message: msg.slice(0, 120) });
+        }
+        endLiveSession("error");
+        showLiveFallback();
+      });
+  }
+
+  /**
+   * Consulta config pública y muestra el botón en vivo si aplica.
+   */
+  function initLiveVoiceFeature() {
+    fetch(BACKEND_URL + "/api/widget-config")
+      .then(function (res) {
+        return res.json();
+      })
+      .then(function (cfg) {
+        if (cfg && cfg.liveVoiceEnabled === true) {
+          liveState.enabled = true;
+          if (liveState.liveBtn) {
+            liveState.liveBtn.style.display = "flex";
+          }
+        }
+      })
+      .catch(function () {
+        // Silencioso: el chat sigue funcionando
+      });
+  }
+
   /**
    * Inserta en el documento los estilos CSS del widget (paleta Amarte: magenta, navy, blanco).
    */
@@ -412,7 +804,42 @@
       ".amarte-widget-launcher-icon svg{width:20px;height:20px;}" +
       ".amarte-widget-panel{right:16px;bottom:calc(80px + env(safe-area-inset-bottom,0px));}}" +
       "@media (min-width:769px){.amarte-widget-panel{width:min(420px,calc(100vw - 48px));" +
-      "max-height:min(720px,calc(100vh - 140px));}.amarte-widget-messages{min-height:320px;}}";
+      "max-height:min(720px,calc(100vh - 140px));}.amarte-widget-messages{min-height:320px;}}" +
+      /* Live voice */
+      ".amarte-live-btn{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;" +
+      "margin:0 0 8px;padding:10px 14px;border:none;border-radius:30px;cursor:pointer;" +
+      "background:#1A1A3D;color:#fff;font-size:0.85rem;font-weight:600;}" +
+      ".amarte-live-btn:hover{background:#2a2a55;}" +
+      ".amarte-live-btn:disabled{opacity:0.5;cursor:not-allowed;}" +
+      ".amarte-live-btn .amarte-live-dot{width:8px;height:8px;border-radius:50%;background:#e53935;flex-shrink:0;}" +
+      ".amarte-live-overlay{position:absolute;inset:0;background:rgba(26,26,61,0.55);z-index:5;" +
+      "display:none;align-items:center;justify-content:center;padding:16px;}" +
+      ".amarte-live-overlay.amarte-open{display:flex;}" +
+      ".amarte-live-card{background:#fff;border-radius:16px;padding:18px;max-width:100%;width:100%;" +
+      "box-shadow:0 8px 28px rgba(0,0,0,0.18);}" +
+      ".amarte-live-card p{margin:0 0 14px;font-size:0.9rem;line-height:1.45;color:#1a1a1a;}" +
+      ".amarte-live-card-actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;}" +
+      ".amarte-live-card-actions button{border:none;border-radius:999px;padding:10px 14px;font-weight:600;" +
+      "font-size:0.85rem;cursor:pointer;}" +
+      ".amarte-live-start{background:#D81B60;color:#fff;}" +
+      ".amarte-live-start:hover{background:#AD1457;}" +
+      ".amarte-live-cancel{background:#eee;color:#333;}" +
+      ".amarte-live-panel{display:none;flex-direction:column;gap:8px;padding:10px 16px 12px;" +
+      "background:rgba(255,255,255,0.92);border-top:1px solid rgba(0,0,0,0.06);}" +
+      ".amarte-live-panel.amarte-open{display:flex;}" +
+      ".amarte-live-status{font-size:0.85rem;color:#1A1A3D;font-weight:600;display:flex;align-items:center;gap:8px;}" +
+      ".amarte-live-status .amarte-live-mic-ind{width:10px;height:10px;border-radius:50%;background:#9e9e9e;}" +
+      ".amarte-live-status.amarte-listening .amarte-live-mic-ind{background:#2E7D32;}" +
+      ".amarte-live-status.amarte-speaking .amarte-live-mic-ind{background:#D81B60;" +
+      "animation:amarte-live-pulse 1.1s ease-in-out infinite;}" +
+      ".amarte-live-status.amarte-muted .amarte-live-mic-ind{background:#f9a825;}" +
+      "@keyframes amarte-live-pulse{0%,100%{transform:scale(1);opacity:1;}50%{transform:scale(1.35);opacity:0.7;}}" +
+      ".amarte-live-meta{font-size:0.75rem;color:#666;}" +
+      ".amarte-live-controls{display:flex;flex-wrap:wrap;gap:8px;}" +
+      ".amarte-live-controls button{border:none;border-radius:999px;padding:8px 12px;font-size:0.8rem;" +
+      "font-weight:600;cursor:pointer;background:#eee;color:#1a1a1a;}" +
+      ".amarte-live-controls button:disabled{opacity:0.45;cursor:not-allowed;}" +
+      ".amarte-live-controls .amarte-live-end{background:#1A1A3D;color:#fff;}";
 
     // Añade el style al head del documento
     document.head.appendChild(style);
@@ -892,19 +1319,110 @@
     quickRow.appendChild(buildQuickLink(urlRes, "Reservar", ""));
     quickRow.appendChild(buildQuickLink(urlPromos, "PROMOCIONES", ""));
 
+    var liveBtn = document.createElement("button");
+    liveBtn.type = "button";
+    liveBtn.className = "amarte-live-btn";
+    liveBtn.style.display = "none";
+    liveBtn.setAttribute("aria-label", "Hablar en vivo con Martina");
+    var liveDot = document.createElement("span");
+    liveDot.className = "amarte-live-dot";
+    liveDot.setAttribute("aria-hidden", "true");
+    var liveBtnLabel = document.createElement("span");
+    liveBtnLabel.textContent = "Hablar en vivo con Martina";
+    liveBtn.appendChild(liveDot);
+    liveBtn.appendChild(liveBtnLabel);
+    liveState.liveBtn = liveBtn;
+
+    var livePanel = document.createElement("div");
+    livePanel.className = "amarte-live-panel";
+    livePanel.setAttribute("role", "status");
+    livePanel.setAttribute("aria-live", "polite");
+    var liveStatus = document.createElement("div");
+    liveStatus.className = "amarte-live-status";
+    var micInd = document.createElement("span");
+    micInd.className = "amarte-live-mic-ind";
+    micInd.setAttribute("aria-hidden", "true");
+    var statusText = document.createElement("span");
+    statusText.className = "amarte-live-status-text";
+    statusText.textContent = "Conectando con Martina…";
+    liveStatus.appendChild(micInd);
+    liveStatus.appendChild(statusText);
+    var liveMeta = document.createElement("div");
+    liveMeta.className = "amarte-live-meta";
+    liveMeta.textContent = "Duración 00:00";
+    var liveControls = document.createElement("div");
+    liveControls.className = "amarte-live-controls";
+    var muteBtn = document.createElement("button");
+    muteBtn.type = "button";
+    muteBtn.textContent = "Silenciar";
+    muteBtn.setAttribute("aria-label", "Silenciar micrófono");
+    var unmuteBtn = document.createElement("button");
+    unmuteBtn.type = "button";
+    unmuteBtn.textContent = "Activar micrófono";
+    unmuteBtn.setAttribute("aria-label", "Activar micrófono");
+    var endBtn = document.createElement("button");
+    endBtn.type = "button";
+    endBtn.className = "amarte-live-end";
+    endBtn.textContent = "Finalizar";
+    endBtn.setAttribute("aria-label", "Finalizar conversación en vivo");
+    liveControls.appendChild(muteBtn);
+    liveControls.appendChild(unmuteBtn);
+    liveControls.appendChild(endBtn);
+    livePanel.appendChild(liveStatus);
+    livePanel.appendChild(liveMeta);
+    livePanel.appendChild(liveControls);
+    liveState.statusEl = liveStatus;
+    liveState.metaEl = liveMeta;
+    liveState.panelEl = livePanel;
+    liveState.muteBtn = muteBtn;
+    liveState.unmuteBtn = unmuteBtn;
+    liveState.endBtn = endBtn;
+    updateLiveControlButtons();
+
+    var liveOverlay = document.createElement("div");
+    liveOverlay.className = "amarte-live-overlay";
+    liveOverlay.setAttribute("role", "dialog");
+    liveOverlay.setAttribute("aria-modal", "true");
+    liveOverlay.setAttribute("aria-label", "Confirmar conversación en vivo");
+    var liveCard = document.createElement("div");
+    liveCard.className = "amarte-live-card";
+    var liveNotice = document.createElement("p");
+    liveNotice.textContent =
+      "Martina utilizará el micrófono para mantener una conversación de voz en vivo (máximo 2 minutos). La voz es generada por inteligencia artificial.";
+    var liveCardActions = document.createElement("div");
+    liveCardActions.className = "amarte-live-card-actions";
+    var liveStartBtn = document.createElement("button");
+    liveStartBtn.type = "button";
+    liveStartBtn.className = "amarte-live-start";
+    liveStartBtn.textContent = "Iniciar conversación";
+    liveStartBtn.setAttribute("aria-label", "Iniciar conversación en vivo");
+    var liveCancelBtn = document.createElement("button");
+    liveCancelBtn.type = "button";
+    liveCancelBtn.className = "amarte-live-cancel";
+    liveCancelBtn.textContent = "Cancelar";
+    liveCancelBtn.setAttribute("aria-label", "Cancelar conversación en vivo");
+    liveCardActions.appendChild(liveCancelBtn);
+    liveCardActions.appendChild(liveStartBtn);
+    liveCard.appendChild(liveNotice);
+    liveCard.appendChild(liveCardActions);
+    liveOverlay.appendChild(liveCard);
+    liveState.overlayEl = liveOverlay;
+
     footerWrap.appendChild(footerRow);
     footerWrap.appendChild(micHint);
+    footerWrap.appendChild(liveBtn);
+    footerWrap.appendChild(livePanel);
     footerWrap.appendChild(quickRow);
 
     panel.appendChild(header);
     panel.appendChild(messagesEl);
     panel.appendChild(footerWrap);
+    panel.appendChild(liveOverlay);
 
     rootEl.appendChild(launcher);
     rootEl.appendChild(panel);
     document.body.appendChild(rootEl);
 
-    // Alterna la clase que abre/cierra el panel
     function togglePanel() {
       var isOpen = panel.classList.toggle("amarte-open");
       rootEl.classList.toggle("amarte-chat-open", isOpen);
@@ -915,31 +1433,66 @@
       }
     }
 
-    // Click en lanzador: abre o cierra
     launcher.addEventListener("click", function () {
       togglePanel();
     });
-    // Click en cerrar: quita clase abierta
     closeBtn.addEventListener("click", function () {
       panel.classList.remove("amarte-open");
       rootEl.classList.remove("amarte-chat-open");
       launcher.setAttribute("aria-expanded", "false");
+      if (liveState.active) {
+        endLiveSession("panel_closed");
+      }
+      closeLiveConsent();
     });
-    // Enter en el input envía mensaje
     inputEl.addEventListener("keydown", function (e) {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         sendUserMessage();
       }
     });
-    // Click en enviar
     sendBtn.addEventListener("click", function () {
       sendUserMessage();
     });
-    // Micrófono: grabar / detener y enviar
     micBtn.addEventListener("click", function () {
       toggleVoiceRecording();
     });
+
+    liveBtn.addEventListener("click", function () {
+      if (liveState.active) return;
+      openLiveConsent();
+      liveStartBtn.focus();
+    });
+    liveCancelBtn.addEventListener("click", function () {
+      closeLiveConsent();
+    });
+    liveStartBtn.addEventListener("click", function () {
+      beginLiveConversation();
+    });
+    liveOverlay.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") {
+        closeLiveConsent();
+      }
+    });
+    muteBtn.addEventListener("click", function () {
+      if (!window.AmarteLiveAgent) return;
+      window.AmarteLiveAgent.mute();
+      liveState.muted = true;
+      setLiveUiStatus("muted");
+      updateLiveControlButtons();
+    });
+    unmuteBtn.addEventListener("click", function () {
+      if (!window.AmarteLiveAgent) return;
+      window.AmarteLiveAgent.unmute();
+      liveState.muted = false;
+      setLiveUiStatus("listening");
+      updateLiveControlButtons();
+    });
+    endBtn.addEventListener("click", function () {
+      endLiveSession("user");
+    });
+
+    initLiveVoiceFeature();
   }
 
   /**

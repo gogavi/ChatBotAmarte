@@ -1,24 +1,32 @@
 # Dosier del proyecto — ChatBotAmarte
 
-**Versión del documento:** 1.0  
+**Versión del documento:** 2.1  
 **Producto:** Concierge de IA “Martina” para Hotel Amarte Suite  
 **Repositorio:** `ChatBotAmarte`  
 **Producción:** [https://chatbotamarte-production.up.railway.app](https://chatbotamarte-production.up.railway.app)  
-**Sitio anfitrión:** [https://amartesuite.com](https://amartesuite.com)
+**Sitio anfitrión:** [https://amartesuite.com](https://amartesuite.com)  
+**Supabase (SaaS reservas):** [https://dftbelnombbtjryqphaa.supabase.co](https://dftbelnombbtjryqphaa.supabase.co)
 
 ---
 
 ## 1. Resumen ejecutivo
 
-ChatBotAmarte es un sistema compacto de **backend + widget embebible** que permite a los visitantes de Amarte Suite conversar con **Martina**, una asistente virtual que:
+ChatBotAmarte es un sistema de **backend + widget embebible** que permite a los visitantes de Amarte Suite conversar con **Martina** en tres modos:
 
-- Informa sobre suites, planes y tarifas en COP (fuente única: catálogo interno).
-- Orienta el flujo de reserva (fecha, tipo de suite/plan, duración).
-- Ofrece enlaces a reservas, promociones, pago Wompi y WhatsApp.
-- Soporta chat por **texto** y por **voz** (Whisper + ElevenLabs).
-- Recuerda el contexto de la conversación mediante **SQLite** y un `conversationId` en el navegador.
+| Modo | Canal | Tecnología |
+|------|--------|------------|
+| Chat escrito | `POST /chat` | OpenAI `gpt-5.4-mini` (JSON schema) |
+| Nota de voz | `POST /chat/audio` | STT OpenAI + chat + ElevenLabs TTS |
+| Hablar en vivo | WebRTC | ElevenLabs Agents + tools + webhook post-call |
 
-El diseño es deliberadamente simple: poca superficie de código, lógica de negocio en archivos de configuración, y un único punto de entrada (`server.js`).
+Además:
+
+- Cotiza suites/planes desde el catálogo interno (única fuente de precios).
+- Describe includes de planes con emojis (decoración, kit erótico, etc.).
+- Crea **prerreservas pendientes** en el SaaS (`public.reservations`, `canal=Chatbot`).
+- Persiste historial y sesiones en vivo en **Supabase**.
+
+Punto de entrada: `server.js`. Documentación corta: `README.md`. Setup Agents: `docs/ELEVENLABS_*.md`.
 
 ---
 
@@ -26,12 +34,14 @@ El diseño es deliberadamente simple: poca superficie de código, lógica de neg
 
 | Objetivo | Cómo se cumple |
 |----------|----------------|
-| Atender consultas 24/7 en el sitio web | Widget flotante “Pregúntale a Martina” |
-| Cotizar con precios reales | Catálogo en `config/amarteCatalog.js` inyectado al prompt |
-| No inventar promociones | Memoria operativa + reglas del system prompt |
-| Facilitar conversión | Botones: Reservar, PROMOCIONES, Pago Wompi, WhatsApp |
-| Contextualizar por página | Detección de suite vía `pageUrl` (`suitePageHints.js`) |
-| Experiencia móvil | UI glassmorphism, launcher tipo píldora, voz |
+| Atender 24/7 en el sitio | Widget “Pregúntale a Martina” |
+| Cotizar precios reales | `config/amarteCatalog.js` (+ `services/catalogLookup.js` en vivo) |
+| No inventar promociones | Prompt + memoria operativa |
+| Conversión | Botones Reservar / PROMOCIONES / Wompi / WhatsApp |
+| Prerreservas en el SaaS | `reservationService.js` |
+| Conversación oral en tiempo real | ElevenLabs Agents + `amarte-live-agent.bundle.js` |
+| Contextualizar por página | `suitePageHints.js` + variables dinámicas del agente |
+| UX móvil | Glassmorphism, mic nota de voz, overlay “Hablar en vivo” |
 
 ---
 
@@ -40,47 +50,65 @@ El diseño es deliberadamente simple: poca superficie de código, lógica de neg
 ```mermaid
 flowchart TB
   subgraph sitio["amartesuite.com"]
-    W["Widget amarte-widget.js"]
+    W["amarte-widget.js"]
+    Bundle["amarte-live-agent.bundle.js"]
   end
 
-  subgraph railway["Railway — Express server.js"]
-    CORS["CORS"]
+  subgraph railway["Railway — Express"]
     CHAT["POST /chat"]
     AUDIO["POST /chat/audio"]
-    STATIC["GET estáticos /public"]
-    HEALTH["GET /health"]
-    STORE[("SQLite historial")]
-    PROMPT["buildMartinaSystemPrompt"]
+    CFG["GET /api/widget-config"]
+    TOK["POST /api/elevenlabs/conversation-token"]
+    TOOLS["POST /api/agent-tools/*"]
+    HOOK["POST /api/elevenlabs/post-call"]
+    RES["reservationService"]
   end
 
-  subgraph externos["Servicios externos"]
-    OAI["OpenAI gpt-4o-mini + Whisper"]
+  subgraph supabase["Supabase"]
+    HIST["chatbot_conversations / chatbot_messages"]
+    LIVE["live_conversations"]
+    RSV["public.reservations"]
+  end
+
+  subgraph externos["Externos"]
+    OAI["OpenAI"]
     EL["ElevenLabs TTS"]
+    ELA["ElevenLabs Agents WebRTC"]
   end
 
-  W -->|JSON / multipart| CORS
-  CHAT --> PROMPT --> OAI
-  AUDIO --> OAI
+  W --> CHAT --> OAI
+  W --> AUDIO --> OAI
   AUDIO --> EL
-  CHAT --> STORE
-  AUDIO --> STORE
-  STATIC --> W
+  CHAT --> HIST
+  AUDIO --> HIST
+  CHAT --> RES --> RSV
+  W --> CFG
+  W --> Bundle
+  Bundle --> TOK
+  Bundle --> ELA
+  ELA --> TOOLS
+  ELA --> HOOK --> LIVE
 ```
 
 ### Capas
 
-| Capa | Tecnología | Archivo principal |
-|------|------------|-------------------|
-| Servidor HTTP | Express 4 | `server.js` |
-| Chat IA | OpenAI `gpt-4o-mini` | `runChat()` en `server.js` |
-| Transcripción | OpenAI Whisper `whisper-1` | `POST /chat/audio` |
-| Síntesis de voz | ElevenLabs `eleven_multilingual_v2` | `synthesizeElevenLabs()` |
-| Negocio / tarifas | JS estático | `config/amarteCatalog.js` |
-| System prompt | Composición dinámica | `config/martinaSystemPrompt.js` |
-| Memoria operativa | Markdown | `config/memoria.md` + `loadMemoria.js` |
-| Historial | SQLite (`better-sqlite3`) | `conversationStore.js` |
-| Widget UI | Vanilla JS + CSS inyectado | `public/amarte-widget.js` |
-| Enlaces de pago | Normalización defensiva | `paymentLinks.js` |
+| Capa | Tecnología | Archivo(s) |
+|------|------------|------------|
+| Servidor HTTP | Express 4 + rate-limit | `server.js`, `routes/*` |
+| Chat IA | OpenAI `gpt-5.4-mini` | `runChat()` |
+| STT | `gpt-4o-mini-transcribe` | `POST /chat/audio` |
+| TTS nota de voz | ElevenLabs multilingual v2 | `synthesizeElevenLabs()`, `ttsNormalize.js` |
+| Hablar en vivo | ElevenLabs Agents WebRTC | `liveVoiceConfig.js`, `src/amarte-live-agent.js`, `routes/elevenlabs*` |
+| Tools del agente | Bearer `ELEVENLABS_TOOL_SECRET` | `routes/agentTools.js`, `services/catalogLookup.js` |
+| Catálogo / prompt | JS + Markdown | `config/*` |
+| Historial chat | Supabase | `conversationStore.js`, `supabaseClient.js` |
+| Sesiones en vivo | Supabase `live_conversations` | post-call + `conversationStore` |
+| Prerreservas | Supabase `reservations` | `reservationService.js` |
+| Tiempo Bogotá | Intl | `services/bogotaTime.js` |
+| Validación live | Hosts / campos | `services/liveVoiceValidation.js` |
+| Analytics live | Hook / debug | `analytics.js` |
+| Widget | Vanilla JS | `public/amarte-widget.js` |
+| Bundle live | esbuild IIFE | `npm run build:voice` → `public/amarte-live-agent.bundle.js` |
 
 ---
 
@@ -88,425 +116,310 @@ flowchart TB
 
 ```
 ChatBotAmarte/
-├── server.js                 # Entry point: rutas, OpenAI, ElevenLabs, CORS, estáticos
-├── conversationStore.js      # Persistencia SQLite del historial
-├── paymentLinks.js           # Normalización de URLs Wompi corruptas
-├── package.json              # Dependencias y scripts
-├── .env.example              # Plantilla de variables (sin secretos)
-├── .gitignore                # Ignora .env, node_modules, data/, memoria.local.md
-├── DOSIER.md                 # Este documento
+├── server.js
+├── supabaseClient.js
+├── conversationStore.js      # chat + helpers live_conversations
+├── reservationService.js
+├── liveVoiceConfig.js        # flags, rate limit token, hosts permitidos
+├── analytics.js              # trackEvent (live voice)
+├── paymentLinks.js
+├── ttsNormalize.js
+├── package.json              # prestart → build:voice
+├── README.md
+├── DOSIER.md
+├── .env.example
 │
 ├── config/
-│   ├── amarteCatalog.js      # Fuente de verdad comercial (suites, precios, contacto, pago)
-│   ├── martinaSystemPrompt.js# Ensambla el system prompt de Martina
-│   ├── loadMemoria.js        # Carga memoria Markdown al prompt
-│   ├── memoria.md            # Políticas y campañas operativas
-│   └── suitePageHints.js     # Detecta suite a partir de la URL de la página
+│   ├── amarteCatalog.js      # precios + includes de planes
+│   ├── martinaSystemPrompt.js
+│   ├── chatActions.js
+│   ├── loadMemoria.js / memoria.md
+│   └── suitePageHints.js
+│
+├── routes/
+│   ├── widgetConfig.js       # GET /api/widget-config
+│   ├── elevenlabsToken.js    # POST /api/elevenlabs/conversation-token
+│   ├── elevenlabsPostCall.js # POST /api/elevenlabs/post-call
+│   └── agentTools.js         # POST /api/agent-tools/catalog|actions
+│
+├── services/
+│   ├── bogotaTime.js
+│   ├── catalogLookup.js      # tarifas para tools del agente
+│   └── liveVoiceValidation.js
+│
+├── src/
+│   └── amarte-live-agent.js  # cliente WebRTC (fuente)
 │
 ├── public/
-│   ├── amarte-widget.js      # Widget embebible (UI + cliente API)
-│   └── embed-demo.html       # Página de prueba del widget
+│   ├── amarte-widget.js
+│   ├── amarte-live-agent.bundle.js  # generado
+│   └── embed-demo.html
 │
-├── scripts/
-│   └── verify-production.ps1 # Smoke test contra producción Railway
+├── docs/
+│   ├── ELEVENLABS_AGENT_SETUP.md
+│   ├── ELEVENLABS_TOOLS_SETUP.md
+│   └── ELEVENLABS_POST_CALL_WEBHOOK.md
 │
-└── tests/
-    └── paymentLinks.test.js  # Pruebas de normalización Wompi
+├── supabase/migrations/
+│   └── 20260710_live_conversations.sql
+│
+└── tests/   # paymentLinks, chatActions, ttsNormalize, reservationService,
+             # bogotaTime, catalogLookup, liveVoice*, agentTools,
+             # elevenlabsPostCall, conversationToken, rateLimit
 ```
-
-**Notas:**
-
-- La carpeta `data/` se crea en runtime para SQLite y está en `.gitignore`.
-- `config/memoria.local.md` puede usarse como override local (también ignorado por git).
 
 ---
 
 ## 5. Flujos de conversación
 
-### 5.1 Chat por texto — `POST /chat`
+### 5.1 Chat escrito — `POST /chat`
+
+1. Widget envía mensaje + `conversationId` + contexto temporal Bogotá.  
+2. Servidor carga historial Supabase → `runChat()` (JSON schema).  
+3. Si `pendingReservation` válido → INSERT prerreserva.  
+4. `appendTurn` guarda user + assistant.  
+5. Respuesta: `{ reply, options, reservationId? }`.
+
+### 5.2 Nota de voz — `POST /chat/audio`
+
+1. Micrófono: **magenta** idle → **verde** al grabar → magenta al finalizar.  
+2. Hint: *“Presiona el micrófono para hablar y nuevamente para finalizar”*.  
+3. STT → mismo `runChat()` → TTS ElevenLabs opcional.
+
+### 5.3 Hablar en vivo — ElevenLabs Agents
 
 ```mermaid
-sequenceDiagram
-  participant U as Usuario
-  participant W as Widget
-  participant S as server.js
-  participant DB as SQLite
-  participant AI as OpenAI
-
-  U->>W: Escribe mensaje / Enter
-  W->>S: POST /chat JSON
-  S->>DB: getPriorMessages(conversationId)
-  S->>S: buildMartinaSystemPrompt + matchSuiteFromPageUrl
-  S->>AI: chat.completions gpt-4o-mini
-  AI-->>S: texto + bloque OPTIONS
-  S->>S: normalizeAssistantPaymentLinks + parseAssistantReply
-  S->>DB: appendTurn(user, rawText)
-  S-->>W: reply + options
-  W-->>U: burbuja + botones
+flowchart LR
+  W[Widget] --> CFG["GET /api/widget-config"]
+  CFG -->|liveVoiceEnabled| Btn[Botón Hablar en vivo]
+  Btn --> Bundle
+  Bundle --> Tok["POST /api/elevenlabs/conversation-token"]
+  Tok --> EL[WebRTC Agents]
+  EL --> Tools["/api/agent-tools/*"]
+  EL --> Hook["/api/elevenlabs/post-call"]
+  Hook --> Live[(live_conversations)]
 ```
 
-**Payload típico del widget:**
+1. Widget consulta `/api/widget-config`; si `liveVoiceEnabled`, muestra el botón.  
+2. Carga `amarte-live-agent.bundle.js` bajo demanda.  
+3. Overlay de permiso → token WebRTC (rate limit: 5 / 10 min).  
+4. Sesión con variables dinámicas (`conversation_id`, `suite_context`, fecha Bogotá, etc.).  
+5. Tools del agente (catálogo / acciones) autenticadas con `ELEVENLABS_TOOL_SECRET`.  
+6. Al terminar, webhook post-call (firma HMAC) persiste en `live_conversations`.  
+7. Desactivar solo este modo: `ELEVENLABS_LIVE_ENABLED=false`.
 
-```json
-{
-  "message": "¿Cuánto cuesta la Suite Jacuzzi?",
-  "roomName": "document.title",
-  "pageUrl": "https://amartesuite.com/producto/...",
-  "conversationId": "uuid-v4",
-  "referenceDate": "YYYY-MM-DD",
-  "referenceTime": "HH:mm",
-  "referenceWeekday": "viernes",
-  "referenceIso": "YYYY-MM-DDTHH:mm:00-05:00"
-}
-```
+Detalle operativo: `docs/ELEVENLABS_AGENT_SETUP.md`, `ELEVENLABS_TOOLS_SETUP.md`, `ELEVENLABS_POST_CALL_WEBHOOK.md`.
 
-La referencia temporal se calcula en el cliente con zona **America/Bogota** (`getBogotaReference()`), para que Martina sepa “hoy/mañana” y si aplica tarifa entre semana o fin de semana.
+### 5.4 Prerreserva desde el chat
 
-**Respuesta:**
-
-```json
-{
-  "reply": "Texto visible para el usuario",
-  "options": [
-    { "label": "📅 Reservar ahora", "url": "..." },
-    { "label": "🎁 PROMOCIONES", "url": "..." },
-    { "label": "💳 Pago seguro Wompi", "url": "..." },
-    { "label": "💬 WhatsApp", "url": "..." }
-  ]
-}
-```
-
-### 5.2 Chat por voz — `POST /chat/audio`
-
-1. El usuario graba con el micrófono (`MediaRecorder`, máx. ~120 s, preferencia `audio/webm;codecs=opus`).
-2. El widget envía `multipart/form-data` con el audio y el mismo contexto (room, page, conversationId, temporal).
-3. El servidor:
-   - Transcribe con **Whisper** (`language: "es"`).
-   - Ejecuta el mismo núcleo `runChat()` con el transcript.
-   - Opcionalmente sintetiza la respuesta con **ElevenLabs** (si hay `ELEVENLABS_API_KEY`).
-4. Respuesta incluye `transcript`, `reply`, `options`, `ttsStatus` y, si aplica, `audioBase64` + `audioMimeType`.
-
-El widget muestra el transcript como mensaje de usuario y reproduce el audio de Martina cuando está disponible.
+1. Tras cotizar exacto, Martina **ofrece** prerreserva; exige **nombre** + **WhatsApp**.  
+2. Con aceptación y datos válidos → `pendingReservation` en el JSON.  
+3. INSERT `reservations`: `canal=Chatbot`, `is_taken=false`, `suite=—`, abono ~50 %.  
+4. Una prerreserva por `conversationId`. Botones prioritarios: Wompi + WhatsApp.
 
 ---
 
-## 6. System prompt y conocimiento de negocio
+## 6. System prompt y catálogo
 
-### 6.1 Cómo se arma el prompt
-
-La función `buildMartinaSystemPrompt(context)` en `config/martinaSystemPrompt.js` combina:
-
-| Fuente | Contenido |
-|--------|-----------|
-| `amarteCatalog.js` | Identidad, tono, categorías de suites, tarifas COP, servicios, flujo de reserva, ubicación, pago, contacto |
-| `memoria.md` | Políticas y campañas (máx. ~12 000 caracteres) |
-| `suitePageHints.js` | Suite detectada por pathname de la página actual |
-| Contexto runtime | `roomName`, `pageUrl`, fecha/hora Bogotá |
-
-### 6.2 Reglas críticas de Martina
-
-- **Solo cotiza** tarifas del catálogo interno; no inventa descuentos.
-- **Promociones:** invita a la landing oficial, no cita precios de landings que contradigan el catálogo.
-- **Zona horaria:** Bogotá para “hoy/mañana” y weekday vs weekend.
-- **Formato de salida obligatorio:** texto visible + bloque `[OPTIONS]...[/OPTIONS]` con JSON de botones.
-- **Wompi en texto:** URL completa en plano (sin Markdown `[texto](url)`), para evitar corrupción del enlace.
-
-### 6.3 Contrato `[OPTIONS]`
-
-El modelo debe terminar cada respuesta así:
-
-```
-[OPTIONS]
-[
-  {"label": "📅 Reservar ahora", "url": "..."},
-  {"label": "🎁 PROMOCIONES", "url": "..."},
-  {"label": "💳 Pago seguro Wompi", "url": "..."},
-  {"label": "💬 WhatsApp", "url": "..."}
-]
-[/OPTIONS]
-```
-
-`parseAssistantReply()` separa el texto visible del JSON. Las URLs de pago se normalizan con `normalizePaymentOptionUrl()`.
+- Cotización solo desde `amarteCatalog.js`.  
+- Planes: siempre mencionar includes con emojis.  
+  - Base: 🌹 pétalos, 🕯️ velas, 🎈 globos, 🍾 vino espumoso, 🍫 chocolates.  
+  - Plan Húmedo: + 🛁 jacuzzi + ♨️ sauna.  
+  - Plan Erótico: + kit 🧴 body, ⛓️ esposas, 🪢 látigo.  
+- Salida chat: JSON `{ message, actionTypes, pendingReservation }` (`chatActions.js`).  
+- En vivo: precios vía tool `catalogLookup` (misma fuente); URLs de acciones solo desde backend.
 
 ---
 
 ## 7. Widget frontend
 
-### 7.1 Carga
-
-- Archivo: `public/amarte-widget.js` (IIFE, sin dependencias externas).
-- Guard anti-doble carga: `window.__amarteWidgetLoaded`.
-- Al iniciar: inyecta CSS (`injectStyles`) y construye el DOM (`buildWidget`).
-
-### 7.2 Resolución de `BACKEND_URL` (prioridad)
-
-1. `window.AMARTE_CHATBOT_URL`
-2. Origen del `<script src=".../amarte-widget.js">`
-3. `window.location.origin` (útil en demo local)
-
-### 7.3 Overrides opcionales
-
-| Variable global | Uso |
-|-----------------|-----|
-| `AMARTE_CHATBOT_URL` | Base del API |
-| `AMARTE_QUICK_WHATSAPP_URL` | Botón WhatsApp del pie |
-| `AMARTE_QUICK_RESERVATIONS_URL` | Botón Reservar |
-| `AMARTE_PROMOCIONES_URL` | Botón PROMOCIONES |
-| `AMARTE_QUICK_CALL_TEL` | Botón Llamar (`tel:`) |
-
-### 7.4 UI actual
-
 | Elemento | Descripción |
 |----------|-------------|
-| **Launcher** | Píldora magenta “Pregúntale a Martina” + icono chat; esquina inferior derecha |
-| **Panel** | Glassmorphism: fondo blanco 75 %, blur 15 px, radio 25 px, borde blanco |
-| **Header** | Título “Amarte Suite” en magenta; subtítulo “Concierge” en gris; sin fondo sólido |
-| **Mensajes** | Burbujas usuario (gradiente magenta) / bot (blanco); Markdown ligero |
-| **Pie** | Input píldora, micrófono SVG magenta, enviar circular magenta |
-| **Accesos rápidos** | WhatsApp, Llamar (solo móvil), Reservar, PROMOCIONES — píldoras magenta sólidas |
+| Launcher | “Pregúntale a Martina” |
+| Chat | Input + mic nota de voz (verde/magenta) + hint + enviar |
+| Hablar en vivo | Botón (si config lo habilita), overlay, panel mute/unmute/colgar, estados listening/speaking |
+| Accesos rápidos | WhatsApp, Llamar (móvil), Reservar, PROMOCIONES |
+| Bundle | `/amarte-live-agent.bundle.js` (generado en `prestart`) |
 
-Al abrir el chat, el launcher se oculta con transición (`amarte-chat-open`).
+`conversationId` en `localStorage` (`amarte_conversation_id`).
 
-### 7.5 Identidad de conversación
-
-`conversationId` UUID v4 guardado en `localStorage` (`amarte_conversation_id`), con fallback a `sessionStorage` y luego UUID efímero.
+Overrides: `AMARTE_CHATBOT_URL`, `AMARTE_QUICK_*`, `AMARTE_PROMOCIONES_URL`.
 
 ---
 
-## 8. Persistencia (SQLite)
+## 8. Persistencia (Supabase)
 
-**Módulo:** `conversationStore.js`
+**Proyecto:** `dftbelnombbtjryqphaa`. Service role solo en backend.
 
-```sql
-CREATE TABLE chat_messages (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  conversation_id TEXT NOT NULL,
-  role TEXT NOT NULL,
-  content TEXT NOT NULL,
-  created_at TEXT DEFAULT (datetime('now'))
-);
-```
+| Tabla | Uso |
+|-------|-----|
+| `chatbot_conversations` | Sesión chat; `reservation_id` opcional |
+| `chatbot_messages` | Historial user/assistant |
+| `live_conversations` | Post-call Agents (transcript, summary, booking_intent, …) |
+| `reservations` | Prerreservas SaaS (`canal=Chatbot`) |
 
-| Función | Rol |
-|---------|-----|
-| `initConversationStore(path)` | Abre DB y crea tabla |
-| `getPriorMessages(id, limit=40)` | Últimos N mensajes en orden cronológico |
-| `appendTurn(id, user, assistantRaw)` | Inserta turno usuario + asistente (incluye `[OPTIONS]`) |
+Migración live: `supabase/migrations/20260710_live_conversations.sql`.
 
-Si SQLite falla al iniciar, el chat **sigue funcionando** sin historial (warning en consola).
-
-En Railway el disco puede ser efímero: el historial puede perderse entre redeploys salvo que se monte un volumen persistente.
+Historial: init + **reintento lazy** (`ensureStoreReady`). Sin keys → chat sin memoria.
 
 ---
 
-## 9. Normalización de enlaces Wompi
-
-**Problema histórico:** el Markdown del widget interpretaba el `_` de `VPOS_RXJqnz` como cursiva y generaba URLs corruptas (`VPOS%3Cem%3ERXJqnz`).
-
-**Solución en capas:**
-
-1. **Prompt:** pedir URL Wompi en texto plano.
-2. **Backend** (`paymentLinks.js`): reescribe variantes corruptas y Markdown de “Pago seguro Wompi” a la URL canónica.
-3. **Widget:** normaliza por URL y por etiqueta del enlace antes de crear el `<a href>`.
-
-**URL canónica:** `https://checkout.wompi.co/l/VPOS_RXJqnz`
-
-**Tests:** `node tests/paymentLinks.test.js`
-
----
-
-## 10. API pública
+## 9. API pública
 
 | Método | Ruta | Descripción |
 |--------|------|-------------|
-| `GET` | `/` | Página informativa + snippet de embed |
-| `GET` | `/health` | Estado: OpenAI, ElevenLabs, historial |
-| `POST` | `/chat` | Chat texto → `{ reply, options }` |
-| `POST` | `/chat/audio` | Audio → transcript + reply + TTS opcional |
-| `GET` | `/amarte-widget.js` | Widget (Cache-Control: no-cache) |
-| `GET` | `/embed-demo.html` | Demo local |
+| `GET` | `/health` | openai, elevenLabs, **elevenLabsAgentConfigured**, **liveVoiceEnabled**, chatHistory, supabase |
+| `GET` | `/` | Info + embed |
+| `POST` | `/chat` | Chat texto |
+| `POST` | `/chat/audio` | Nota de voz |
+| `GET` | `/api/widget-config` | `{ liveVoiceEnabled }` |
+| `POST` | `/api/elevenlabs/conversation-token` | Token WebRTC (rate-limited) |
+| `POST` | `/api/agent-tools/catalog` | Precio desde catálogo (tool secret) |
+| `POST` | `/api/agent-tools/actions` | URLs canónicas (tool secret) |
+| `POST` | `/api/elevenlabs/post-call` | Webhook post-call (firma) |
+| `GET` | `/amarte-widget.js` | Widget |
+| `GET` | `/amarte-live-agent.bundle.js` | Cliente live |
+| `GET` | `/embed-demo.html` | Demo |
 
-**CORS permitido:** `https://amartesuite.com`, `https://www.amartesuite.com`.
-
-No hay autenticación de API; la protección principal en navegador es CORS.
+**CORS:** `amartesuite.com` / `www.amartesuite.com`.
 
 ---
 
-## 11. Configuración y despliegue
+## 10. Configuración y despliegue
 
-### 11.1 Variables de entorno
+### Variables de entorno
 
-| Variable | Obligatoria | Default / notas |
-|----------|-------------|-----------------|
-| `OPENAI_API_KEY` | Sí | Sin ella, `/chat` y `/chat/audio` fallan |
-| `PORT` | No | `3000` (Railway la inyecta) |
-| `ELEVENLABS_API_KEY` | No | Sin ella hay chat, pero sin voz de respuesta |
-| `ELEVENLABS_VOICE_ID` | No | `VmejBeYhbrcTPwDniox7` |
-| `CHAT_DB_PATH` | No | `./data/conversations.sqlite` |
-| `MARTINA_MEMORIA_PATH` | No | `./config/memoria.md` |
+| Variable | Uso |
+|----------|-----|
+| `OPENAI_API_KEY` | Chat + STT |
+| `PORT` | Default 3000 |
+| `ELEVENLABS_API_KEY` | TTS + Agents |
+| `ELEVENLABS_VOICE_ID` | Voz TTS (default Lina) |
+| `ELEVENLABS_AGENT_ID` | Agente Conversational AI |
+| `ELEVENLABS_ENVIRONMENT` | Default `production` |
+| `ELEVENLABS_CONVAI_WEBHOOK_SECRET` | Firma post-call |
+| `ELEVENLABS_TOOL_SECRET` | Auth tools del agente |
+| `ELEVENLABS_LIVE_ENABLED` | `true`/`false` (botón en vivo) |
+| `ELEVENLABS_ALLOW_LOCAL_PAGE_HOSTS` | Demo localhost |
+| `SUPABASE_URL` | Proyecto Amarte |
+| `SUPABASE_SERVICE_ROLE_KEY` | Backend only |
+| `MARTINA_MEMORIA_PATH` | Override memoria |
 
-### 11.2 Scripts npm
+### Scripts
 
-| Script | Comando |
-|--------|---------|
-| `npm start` | Arranca el servidor |
-| `npm run verify:prod` | Smoke test contra Railway |
-| `npm run railway:up` | Deploy con Railway CLI |
-| `npm run railway:logs` | Logs del servicio |
+| Script | Acción |
+|--------|--------|
+| `npm start` | `prestart` → `build:voice` + `node server.js` |
+| `npm run build:voice` | esbuild → `amarte-live-agent.bundle.js` |
+| `npm test` | Suite completa (chat + live + rate limit) |
+| `npm run verify:prod` | Smoke Railway |
+| `npm run railway:up` / `railway:logs` | Deploy / logs |
 
-### 11.3 Dependencias
+### Dependencias
 
-`express`, `cors`, `dotenv`, `openai`, `multer`, `better-sqlite3`  
+**Runtime:** `express`, `cors`, `dotenv`, `openai`, `multer`, `@supabase/supabase-js`, `@elevenlabs/client`, `@elevenlabs/elevenlabs-js`, `express-rate-limit`  
+**Dev:** `esbuild`  
 **Node:** `>= 18`
 
-### 11.4 Arranque local
-
-```bash
-copy .env.example .env
-# Editar OPENAI_API_KEY (y opcionalmente ElevenLabs)
-npm install
-npm start
-```
-
-Demo del widget: [http://localhost:3010/embed-demo.html](http://localhost:3010/embed-demo.html) (si `PORT=3010` en `.env`).
-
-### 11.5 Embed en WordPress / amartesuite.com
+### Embed WordPress
 
 ```html
 <script>
   window.AMARTE_CHATBOT_URL = "https://chatbotamarte-production.up.railway.app";
 </script>
-<script src="https://chatbotamarte-production.up.railway.app/amarte-widget.js?v=ACTUALIZA_ESTE_VALOR"></script>
+<script src="https://chatbotamarte-production.up.railway.app/amarte-widget.js?v=ACTUALIZA"></script>
 ```
 
-Tras cada cambio visual o de lógica del widget, **actualizar el `?v=`** para forzar recarga en navegadores con caché.
+Bump `?v=` tras cambios de UI. **Nunca** poner API keys en el embed.
 
 ---
 
-## 12. Datos de negocio (sin secretos)
+## 11. Datos de negocio (sin secretos)
 
-### Identidad
-
-- Asistente: **Martina**
-- Hotel: **Hotel Amarte Suite**
-- Tono: cálido, profesional, persuasivo
-
-### Contacto y conversión
-
-| Canal | Valor |
-|-------|-------|
-| WhatsApp | `+57 300 741 6683` (mensaje prellenado al abrir) |
-| Teléfono (widget) | `tel:+573013307909` |
-| Reservas | [Formulario de reservas](https://amartesuite.com/formulario-reservas-amarte-suite/) |
-| Promociones | [Landing Jacuzzi](https://amartesuite.com/suite-jacuzzi-mejor-precio/) |
-| Pago Wompi | [Checkout VPOS_RXJqnz](https://checkout.wompi.co/l/VPOS_RXJqnz) |
-| Ubicación | Calle 62 No. 14–19, Teusaquillo, Bogotá — [mapa](https://bit.ly/ubicacionAmarte) |
-
-### Categorías de suites
-
-- **Deluxe:** Diamante, Gold, Rubí, Zafiro  
-- **Temáticas:** Árabe, Gótica, Queen  
-- **Jacuzzi:** VIP Jacuzzi  
-- **Sencillas:** Cabaña, Movimiento, Amarte  
-
-### Tarifas (resumen)
-
-- **Entre semana:** domingo–jueves  
-- **Fin de semana:** viernes–sábado  
-- **Suites:** 4 h / 8 h / 12 h / día hotelero (2:00 p.m. – 12:00 m. día siguiente)  
-- **Planes:** 6 h / 12 h / día hotelero  
-
-Las cifras exactas viven en `config/amarteCatalog.js` (única fuente que Martina debe usar al cotizar).
-
-### Flujo de reserva (3 pasos en el prompt)
-
-1. Fecha y hora de ingreso  
-2. Tipo de suite o plan  
-3. Pack de tiempo (4/6/8/12 h o día hotelero)
+- **Martina** · Hotel Amarte Suite · tono cálido/profesional.  
+- WhatsApp `+57 300 741 6683` · Tel widget `+573013307909`.  
+- Formulario reservas, landing promos, Wompi `VPOS_RXJqnz`, Calle 62 Teusaquillo.  
+- Suites: Deluxe / Temáticas / Jacuzzi (SaaS: `Suite Jacuzzi`) / Sencillas.  
+- Packs: 4/6/8/12 h y día hotelero; weekday vs weekend Bogotá.
 
 ---
 
-## 13. Mapa de responsabilidades (dónde cambiar qué)
+## 12. Mapa de responsabilidades
 
-| Quiero cambiar… | Archivo |
-|-----------------|---------|
-| Precios, suites, URLs de producto | `config/amarteCatalog.js` |
-| Políticas / campañas / tono operativo | `config/memoria.md` |
-| Instrucciones de comportamiento de Martina | `config/martinaSystemPrompt.js` |
-| Detección de suite por URL | `config/suitePageHints.js` |
-| UI del chat / launcher / estilos | `public/amarte-widget.js` |
-| Rutas API, CORS, TTS, Whisper | `server.js` |
-| Historial SQLite | `conversationStore.js` |
-| Corrección de enlaces Wompi | `paymentLinks.js` (+ widget) |
-| Variables de entorno | `.env` local / Variables en Railway |
-
----
-
-## 14. Operación y verificación
-
-### Health check
-
-```
-GET https://chatbotamarte-production.up.railway.app/health
-```
-
-Esperado: `ok: true`, `openaiConfigured: true`.
-
-### Smoke test automatizado
-
-```bash
-npm run verify:prod
-```
-
-Comprueba `/health`, presencia del fix Wompi en el widget y una respuesta de `/chat` con URL de pago correcta.
-
-### Checklist post-deploy
-
-1. Deploy en Railway (`railway up` o redeploy en dashboard).  
-2. `/health` responde OK.  
-3. Widget carga desde la URL de Railway.  
-4. Actualizar `?v=` en el embed de WordPress.  
-5. Probar en incógnito: mensaje “enlace de pago” y botón Reservar / WhatsApp.
+| Cambiar… | Dónde |
+|----------|--------|
+| Precios / includes planes | `config/amarteCatalog.js` |
+| Prompt chat | `config/martinaSystemPrompt.js` |
+| Botones / schema JSON | `config/chatActions.js` |
+| UI widget / live overlay | `public/amarte-widget.js` |
+| Cliente WebRTC | `src/amarte-live-agent.js` (+ rebuild) |
+| Flags live / rate limit token | `liveVoiceConfig.js` |
+| Tools agente | `routes/agentTools.js`, `services/catalogLookup.js` |
+| Token / post-call | `routes/elevenlabsToken.js`, `elevenlabsPostCall.js` |
+| Prerreservas | `reservationService.js` |
+| Historial | `conversationStore.js` |
+| Setup Agents | `docs/ELEVENLABS_*.md` |
+| Env | `.env` / Railway |
 
 ---
 
-## 15. Limitaciones conocidas
+## 13. Operación
+
+**Health esperado:**
+
+```json
+{
+  "ok": true,
+  "openaiConfigured": true,
+  "elevenLabsConfigured": true,
+  "elevenLabsAgentConfigured": true,
+  "liveVoiceEnabled": true,
+  "chatHistoryEnabled": true,
+  "supabaseConfigured": true
+}
+```
+
+**Checklist post-deploy:** vars OpenAI + Supabase + ElevenLabs Agents → `railway up` → `/health` → bump `?v=` widget → probar chat, nota de voz y Hablar en vivo.
+
+---
+
+## 14. Limitaciones
 
 | Limitación | Implicación |
 |------------|-------------|
-| Sin auth en API | Cualquier cliente puede llamar al backend; CORS solo protege en navegador |
-| SQLite en disco efímero (Railway free/hobby) | Historial puede perderse al redeploy |
-| Auto-deploy GitHub puede no estar activo | A menudo hace falta `railway up` o redeploy manual |
-| Caché del widget en WordPress | Requiere bump de `?v=` tras cambios de UI |
-| Modelo `gpt-4o-mini` | Barato y rápido; puede omitir `[OPTIONS]` ocasionalmente |
+| API sin auth de usuario | CORS en navegador; secrets solo server-side |
+| Historial / live sin Supabase | Sin memoria ni persistencia post-call |
+| Token live rate-limited | 5 peticiones / 10 min por IP |
+| Una prerreserva por conversación | Nuevo UUID = nueva prerreserva posible |
+| Disponibilidad | Asesor confirma en SaaS |
+| Caché WordPress | Bump `?v=` |
+| Bundle live | Debe generarse en build (`prestart`) |
 
 ---
 
-## 16. Glosario
+## 15. Glosario
 
 | Término | Significado |
 |---------|-------------|
-| **Martina** | Nombre de la asistente virtual |
-| **Widget** | Script embebido que dibuja el chat en el sitio |
-| **System prompt** | Instrucciones fijas enviadas a OpenAI en cada turno |
-| **Catálogo** | Precios y datos comerciales canónicos |
-| **Memoria** | Markdown operativo (políticas/campañas) |
-| **OPTIONS** | Bloque JSON de botones al final de cada respuesta |
-| **Launcher** | Botón flotante “Pregúntale a Martina” |
-| **Glassmorphism** | Estilo visual del panel (vidrio translúcido + blur) |
+| **Martina** | Asistente virtual |
+| **Nota de voz** | Grabación → STT → chat → TTS |
+| **Hablar en vivo** | WebRTC con ElevenLabs Agents |
+| **Prerreserva** | `reservations` con `canal=Chatbot`, `is_taken=false` |
+| **pendingReservation** | Campo JSON del chat escrito |
+| **Tool secret** | Bearer para `/api/agent-tools/*` |
+| **Post-call** | Webhook al cerrar sesión Agents |
+| **live_conversations** | Tabla Supabase de sesiones en vivo |
 
 ---
 
-## 17. Conclusión
+## 16. Conclusión
 
-ChatBotAmarte es un **concierge conversacional de producción** orientado a conversión: combina un backend Express ligero, un widget autocontenido y un catálogo comercial como fuente de verdad. La complejidad está concentrada en el **prompt** y en la **integridad de los enlaces de pago**, no en una arquitectura pesada.
+ChatBotAmarte combina **chat escrito**, **nota de voz** y **Hablar en vivo**, con catálogo único, prerreservas en el SaaS y persistencia en Supabase. La complejidad de Agents está aislada en `routes/`, `services/`, `src/amarte-live-agent.js` y `docs/ELEVENLABS_*`.
 
-Para evolucionar el producto con bajo riesgo:
-
-1. Actualizar negocio en `amarteCatalog.js` / `memoria.md`.  
-2. Ajustar UX solo en `amarte-widget.js`.  
-3. Verificar con `npm run verify:prod` tras cada deploy.
+1. Negocio → `amarteCatalog.js` / `memoria.md`.  
+2. UX → `amarte-widget.js` (+ rebuild live si aplica).  
+3. Verificar → `npm test` y `npm run verify:prod`.
 
 ---
 
-*Documento generado a partir del código del repositorio. No incluye secretos ni claves de API.*
+*Documento v2.1 alineado con el código del repositorio. No incluye secretos ni claves de API.*
