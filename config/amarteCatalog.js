@@ -168,6 +168,9 @@ function formatPricingForPrompt() {
   const lines = [];
   lines.push("TARIFAS (COP Colombia). Domingo a jueves = tarifa entre semana. Viernes y sábado = tarifa fin de semana.");
   lines.push("Día hotelero: de 2:00 p. m. a 12:00 m. del día siguiente.");
+  lines.push(
+    "IMPORTANTE: este bloque es referencia interna. NO copies al usuario el formato con | ni matrices densas; presenta precios según las reglas de «Presentación de precios» (desde / una línea / lista por viñetas)."
+  );
   lines.push("");
   lines.push("— SUITES (por duración) —");
   for (const key of Object.keys(pricing.suites)) {
