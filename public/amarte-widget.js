@@ -394,10 +394,12 @@
       "padding:12px 16px;font-size:0.95rem;outline:none;background:rgba(255,255,255,0.9);box-shadow:none;}" +
       ".amarte-widget-input:focus{border-color:#D81B60;}" +
       ".amarte-widget-mic{background:transparent;color:#D81B60;border:none;border-radius:50%;" +
-      "width:40px;height:40px;padding:0;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;}" +
+      "width:40px;height:40px;padding:0;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;" +
+      "transition:background 0.2s ease,color 0.2s ease;}" +
       ".amarte-widget-mic:hover{background:rgba(216,27,96,0.08);}" +
       ".amarte-widget-mic:disabled{opacity:0.5;cursor:not-allowed;}" +
-      ".amarte-widget-mic.amarte-recording{background:#D81B60;color:#fff;}" +
+      ".amarte-widget-mic.amarte-recording{background:#2E7D32;color:#fff;}" +
+      ".amarte-widget-mic.amarte-recording:hover{background:#1B5E20;}" +
       ".amarte-widget-audio{width:100%;max-width:100%;margin-top:8px;height:40px;}" +
       ".amarte-widget-send{width:44px;height:44px;min-width:44px;padding:0;border:none;border-radius:50%;" +
       "background:#D81B60;color:#fff;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;" +

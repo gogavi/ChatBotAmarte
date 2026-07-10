@@ -77,21 +77,57 @@ const pricing = {
   plans: {
     plan_amarte: {
       name: "Plan Amarte",
+      includes: [
+        { emoji: "🌹", label: "Pétalos de rosas" },
+        { emoji: "🕯️", label: "Velas aromáticas" },
+        { emoji: "🎈", label: "Globos" },
+        { emoji: "🍾", label: "Una botella de vino espumoso" },
+        { emoji: "🍫", label: "Un par de chocolates" },
+      ],
       weekday: { h6: 210000, h12: 280000, diaHotelero: 320000 },
       weekend: { h6: 240000, h12: 340000, diaHotelero: 380000 },
     },
     plan_cabana_movimiento: {
       name: "Plan Cabaña o Plan Cama Movimiento",
+      includes: [
+        { emoji: "🌹", label: "Pétalos de rosas" },
+        { emoji: "🕯️", label: "Velas aromáticas" },
+        { emoji: "🎈", label: "Globos" },
+        { emoji: "🍾", label: "Una botella de vino espumoso" },
+        { emoji: "🍫", label: "Un par de chocolates" },
+      ],
       weekday: { h6: 220000, h12: 290000, diaHotelero: 340000 },
       weekend: { h6: 250000, h12: 360000, diaHotelero: 420000 },
     },
     plan_humedo: {
       name: "Plan Húmedo",
+      includes: [
+        { emoji: "🛁", label: "Jacuzzi" },
+        { emoji: "♨️", label: "Sauna" },
+        { emoji: "🌹", label: "Pétalos de rosas" },
+        { emoji: "🕯️", label: "Velas aromáticas" },
+        { emoji: "🎈", label: "Globos" },
+        { emoji: "🍾", label: "Una botella de vino espumoso" },
+        { emoji: "🍫", label: "Un par de chocolates" },
+      ],
       weekday: { h6: 320000, h12: 420000, diaHotelero: 500000 },
       weekend: { h6: 360000, h12: 480000, diaHotelero: 540000 },
     },
     plan_romantico_cumple_erotico: {
       name: "Plan Romántico / Cumpleaños / Erótico",
+      includes: [
+        { emoji: "🌹", label: "Pétalos de rosas" },
+        { emoji: "🕯️", label: "Velas aromáticas" },
+        { emoji: "🎈", label: "Globos" },
+        { emoji: "🍾", label: "Una botella de vino espumoso" },
+        { emoji: "🍫", label: "Un par de chocolates" },
+      ],
+      /** Extras solo cuando el usuario elige la variante Erótico */
+      includesErotico: [
+        { emoji: "🧴", label: "Body" },
+        { emoji: "⛓️", label: "Esposas" },
+        { emoji: "🪢", label: "Látigo" },
+      ],
       weekday: { h6: 360000, h12: 460000, diaHotelero: 540000 },
       weekend: { h6: 420000, h12: 540000, diaHotelero: 590000 },
     },
@@ -185,9 +221,22 @@ function formatPricingForPrompt() {
     lines.push("");
   }
   lines.push("— PLANES (por duración; incluyen experiencia según plan) —");
+  lines.push(
+    "Al ofrecer o cotizar un plan, menciona siempre qué incluye (con emojis), en una línea corta o viñetas breves."
+  );
   for (const key of Object.keys(pricing.plans)) {
     const p = pricing.plans[key];
     lines.push(`• ${p.name}`);
+    if (Array.isArray(p.includes) && p.includes.length) {
+      lines.push(
+        `  Incluye: ${p.includes.map((i) => `${i.emoji} ${i.label}`).join(", ")}`
+      );
+    }
+    if (Array.isArray(p.includesErotico) && p.includesErotico.length) {
+      lines.push(
+        `  Plan Erótico además incluye kit erótico: ${p.includesErotico.map((i) => `${i.emoji} ${i.label}`).join(", ")}`
+      );
+    }
     lines.push(
       `  Domingo–Jueves: 6 h ${formatCop(p.weekday.h6)} | 12 h ${formatCop(p.weekday.h12)} | Día hotelero ${formatCop(p.weekday.diaHotelero)}`
     );

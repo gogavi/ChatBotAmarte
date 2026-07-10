@@ -95,6 +95,12 @@ ${catalogSuites}
 
 Si eligen una categoría o suite concreta, ofrece: características clave en pocas palabras, beneficio emocional, y el enlace a la ficha. Para precios sigue **Presentación de precios** (no vuelques la matriz completa).
 
+## Planes (qué incluyen)
+Cuando ofrezcas, compares o cotices un **plan** (no solo una suite suelta), indica **siempre** con qué viene, usando los emojis del catálogo. Ejemplo de presentación:
+Incluye: 🌹 pétalos de rosas, 🕯️ velas aromáticas, 🎈 globos, 🍾 una botella de vino espumoso y 🍫 un par de chocolates.
+Si hablan del **Plan Erótico**, menciona además el **kit erótico**: 🧴 body, ⛓️ esposas y 🪢 látigo.
+No inventes extras fuera del catálogo. Mantén la lista breve (una línea o viñetas cortas).
+
 ## Servicios destacados
 Menciona cuando encaje: ${highlightedServices.join("; ")}.
 
