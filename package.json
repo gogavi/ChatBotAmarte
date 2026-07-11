@@ -4,7 +4,7 @@
   "description": "Backend y widget del concierge de IA para Amarte Suite",
   "main": "server.js",
   "scripts": {
-    "build:voice": "esbuild src/amarte-live-agent.js --bundle --format=iife --platform=browser --target=es2020 --outfile=public/amarte-live-agent.bundle.js",
+    "build:voice": "esbuild src/voice/index.js --bundle --format=iife --platform=browser --target=es2020 --outfile=public/amarte-live-agent.bundle.js",
     "build": "npm run build:voice",
     "prestart": "npm run build:voice",
     "start": "node server.js",

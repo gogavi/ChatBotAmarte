@@ -1,9 +1,10 @@
 /**
- * Bundle cliente: integración ElevenLabs Agents (WebRTC) para Amarte.
- * Se expone como window.AmarteLiveAgent tras el build IIFE.
+ * Primera implementación de VoiceAgentProvider: ElevenLabs Agents (WebRTC).
+ * Único módulo que importa @elevenlabs/client.
  */
 
 import { Conversation } from "@elevenlabs/client";
+import { VOICE_AGENT_STATES } from "../states.js";
 
 /** Duración máxima de sesión en vivo (ms). */
 const LIVE_MAX_SESSION_MS = 2 * 60 * 1000;
@@ -11,21 +12,29 @@ const LIVE_MAX_SESSION_MS = 2 * 60 * 1000;
 /** @type {ReturnType<typeof setTimeout> | null} */
 let maxSessionTimer = null;
 
+/** @type {string | null} */
+let activeLocalConversationId = null;
+
+/** @type {import("@elevenlabs/client").Conversation | null} */
+let activeConversation = null;
+
+/** @type {boolean} */
+let starting = false;
+
+/** @type {import('../VoiceAgentProvider.js').VoiceAgentStartContext | null} */
+let activeCallbacks = null;
+
 function clearMaxSessionTimer() {
   if (maxSessionTimer) {
     clearTimeout(maxSessionTimer);
     maxSessionTimer = null;
   }
 }
-/** @type {string | null} */
-let activeLocalConversationId = null;
-/** @type {boolean} */
-let starting = false;
 
 /**
  * @returns {boolean}
  */
-function isWebRtcSupported() {
+function isSupported() {
   try {
     return Boolean(
       typeof navigator !== "undefined" &&
@@ -42,34 +51,27 @@ function isWebRtcSupported() {
 }
 
 /**
- * @param {object} callbacks
- * @param {string} status
+ * @param {import('../VoiceAgentProvider.js').VoiceAgentStartContext | null} callbacks
+ * @param {import('../states.js').VoiceAgentState} status
  */
 function emitStatus(callbacks, status) {
-  if (callbacks && typeof callbacks.onUiStatus === "function") {
+  if (!callbacks) return;
+  if (typeof callbacks.onStatus === "function") {
+    callbacks.onStatus(status);
+  }
+  if (typeof callbacks.onUiStatus === "function") {
     callbacks.onUiStatus(status);
   }
 }
 
 /**
- * @param {{
- *   backendUrl: string;
- *   conversationId: string;
- *   pageUrl: string;
- *   roomName?: string;
- *   onUiStatus?: (status: string) => void;
- *   onTranscript?: (payload: { role: string; text: string }) => void;
- *   onShowActions?: (actions: string[]) => void;
- *   onError?: (message: string) => void;
- *   onConnected?: (info: { conversationId: string }) => void;
- *   onDisconnected?: (details: unknown) => void;
- * }} options
+ * @param {import('../VoiceAgentProvider.js').VoiceAgentStartContext} options
  */
 async function start(options) {
   if (starting || activeConversation) {
     throw new Error("Ya hay una sesión de voz en vivo activa");
   }
-  if (!isWebRtcSupported()) {
+  if (!isSupported()) {
     throw new Error("Este navegador no soporta WebRTC");
   }
 
@@ -79,7 +81,8 @@ async function start(options) {
   }
 
   starting = true;
-  emitStatus(options, "connecting");
+  activeCallbacks = options;
+  emitStatus(options, VOICE_AGENT_STATES.CONNECTING);
 
   try {
     const tokenRes = await fetch(
@@ -142,35 +145,46 @@ async function start(options) {
         },
       },
       onConnect: ({ conversationId }) => {
-        emitStatus(options, "connected");
+        emitStatus(options, VOICE_AGENT_STATES.CONNECTED);
         if (typeof options.onConnected === "function") {
           options.onConnected({ conversationId });
         }
       },
       onDisconnect: (details) => {
         clearMaxSessionTimer();
-        emitStatus(options, "disconnected");
+        emitStatus(options, VOICE_AGENT_STATES.DISCONNECTED);
         activeConversation = null;
         starting = false;
+        activeCallbacks = null;
         if (typeof options.onDisconnected === "function") {
           options.onDisconnected(details);
         }
       },
       onError: (message, context) => {
         clearMaxSessionTimer();
-        emitStatus(options, "error");
+        emitStatus(options, VOICE_AGENT_STATES.ERROR);
         if (typeof options.onError === "function") {
           options.onError(String(message || "Error de conversación"), context);
         }
       },
       onStatusChange: ({ status }) => {
-        if (status === "connecting") emitStatus(options, "connecting");
-        if (status === "connected") emitStatus(options, "connected");
-        if (status === "disconnected") emitStatus(options, "disconnected");
+        if (status === "connecting") {
+          emitStatus(options, VOICE_AGENT_STATES.CONNECTING);
+        }
+        if (status === "connected") {
+          emitStatus(options, VOICE_AGENT_STATES.CONNECTED);
+        }
+        if (status === "disconnected") {
+          emitStatus(options, VOICE_AGENT_STATES.DISCONNECTED);
+        }
       },
       onModeChange: ({ mode }) => {
-        if (mode === "listening") emitStatus(options, "listening");
-        if (mode === "speaking") emitStatus(options, "speaking");
+        if (mode === "listening") {
+          emitStatus(options, VOICE_AGENT_STATES.LISTENING);
+        }
+        if (mode === "speaking") {
+          emitStatus(options, VOICE_AGENT_STATES.SPEAKING);
+        }
       },
       onMessage: ({ message, role }) => {
         const text = typeof message === "string" ? message.trim() : "";
@@ -178,7 +192,6 @@ async function start(options) {
         const key = `${role}:${text}`;
         if (seenMessages.has(key)) return;
         seenMessages.add(key);
-        // Limitar tamaño del set
         if (seenMessages.size > 200) {
           const first = seenMessages.values().next().value;
           seenMessages.delete(first);
@@ -204,7 +217,8 @@ async function start(options) {
     clearMaxSessionTimer();
     starting = false;
     activeConversation = null;
-    emitStatus(options, "error");
+    activeCallbacks = null;
+    emitStatus(options, VOICE_AGENT_STATES.ERROR);
     throw err;
   }
 }
@@ -212,9 +226,12 @@ async function start(options) {
 async function stop() {
   clearMaxSessionTimer();
   const conv = activeConversation;
+  const callbacks = activeCallbacks;
   activeConversation = null;
   starting = false;
+  activeCallbacks = null;
   if (!conv) {
+    emitStatus(callbacks, VOICE_AGENT_STATES.IDLE);
     return;
   }
   try {
@@ -224,17 +241,20 @@ async function stop() {
   } catch {
     // idempotente
   }
+  emitStatus(callbacks, VOICE_AGENT_STATES.IDLE);
 }
 
 function mute() {
   if (activeConversation && typeof activeConversation.setMicMuted === "function") {
     activeConversation.setMicMuted(true);
+    emitStatus(activeCallbacks, VOICE_AGENT_STATES.MUTED);
   }
 }
 
 function unmute() {
   if (activeConversation && typeof activeConversation.setMicMuted === "function") {
     activeConversation.setMicMuted(false);
+    emitStatus(activeCallbacks, VOICE_AGENT_STATES.LISTENING);
   }
 }
 
@@ -264,7 +284,13 @@ function cleanupOnUnload() {
   }
 }
 
-const AmarteLiveAgent = {
+if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+  window.addEventListener("pagehide", cleanupOnUnload);
+  window.addEventListener("beforeunload", cleanupOnUnload);
+}
+
+/** @type {import('../VoiceAgentProvider.js').VoiceAgentProvider} */
+const ElevenLabsProvider = {
   start,
   stop,
   mute,
@@ -272,15 +298,7 @@ const AmarteLiveAgent = {
   setVolume,
   isActive,
   getConversationId,
-  isWebRtcSupported,
+  isSupported,
 };
 
-export default AmarteLiveAgent;
-
-if (typeof window !== "undefined") {
-  if (typeof window.addEventListener === "function") {
-    window.addEventListener("pagehide", cleanupOnUnload);
-    window.addEventListener("beforeunload", cleanupOnUnload);
-  }
-  window.AmarteLiveAgent = AmarteLiveAgent;
-}
+export default ElevenLabsProvider;

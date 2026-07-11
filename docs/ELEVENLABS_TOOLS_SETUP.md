@@ -20,10 +20,18 @@ ELEVENLABS_TOOL_SECRET=genera-un-secreto-largo-aleatorio
 
 En ElevenLabs, al crear cada **Webhook Tool**, añade el mismo Bearer en los headers de autenticación.
 
+## Backend de producción
+
+```text
+https://chatbotamarte-production.up.railway.app
+```
+
+Usa el mismo `ELEVENLABS_TOOL_SECRET` que está en Railway (header `Authorization: Bearer …`).
+
 ## 1. Consultar catálogo
 
 ```http
-POST https://TU_BACKEND/api/agent-tools/catalog
+POST https://chatbotamarte-production.up.railway.app/api/agent-tools/catalog
 Content-Type: application/json
 Authorization: Bearer ELEVENLABS_TOOL_SECRET
 ```
@@ -60,7 +68,7 @@ Los precios salen **solo** de `config/amarteCatalog.js`.
 ## 2. Enlaces oficiales
 
 ```http
-POST https://TU_BACKEND/api/agent-tools/actions
+POST https://chatbotamarte-production.up.railway.app/api/agent-tools/actions
 Authorization: Bearer ELEVENLABS_TOOL_SECRET
 ```
 

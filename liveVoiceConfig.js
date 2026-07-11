@@ -1,5 +1,6 @@
 /**
- * Configuración del modo “Hablar en vivo con Martina” (ElevenLabs Agents).
+ * Configuración del modo “Hablar en vivo con Martina”.
+ * Proveedor seleccionable vía VOICE_AGENT_PROVIDER (elevenlabs | openai).
  * Secretos nunca se exportan al navegador.
  */
 
@@ -22,9 +23,26 @@ const FIELD_LIMITS = Object.freeze({
 });
 
 /**
+ * Proveedor de agente de voz activo.
+ * @returns {'elevenlabs'|'openai'}
+ */
+function getVoiceAgentProvider() {
+  const raw = String(process.env.VOICE_AGENT_PROVIDER || "elevenlabs")
+    .trim()
+    .toLowerCase();
+  return raw === "openai" ? "openai" : "elevenlabs";
+}
+
+/**
  * @returns {boolean}
  */
 function isLiveVoiceEnabled() {
+  const provider = getVoiceAgentProvider();
+  // OpenAI Realtime aún no implementado: no mostrar botón que falla.
+  if (provider === "openai") {
+    return false;
+  }
+
   const raw = String(process.env.ELEVENLABS_LIVE_ENABLED || "")
     .trim()
     .toLowerCase();
@@ -98,6 +116,7 @@ module.exports = {
   TOKEN_RATE_LIMIT,
   ELEVENLABS_FETCH_TIMEOUT_MS,
   FIELD_LIMITS,
+  getVoiceAgentProvider,
   isLiveVoiceEnabled,
   isElevenLabsAgentConfigured,
   getElevenLabsEnvironment,

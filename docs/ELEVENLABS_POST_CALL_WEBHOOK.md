@@ -3,7 +3,7 @@
 ## Endpoint
 
 ```http
-POST https://TU_BACKEND/api/elevenlabs/post-call
+POST https://chatbotamarte-production.up.railway.app/api/elevenlabs/post-call
 ```
 
 ## Variable de entorno

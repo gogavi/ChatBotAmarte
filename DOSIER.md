@@ -98,7 +98,7 @@ flowchart TB
 | Chat IA | OpenAI `gpt-5.4-mini` | `runChat()` |
 | STT | `gpt-4o-mini-transcribe` | `POST /chat/audio` |
 | TTS nota de voz | ElevenLabs multilingual v2 | `synthesizeElevenLabs()`, `ttsNormalize.js` |
-| Hablar en vivo | ElevenLabs Agents WebRTC | `liveVoiceConfig.js`, `src/amarte-live-agent.js`, `routes/elevenlabs*` |
+| Hablar en vivo | VoiceAgentManager + ElevenLabsProvider | `liveVoiceConfig.js`, `src/voice/`, `routes/elevenlabs*` |
 | Tools del agente | Bearer `ELEVENLABS_TOOL_SECRET` | `routes/agentTools.js`, `services/catalogLookup.js` |
 | Catálogo / prompt | JS + Markdown | `config/*` |
 | Historial chat | Supabase | `conversationStore.js`, `supabaseClient.js` |
@@ -148,7 +148,7 @@ ChatBotAmarte/
 │   └── liveVoiceValidation.js
 │
 ├── src/
-│   └── amarte-live-agent.js  # cliente WebRTC (fuente)
+│   └── voice/                # VoiceAgentManager + providers (ElevenLabs, stub OpenAI)
 │
 ├── public/
 │   ├── amarte-widget.js
@@ -352,7 +352,7 @@ Bump `?v=` tras cambios de UI. **Nunca** poner API keys en el embed.
 | Prompt chat | `config/martinaSystemPrompt.js` |
 | Botones / schema JSON | `config/chatActions.js` |
 | UI widget / live overlay | `public/amarte-widget.js` |
-| Cliente WebRTC | `src/amarte-live-agent.js` (+ rebuild) |
+| Cliente voz (providers) | `src/voice/` (+ rebuild) |
 | Flags live / rate limit token | `liveVoiceConfig.js` |
 | Tools agente | `routes/agentTools.js`, `services/catalogLookup.js` |
 | Token / post-call | `routes/elevenlabsToken.js`, `elevenlabsPostCall.js` |
@@ -414,7 +414,7 @@ Bump `?v=` tras cambios de UI. **Nunca** poner API keys en el embed.
 
 ## 16. Conclusión
 
-ChatBotAmarte combina **chat escrito**, **nota de voz** y **Hablar en vivo**, con catálogo único, prerreservas en el SaaS y persistencia en Supabase. La complejidad de Agents está aislada en `routes/`, `services/`, `src/amarte-live-agent.js` y `docs/ELEVENLABS_*`.
+ChatBotAmarte combina **chat escrito**, **nota de voz** y **Hablar en vivo**, con catálogo único, prerreservas en el SaaS y persistencia en Supabase. La complejidad de Agents está aislada en `routes/`, `services/`, `src/voice/` (VoiceAgentManager + providers) y `docs/ELEVENLABS_*`.
 
 1. Negocio → `amarteCatalog.js` / `memoria.md`.  
 2. UX → `amarte-widget.js` (+ rebuild live si aplica).  

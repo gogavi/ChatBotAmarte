@@ -59,16 +59,56 @@ Reutiliza el tono y las reglas comerciales de:
 
 Adaptadas a formato oral (sin Markdown denso ni matrices de precios).
 
+## Backend de producción
+
+```text
+https://chatbotamarte-production.up.railway.app
+```
+
+- Widget config: `GET /api/widget-config` → `{ "liveVoiceEnabled": true }`
+- Token WebRTC: `POST /api/elevenlabs/conversation-token`
+- Tools: `POST /api/agent-tools/catalog` y `/actions`
+- Post-call: `POST /api/elevenlabs/post-call`
+
+## Arquitectura del cliente (proveedor intercambiable)
+
+El widget **no** importa ni llama a `Conversation.startSession` de ElevenLabs.
+Usa únicamente `window.VoiceAgentManager`, que selecciona el adaptador según
+`VOICE_AGENT_PROVIDER`:
+
+| Valor | Implementación |
+|-------|----------------|
+| `elevenlabs` (default) | `ElevenLabsProvider` — WebRTC vía `@elevenlabs/client` |
+| `openai` | `OpenAIRealtimeProvider` — stub (aún no implementado) |
+
+Código fuente: `src/voice/` → bundle `public/amarte-live-agent.bundle.js`.
+
+Estados de sesión independientes del proveedor: `idle`, `connecting`, `connected`,
+`listening`, `thinking`, `speaking`, `muted`, `disconnected`, `error`.
+
+Punto de extensión futuro para OpenAI: `POST /api/openai/realtime-session`
+(sin implementar en esta fase).
+
 ## Variables de entorno en Railway
 
 ```env
+VOICE_AGENT_PROVIDER=elevenlabs
 ELEVENLABS_API_KEY=
-ELEVENLABS_AGENT_ID=
+ELEVENLABS_AGENT_ID=agent_3901kx6z99b3efdr80dwe2j3pp0y
 ELEVENLABS_ENVIRONMENT=production
 ELEVENLABS_LIVE_ENABLED=true
+ELEVENLABS_TOOL_SECRET=
+ELEVENLABS_CONVAI_WEBHOOK_SECRET=
 ```
 
 El navegador **nunca** recibe la API key ni el Agent ID: solo un token temporal vía `POST /api/elevenlabs/conversation-token`.
+`GET /api/widget-config` expone `{ liveVoiceEnabled, voiceAgentProvider }`.
+
+### Permisos de la API key (obligatorio)
+
+La key debe incluir el permiso **`convai_write`**. Sin él, ElevenLabs responde `401 missing_permissions` y el backend devuelve `502` en `/api/elevenlabs/conversation-token`.
+
+En ElevenLabs → API Keys → crea o edita una key con acceso a Conversational AI (write) y actualiza `ELEVENLABS_API_KEY` en Railway y en `.env` local.
 
 ## Cómo desactivar el modo en vivo
 
@@ -83,16 +123,25 @@ El chat escrito y la nota de voz siguen funcionando.
 1. Copia `.env.example` → `.env` y rellena claves.
 2. `npm run build:voice`
 3. `npm start`
-4. Abre `http://localhost:3000/embed-demo.html`
+4. Abre `http://localhost:3010/embed-demo.html` (o el puerto de `PORT`).
 5. Abre el widget → **Hablar en vivo con Martina** → confirmar → permitir micrófono.
 
 En local, `pageUrl` en `localhost` se acepta si `NODE_ENV !== production` o `ELEVENLABS_ALLOW_LOCAL_PAGE_HOSTS=true`.
 
-## Pasos en ElevenLabs (manual)
+## Checklist de despliegue (Martina Live)
 
-1. Crear agente privado con el nombre y primera frase de arriba.
-2. Pegar el system prompt oral.
-3. Registrar variables dinámicas.
-4. Crear herramientas webhook + Client Tool (ver `ELEVENLABS_TOOLS_SETUP.md`).
-5. Configurar post-call webhook (ver `ELEVENLABS_POST_CALL_WEBHOOK.md`).
-6. Copiar el **Agent ID** a `ELEVENLABS_AGENT_ID` en Railway.
+### Hecho en backend / Railway
+
+- [x] Agent ID `agent_3901kx6z99b3efdr80dwe2j3pp0y` en Railway
+- [x] `ELEVENLABS_ENVIRONMENT=production`, `ELEVENLABS_LIVE_ENABLED=true`
+- [x] `ELEVENLABS_TOOL_SECRET` generado y desplegado
+- [x] `GET /api/widget-config` → `liveVoiceEnabled: true`
+- [x] `POST /api/agent-tools/catalog` responde con Bearer del tool secret
+
+### Pendiente en dashboard ElevenLabs
+
+1. API key con permiso **`convai_write`** → actualizar `ELEVENLABS_API_KEY` en Railway.
+2. Confirmar agente privado + WebRTC + variables dinámicas de arriba.
+3. Registrar webhook tools + Client Tool (ver `ELEVENLABS_TOOLS_SETUP.md`).
+4. Post-call webhook (ver `ELEVENLABS_POST_CALL_WEBHOOK.md`) y pegar el signing secret en `ELEVENLABS_CONVAI_WEBHOOK_SECRET`.
+5. Probar “Hablar en vivo” en `https://chatbotamarte-production.up.railway.app/embed-demo.html` o en amartesuite.com.

@@ -964,7 +964,7 @@
      * matching field number in the EndGroup tag.
      */
     skip(wireType, fieldNo) {
-      let start2 = this.pos;
+      let start4 = this.pos;
       switch (wireType) {
         case WireType.Varint:
           while (this.buf[this.pos++] & 128) {
@@ -999,7 +999,7 @@
           throw new Error("cant skip wire type " + wireType);
       }
       this.assertBounds();
-      return this.buf.subarray(start2, this.pos);
+      return this.buf.subarray(start4, this.pos);
     }
     /**
      * Throws error if position in byte array is out of range.
@@ -1089,10 +1089,10 @@
      * Read a `bytes` field, length-delimited arbitrary data.
      */
     bytes() {
-      let len = this.uint32(), start2 = this.pos;
+      let len = this.uint32(), start4 = this.pos;
       this.pos += len;
       this.assertBounds();
-      return this.buf.subarray(start2, start2 + len);
+      return this.buf.subarray(start4, start4 + len);
     }
     /**
      * Read a `string` field, length-delimited data converted to UTF-8 text.
@@ -26964,18 +26964,34 @@ registerProcessor("scribeAudioProcessor", ScribeAudioProcessor);
   setWebRTCAudioAdapterFactory(() => new WebAudioAdapter());
   setScribeMicrophoneSetup(webScribeMicrophoneSetup);
 
-  // src/amarte-live-agent.js
+  // src/voice/states.js
+  var VOICE_AGENT_STATES = Object.freeze({
+    IDLE: "idle",
+    CONNECTING: "connecting",
+    CONNECTED: "connected",
+    LISTENING: "listening",
+    THINKING: "thinking",
+    SPEAKING: "speaking",
+    MUTED: "muted",
+    DISCONNECTED: "disconnected",
+    ERROR: "error"
+  });
+  var VALID = new Set(Object.values(VOICE_AGENT_STATES));
+
+  // src/voice/providers/ElevenLabsProvider.js
   var LIVE_MAX_SESSION_MS = 2 * 60 * 1e3;
   var maxSessionTimer = null;
+  var activeLocalConversationId = null;
+  var activeConversation = null;
+  var starting = false;
+  var activeCallbacks = null;
   function clearMaxSessionTimer() {
     if (maxSessionTimer) {
       clearTimeout(maxSessionTimer);
       maxSessionTimer = null;
     }
   }
-  var activeLocalConversationId = null;
-  var starting = false;
-  function isWebRtcSupported() {
+  function isSupported() {
     try {
       return Boolean(
         typeof navigator !== "undefined" && navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === "function" && typeof window !== "undefined" && (window.RTCPeerConnection || window.webkitRTCPeerConnection || window.mozRTCPeerConnection)
@@ -26985,7 +27001,11 @@ registerProcessor("scribeAudioProcessor", ScribeAudioProcessor);
     }
   }
   function emitStatus(callbacks, status) {
-    if (callbacks && typeof callbacks.onUiStatus === "function") {
+    if (!callbacks) return;
+    if (typeof callbacks.onStatus === "function") {
+      callbacks.onStatus(status);
+    }
+    if (typeof callbacks.onUiStatus === "function") {
       callbacks.onUiStatus(status);
     }
   }
@@ -26993,7 +27013,7 @@ registerProcessor("scribeAudioProcessor", ScribeAudioProcessor);
     if (starting || activeConversation) {
       throw new Error("Ya hay una sesi\xF3n de voz en vivo activa");
     }
-    if (!isWebRtcSupported()) {
+    if (!isSupported()) {
       throw new Error("Este navegador no soporta WebRTC");
     }
     const backendUrl = String(options.backendUrl || "").replace(/\/$/, "");
@@ -27001,7 +27021,8 @@ registerProcessor("scribeAudioProcessor", ScribeAudioProcessor);
       throw new Error("backendUrl requerido");
     }
     starting = true;
-    emitStatus(options, "connecting");
+    activeCallbacks = options;
+    emitStatus(options, VOICE_AGENT_STATES.CONNECTING);
     try {
       const tokenRes = await fetch(
         `${backendUrl}/api/elevenlabs/conversation-token`,
@@ -27054,35 +27075,46 @@ registerProcessor("scribeAudioProcessor", ScribeAudioProcessor);
           }
         },
         onConnect: ({ conversationId }) => {
-          emitStatus(options, "connected");
+          emitStatus(options, VOICE_AGENT_STATES.CONNECTED);
           if (typeof options.onConnected === "function") {
             options.onConnected({ conversationId });
           }
         },
         onDisconnect: (details) => {
           clearMaxSessionTimer();
-          emitStatus(options, "disconnected");
+          emitStatus(options, VOICE_AGENT_STATES.DISCONNECTED);
           activeConversation = null;
           starting = false;
+          activeCallbacks = null;
           if (typeof options.onDisconnected === "function") {
             options.onDisconnected(details);
           }
         },
         onError: (message, context) => {
           clearMaxSessionTimer();
-          emitStatus(options, "error");
+          emitStatus(options, VOICE_AGENT_STATES.ERROR);
           if (typeof options.onError === "function") {
             options.onError(String(message || "Error de conversaci\xF3n"), context);
           }
         },
         onStatusChange: ({ status }) => {
-          if (status === "connecting") emitStatus(options, "connecting");
-          if (status === "connected") emitStatus(options, "connected");
-          if (status === "disconnected") emitStatus(options, "disconnected");
+          if (status === "connecting") {
+            emitStatus(options, VOICE_AGENT_STATES.CONNECTING);
+          }
+          if (status === "connected") {
+            emitStatus(options, VOICE_AGENT_STATES.CONNECTED);
+          }
+          if (status === "disconnected") {
+            emitStatus(options, VOICE_AGENT_STATES.DISCONNECTED);
+          }
         },
         onModeChange: ({ mode }) => {
-          if (mode === "listening") emitStatus(options, "listening");
-          if (mode === "speaking") emitStatus(options, "speaking");
+          if (mode === "listening") {
+            emitStatus(options, VOICE_AGENT_STATES.LISTENING);
+          }
+          if (mode === "speaking") {
+            emitStatus(options, VOICE_AGENT_STATES.SPEAKING);
+          }
         },
         onMessage: ({ message, role }) => {
           const text = typeof message === "string" ? message.trim() : "";
@@ -27115,16 +27147,20 @@ registerProcessor("scribeAudioProcessor", ScribeAudioProcessor);
       clearMaxSessionTimer();
       starting = false;
       activeConversation = null;
-      emitStatus(options, "error");
+      activeCallbacks = null;
+      emitStatus(options, VOICE_AGENT_STATES.ERROR);
       throw err;
     }
   }
   async function stop() {
     clearMaxSessionTimer();
     const conv = activeConversation;
+    const callbacks = activeCallbacks;
     activeConversation = null;
     starting = false;
+    activeCallbacks = null;
     if (!conv) {
+      emitStatus(callbacks, VOICE_AGENT_STATES.IDLE);
       return;
     }
     try {
@@ -27133,15 +27169,18 @@ registerProcessor("scribeAudioProcessor", ScribeAudioProcessor);
       }
     } catch {
     }
+    emitStatus(callbacks, VOICE_AGENT_STATES.IDLE);
   }
   function mute() {
     if (activeConversation && typeof activeConversation.setMicMuted === "function") {
       activeConversation.setMicMuted(true);
+      emitStatus(activeCallbacks, VOICE_AGENT_STATES.MUTED);
     }
   }
   function unmute() {
     if (activeConversation && typeof activeConversation.setMicMuted === "function") {
       activeConversation.setMicMuted(false);
+      emitStatus(activeCallbacks, VOICE_AGENT_STATES.LISTENING);
     }
   }
   function setVolume(volume) {
@@ -27163,7 +27202,11 @@ registerProcessor("scribeAudioProcessor", ScribeAudioProcessor);
       stop();
     }
   }
-  var AmarteLiveAgent = {
+  if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+    window.addEventListener("pagehide", cleanupOnUnload);
+    window.addEventListener("beforeunload", cleanupOnUnload);
+  }
+  var ElevenLabsProvider = {
     start,
     stop,
     mute,
@@ -27171,14 +27214,131 @@ registerProcessor("scribeAudioProcessor", ScribeAudioProcessor);
     setVolume,
     isActive,
     getConversationId,
-    isWebRtcSupported
+    isSupported
   };
-  var amarte_live_agent_default = AmarteLiveAgent;
-  if (typeof window !== "undefined") {
-    if (typeof window.addEventListener === "function") {
-      window.addEventListener("pagehide", cleanupOnUnload);
-      window.addEventListener("beforeunload", cleanupOnUnload);
+  var ElevenLabsProvider_default = ElevenLabsProvider;
+
+  // src/voice/providers/OpenAIRealtimeProvider.js
+  function emitStatus2(callbacks, status) {
+    if (!callbacks) return;
+    if (typeof callbacks.onStatus === "function") {
+      callbacks.onStatus(status);
     }
-    window.AmarteLiveAgent = AmarteLiveAgent;
+    if (typeof callbacks.onUiStatus === "function") {
+      callbacks.onUiStatus(status);
+    }
+  }
+  async function start2(_context) {
+    emitStatus2(_context, VOICE_AGENT_STATES.ERROR);
+    throw new Error(
+      "OpenAI Realtime a\xFAn no implementado. Usa VOICE_AGENT_PROVIDER=elevenlabs."
+    );
+  }
+  async function stop2() {
+  }
+  function mute2() {
+  }
+  function unmute2() {
+  }
+  function setVolume2(_value) {
+  }
+  function isActive2() {
+    return false;
+  }
+  function getConversationId2() {
+    return null;
+  }
+  function isSupported2() {
+    return false;
+  }
+  var OpenAIRealtimeProvider = {
+    start: start2,
+    stop: stop2,
+    mute: mute2,
+    unmute: unmute2,
+    setVolume: setVolume2,
+    isActive: isActive2,
+    getConversationId: getConversationId2,
+    isSupported: isSupported2
+  };
+  var OpenAIRealtimeProvider_default = OpenAIRealtimeProvider;
+
+  // src/voice/VoiceAgentManager.js
+  var activeProvider = null;
+  var activeProviderName = "elevenlabs";
+  function createProvider(name) {
+    const key = String(name || "elevenlabs").trim().toLowerCase();
+    if (key === "openai") {
+      return OpenAIRealtimeProvider_default;
+    }
+    return ElevenLabsProvider_default;
+  }
+  async function start3(options) {
+    if (activeProvider && activeProvider.isActive()) {
+      throw new Error("Ya hay una sesi\xF3n de voz en vivo activa");
+    }
+    const providerName = String(options.provider || "elevenlabs").trim().toLowerCase();
+    activeProviderName = providerName === "openai" ? "openai" : "elevenlabs";
+    activeProvider = createProvider(activeProviderName);
+    return activeProvider.start(options);
+  }
+  async function stop3() {
+    if (!activeProvider) return;
+    const provider = activeProvider;
+    activeProvider = null;
+    await provider.stop();
+  }
+  function mute3() {
+    if (activeProvider) activeProvider.mute();
+  }
+  function unmute3() {
+    if (activeProvider) activeProvider.unmute();
+  }
+  function setVolume3(value) {
+    if (activeProvider) activeProvider.setVolume(value);
+  }
+  function isActive3() {
+    return Boolean(activeProvider && activeProvider.isActive());
+  }
+  function getConversationId3() {
+    if (activeProvider && typeof activeProvider.getConversationId === "function") {
+      return activeProvider.getConversationId();
+    }
+    return null;
+  }
+  function isSupported3() {
+    const provider = activeProvider || createProvider(activeProviderName);
+    if (typeof provider.isSupported === "function") {
+      return provider.isSupported();
+    }
+    return true;
+  }
+  function isWebRtcSupported() {
+    return isSupported3();
+  }
+  function getActiveProviderName() {
+    return activeProviderName;
+  }
+  var VoiceAgentManager = {
+    start: start3,
+    stop: stop3,
+    mute: mute3,
+    unmute: unmute3,
+    setVolume: setVolume3,
+    isActive: isActive3,
+    getConversationId: getConversationId3,
+    isSupported: isSupported3,
+    isWebRtcSupported,
+    createProvider,
+    getActiveProviderName,
+    STATES: VOICE_AGENT_STATES
+  };
+  var VoiceAgentManager_default = VoiceAgentManager;
+
+  // src/voice/index.js
+  var index_default = VoiceAgentManager_default;
+  if (typeof window !== "undefined") {
+    window.VoiceAgentManager = VoiceAgentManager_default;
+    window.AmarteLiveAgent = VoiceAgentManager_default;
   }
 })();

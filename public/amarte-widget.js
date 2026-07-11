@@ -336,6 +336,7 @@
     loadingBundle: false,
     active: false,
     muted: false,
+    provider: "elevenlabs",
     startedAt: 0,
     durationTimer: null,
     statusEl: null,
@@ -389,11 +390,11 @@
   }
 
   /**
-   * Carga el bundle de voz en vivo una sola vez.
+   * Carga el bundle de voz en vivo una sola vez (VoiceAgentManager).
    * @returns {Promise<void>}
    */
   function loadLiveAgentBundle() {
-    if (liveState.bundleLoaded && window.AmarteLiveAgent) {
+    if (liveState.bundleLoaded && window.VoiceAgentManager) {
       return Promise.resolve();
     }
     if (liveState.loadingBundle) {
@@ -401,7 +402,7 @@
         var tries = 0;
         var t = setInterval(function () {
           tries += 1;
-          if (window.AmarteLiveAgent) {
+          if (window.VoiceAgentManager) {
             clearInterval(t);
             resolve();
           } else if (tries > 80) {
@@ -419,8 +420,8 @@
       s.onload = function () {
         liveState.bundleLoaded = true;
         liveState.loadingBundle = false;
-        if (!window.AmarteLiveAgent) {
-          reject(new Error("AmarteLiveAgent no disponible"));
+        if (!window.VoiceAgentManager) {
+          reject(new Error("VoiceAgentManager no disponible"));
           return;
         }
         resolve();
@@ -434,6 +435,8 @@
   }
 
   /**
+   * Estados UI independientes del proveedor:
+   * idle | connecting | connected | listening | thinking | speaking | muted | disconnected | error
    * @param {string} status
    */
   function setLiveUiStatus(status) {
@@ -444,7 +447,8 @@
       "amarte-speaking",
       "amarte-muted"
     );
-    if (status === "connecting") label = "Conectando con Martina…";
+    if (status === "idle") label = "Listo para hablar";
+    else if (status === "connecting") label = "Conectando con Martina…";
     else if (status === "connected" || status === "listening") {
       label = "Martina está escuchando";
       liveState.statusEl.classList.add("amarte-listening");
@@ -621,8 +625,8 @@
     setLivePanelOpen(false);
     var done = Promise.resolve();
     try {
-      if (window.AmarteLiveAgent && typeof window.AmarteLiveAgent.stop === "function") {
-        done = Promise.resolve(window.AmarteLiveAgent.stop()).catch(function () {});
+      if (window.VoiceAgentManager && typeof window.VoiceAgentManager.stop === "function") {
+        done = Promise.resolve(window.VoiceAgentManager.stop()).catch(function () {});
       }
     } catch (e0) {}
     if (wasActive) {
@@ -639,9 +643,9 @@
     loadLiveAgentBundle()
       .then(function () {
         if (
-          !window.AmarteLiveAgent ||
-          (window.AmarteLiveAgent.isWebRtcSupported &&
-            !window.AmarteLiveAgent.isWebRtcSupported())
+          !window.VoiceAgentManager ||
+          (window.VoiceAgentManager.isSupported &&
+            !window.VoiceAgentManager.isSupported())
         ) {
           showLiveFallback();
           return null;
@@ -654,12 +658,13 @@
         updateLiveControlButtons();
         startLiveDurationTimer();
 
-        return window.AmarteLiveAgent.start({
+        return window.VoiceAgentManager.start({
+          provider: liveState.provider || "elevenlabs",
           backendUrl: BACKEND_URL,
           conversationId: getConversationId(),
           pageUrl: window.location.href || "",
           roomName: document.title || "",
-          onUiStatus: function (status) {
+          onStatus: function (status) {
             setLiveUiStatus(status);
           },
           onTranscript: function (payload) {
@@ -709,6 +714,9 @@
         return res.json();
       })
       .then(function (cfg) {
+        if (cfg && cfg.voiceAgentProvider) {
+          liveState.provider = String(cfg.voiceAgentProvider);
+        }
         if (cfg && cfg.liveVoiceEnabled === true) {
           liveState.enabled = true;
           if (liveState.liveBtn) {
@@ -1475,15 +1483,15 @@
       }
     });
     muteBtn.addEventListener("click", function () {
-      if (!window.AmarteLiveAgent) return;
-      window.AmarteLiveAgent.mute();
+      if (!window.VoiceAgentManager) return;
+      window.VoiceAgentManager.mute();
       liveState.muted = true;
       setLiveUiStatus("muted");
       updateLiveControlButtons();
     });
     unmuteBtn.addEventListener("click", function () {
-      if (!window.AmarteLiveAgent) return;
-      window.AmarteLiveAgent.unmute();
+      if (!window.VoiceAgentManager) return;
+      window.VoiceAgentManager.unmute();
       liveState.muted = false;
       setLiveUiStatus("listening");
       updateLiveControlButtons();
