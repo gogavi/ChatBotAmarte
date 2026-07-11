@@ -94,7 +94,7 @@ Punto de extensión futuro para OpenAI: `POST /api/openai/realtime-session`
 ```env
 VOICE_AGENT_PROVIDER=elevenlabs
 ELEVENLABS_API_KEY=
-ELEVENLABS_AGENT_ID=agent_3901kx6z99b3efdr80dwe2j3pp0y
+ELEVENLABS_AGENT_ID=
 ELEVENLABS_ENVIRONMENT=production
 ELEVENLABS_LIVE_ENABLED=true
 ELEVENLABS_TOOL_SECRET=
@@ -134,7 +134,7 @@ Hosts adicionales: `ELEVENLABS_ALLOWED_PAGE_HOSTS=host1,host2`.
 
 ### Hecho en backend / Railway
 
-- [x] Agent ID `agent_3901kx6z99b3efdr80dwe2j3pp0y` en Railway
+- [x] `ELEVENLABS_AGENT_ID` configurado en Railway
 - [x] `ELEVENLABS_ENVIRONMENT=production`, `ELEVENLABS_LIVE_ENABLED=true`
 - [x] `ELEVENLABS_TOOL_SECRET` generado y desplegado
 - [x] `GET /api/widget-config` → `liveVoiceEnabled: true`
