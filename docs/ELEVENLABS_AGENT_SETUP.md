@@ -98,13 +98,14 @@ VOICE_AGENT_PROVIDER=elevenlabs
 ELEVENLABS_API_KEY=
 ELEVENLABS_AGENT_ID=
 ELEVENLABS_ENVIRONMENT=production
-ELEVENLABS_LIVE_ENABLED=true
+ELEVENLABS_LIVE_ENABLED=false
 ELEVENLABS_TOOL_SECRET=
 ELEVENLABS_CONVAI_WEBHOOK_SECRET=
 ```
 
 El navegador **nunca** recibe la API key ni el Agent ID: solo un token temporal vía `POST /api/elevenlabs/conversation-token`.
 `GET /api/widget-config` expone `{ liveVoiceEnabled, voiceAgentProvider }`.
+Para mostrar el botón en vivo: `ELEVENLABS_LIVE_ENABLED=true` (opt-in).
 
 ### Permisos de la API key (obligatorio)
 
@@ -115,6 +116,7 @@ En ElevenLabs → API Keys → crea o edita una key con acceso a Conversational 
 ## Cómo desactivar el modo en vivo
 
 ```env
+# true | false — botón “Hablar en vivo” (opt-in; por ahora desactivado)
 ELEVENLABS_LIVE_ENABLED=false
 ```
 
@@ -137,9 +139,9 @@ Hosts adicionales: `ELEVENLABS_ALLOWED_PAGE_HOSTS=host1,host2`.
 ### Hecho en backend / Railway
 
 - [x] `ELEVENLABS_AGENT_ID` configurado en Railway
-- [x] `ELEVENLABS_ENVIRONMENT=production`, `ELEVENLABS_LIVE_ENABLED=true`
+- [x] `ELEVENLABS_ENVIRONMENT=production`; live desactivado por ahora (`ELEVENLABS_LIVE_ENABLED=false`)
 - [x] `ELEVENLABS_TOOL_SECRET` generado y desplegado
-- [x] `GET /api/widget-config` → `liveVoiceEnabled: true`
+- [x] `GET /api/widget-config` → `liveVoiceEnabled: false` (reactivar con `true` cuando esté listo)
 - [x] `POST /api/agent-tools/catalog` responde con Bearer del tool secret
 
 ### Pendiente en dashboard ElevenLabs

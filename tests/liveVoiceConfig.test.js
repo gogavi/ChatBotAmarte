@@ -36,6 +36,11 @@ process.env.ELEVENLABS_AGENT_ID = "agent_test";
 assert.strictEqual(isElevenLabsAgentConfigured(), true);
 assert.strictEqual(isLiveVoiceEnabled(), true);
 
+// Sin flag explícito: botón oculto aunque haya claves.
+delete process.env.ELEVENLABS_LIVE_ENABLED;
+assert.strictEqual(isLiveVoiceEnabled(), false);
+process.env.ELEVENLABS_LIVE_ENABLED = "true";
+
 delete process.env.VOICE_AGENT_PROVIDER;
 assert.strictEqual(getVoiceAgentProvider(), "elevenlabs");
 

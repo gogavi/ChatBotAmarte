@@ -64,16 +64,9 @@ function isLiveVoiceEnabled() {
   const raw = String(process.env.ELEVENLABS_LIVE_ENABLED || "")
     .trim()
     .toLowerCase();
-  if (raw === "false" || raw === "0" || raw === "no" || raw === "off") {
-    return false;
-  }
-  // Por defecto activo solo si hay Agent ID + API key (evita botón muerto).
-  if (raw === "true" || raw === "1" || raw === "yes" || raw === "on") {
-    return true;
-  }
-  return Boolean(
-    process.env.ELEVENLABS_API_KEY && process.env.ELEVENLABS_AGENT_ID
-  );
+  // Opt-in explícito: el botón solo aparece con ELEVENLABS_LIVE_ENABLED=true.
+  // (Desactivado por ahora; reactivar en Railway/.env cuando el modo en vivo esté listo.)
+  return raw === "true" || raw === "1" || raw === "yes" || raw === "on";
 }
 
 /**
