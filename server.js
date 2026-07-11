@@ -121,7 +121,7 @@ app.get("/", (_req, res) => {
   <pre style="background:#f4f4f4;padding:1rem;overflow:auto;border-radius:8px;"><code>&lt;script&gt;
   window.AMARTE_CHATBOT_URL = "https://chatbotamarte-production.up.railway.app";
 &lt;/script&gt;
-&lt;script src="https://chatbotamarte-production.up.railway.app/amarte-widget.js?v=690f9f4"&gt;&lt;/script&gt;</code></pre>
+&lt;script src="https://chatbotamarte-production.up.railway.app/amarte-widget.js?v=710f9a2"&gt;&lt;/script&gt;</code></pre>
 </body>
 </html>`);
 });

@@ -187,7 +187,13 @@ async function start(options) {
         }
       },
       onMessage: ({ message, role }) => {
-        const text = typeof message === "string" ? message.trim() : "";
+        const raw = typeof message === "string" ? message.trim() : "";
+        if (!raw) return;
+        // Etiquetas de estilo ElevenLabs (p. ej. [warmly]) no deben verse en el chat.
+        const text = raw
+          .replace(/\[[a-z][a-z0-9_-]{0,30}\]/gi, "")
+          .replace(/\s{2,}/g, " ")
+          .trim();
         if (!text) return;
         const key = `${role}:${text}`;
         if (seenMessages.has(key)) return;
@@ -206,6 +212,14 @@ async function start(options) {
     });
 
     activeConversation = conversation;
+    // Asegurar micrófono activo tras conectar (por si el SDK inicia muteado).
+    try {
+      if (typeof conversation.setMicMuted === "function") {
+        conversation.setMicMuted(false);
+      }
+    } catch {
+      // ignore
+    }
     starting = false;
     clearMaxSessionTimer();
     maxSessionTimer = setTimeout(() => {

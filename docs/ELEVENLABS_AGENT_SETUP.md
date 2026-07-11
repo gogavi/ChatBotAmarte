@@ -16,6 +16,8 @@ Español
 Hola, soy Martina, concierge virtual de Hotel Amarte Suite. Puedo ayudarte a elegir una suite, conocer tarifas y orientarte con tu reserva. ¿Qué experiencia estás buscando?
 ```
 
+No uses etiquetas de estilo tipo `[warmly]` / `[thoughtful]` en la primera frase ni en el prompt oral: se cuelan en la transcripción del chat. El tono se controla con la voz del agente en el dashboard.
+
 ## Tipo de agente
 
 - **Privado** (requiere conversation token WebRTC desde el backend).

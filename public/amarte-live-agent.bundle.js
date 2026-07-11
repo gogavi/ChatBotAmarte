@@ -27117,7 +27117,9 @@ registerProcessor("scribeAudioProcessor", ScribeAudioProcessor);
           }
         },
         onMessage: ({ message, role }) => {
-          const text = typeof message === "string" ? message.trim() : "";
+          const raw = typeof message === "string" ? message.trim() : "";
+          if (!raw) return;
+          const text = raw.replace(/\[[a-z][a-z0-9_-]{0,30}\]/gi, "").replace(/\s{2,}/g, " ").trim();
           if (!text) return;
           const key = `${role}:${text}`;
           if (seenMessages.has(key)) return;
@@ -27135,6 +27137,12 @@ registerProcessor("scribeAudioProcessor", ScribeAudioProcessor);
         }
       });
       activeConversation = conversation;
+      try {
+        if (typeof conversation.setMicMuted === "function") {
+          conversation.setMicMuted(false);
+        }
+      } catch {
+      }
       starting = false;
       clearMaxSessionTimer();
       maxSessionTimer = setTimeout(() => {

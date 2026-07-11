@@ -622,6 +622,45 @@
     if (liveState.unmuteBtn) liveState.unmuteBtn.disabled = !liveState.active || !liveState.muted;
     if (liveState.endBtn) liveState.endBtn.disabled = !liveState.active;
     if (liveState.liveBtn) liveState.liveBtn.disabled = liveState.active;
+    var micBtn = rootEl && rootEl.querySelector(".amarte-widget-mic");
+    var micHint = rootEl && rootEl.querySelector(".amarte-widget-mic-hint");
+    if (micBtn) {
+      micBtn.disabled = liveState.active;
+      micBtn.setAttribute(
+        "title",
+        liveState.active
+          ? "Durante la conversación en vivo no hace falta pulsar el micrófono"
+          : "Mensaje de voz"
+      );
+    }
+    if (micHint) {
+      micHint.textContent = liveState.active
+        ? "Habla con naturalidad: Martina te escucha en vivo (no pulses el micrófono)"
+        : "Presiona el micrófono para hablar y nuevamente para finalizar";
+    }
+  }
+
+  /**
+   * Detiene una nota de voz en curso (evita que robe el mic al WebRTC en vivo).
+   */
+  function stopVoiceNoteIfRecording() {
+    if (voiceState.recorder && voiceState.recorder.state === "recording") {
+      try {
+        voiceState.recorder.stop();
+      } catch (e0) {}
+    }
+  }
+
+  /**
+   * Quita etiquetas de audio de ElevenLabs (p. ej. [warmly]) del texto mostrado.
+   * @param {string} text
+   * @returns {string}
+   */
+  function stripLiveAudioTags(text) {
+    return String(text || "")
+      .replace(/\[[a-z][a-z0-9_-]{0,30}\]/gi, "")
+      .replace(/\s{2,}/g, " ")
+      .trim();
   }
 
   function endLiveSession(reason) {
@@ -650,7 +689,24 @@
 
   function beginLiveConversation() {
     closeLiveConsent();
-    loadLiveAgentBundle()
+    stopVoiceNoteIfRecording();
+
+    // Pedir micrófono en el mismo gesto del clic (antes del async del bundle/token).
+    var micReady = Promise.resolve();
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      micReady = navigator.mediaDevices
+        .getUserMedia({ audio: true })
+        .then(function (stream) {
+          stream.getTracks().forEach(function (t) {
+            t.stop();
+          });
+        });
+    }
+
+    micReady
+      .then(function () {
+        return loadLiveAgentBundle();
+      })
       .then(function () {
         if (
           !window.VoiceAgentManager ||
@@ -679,10 +735,12 @@
           },
           onTranscript: function (payload) {
             if (!payload || !payload.text) return;
+            var text = stripLiveAudioTags(payload.text);
+            if (!text) return;
             if (payload.role === "user") {
-              appendMessage("user", payload.text, null);
+              appendMessage("user", text, null);
             } else {
-              appendMessage("bot", payload.text, []);
+              appendMessage("bot", text, []);
             }
           },
           onShowActions: function (actions) {
@@ -691,7 +749,17 @@
           onConnected: function () {
             trackLiveEvent("live_voice_connected", {});
             trackLiveEvent("live_voice_permission_granted", {});
+            try {
+              if (
+                window.VoiceAgentManager &&
+                typeof window.VoiceAgentManager.unmute === "function"
+              ) {
+                window.VoiceAgentManager.unmute();
+              }
+            } catch (eUnmute) {}
+            liveState.muted = false;
             setLiveUiStatus("listening");
+            updateLiveControlButtons();
           },
           onDisconnected: function () {
             endLiveSession("remote");
@@ -707,6 +775,9 @@
         var msg = errStart && errStart.message ? String(errStart.message) : "";
         if (/permis|NotAllowed|Permission|denied/i.test(msg)) {
           trackLiveEvent("live_voice_permission_denied", {});
+          msg =
+            msg ||
+            "Necesitamos permiso de micrófono para la conversación en vivo.";
         } else {
           trackLiveEvent("live_voice_error", { message: msg.slice(0, 120) });
         }
@@ -824,12 +895,13 @@
       "@media (min-width:769px){.amarte-widget-panel{width:min(420px,calc(100vw - 48px));" +
       "max-height:min(720px,calc(100vh - 140px));}.amarte-widget-messages{min-height:320px;}}" +
       /* Live voice */
-      ".amarte-live-btn{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;" +
-      "margin:0 0 8px;padding:10px 14px;border:none;border-radius:30px;cursor:pointer;" +
+      ".amarte-live-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;width:auto;" +
+      "margin:0 auto 8px;padding:10px 16px;border:none;border-radius:30px;cursor:pointer;" +
       "background:#1A1A3D;color:#fff;font-size:0.85rem;font-weight:600;}" +
       ".amarte-live-btn:hover{background:#2a2a55;}" +
       ".amarte-live-btn:disabled{opacity:0.5;cursor:not-allowed;}" +
       ".amarte-live-btn .amarte-live-dot{width:8px;height:8px;border-radius:50%;background:#e53935;flex-shrink:0;}" +
+      ".amarte-widget-footer-wrap>.amarte-live-btn{align-self:center;}" +
       ".amarte-live-overlay{position:absolute;inset:0;background:rgba(26,26,61,0.55);z-index:5;" +
       "display:none;align-items:center;justify-content:center;padding:16px;}" +
       ".amarte-live-overlay.amarte-open{display:flex;}" +
@@ -1029,6 +1101,14 @@
   function toggleVoiceRecording() {
     var micBtn = rootEl.querySelector(".amarte-widget-mic");
     var sendBtn = rootEl.querySelector(".amarte-widget-send");
+    if (liveState.active) {
+      appendMessage(
+        "bot",
+        "Ahora mismo Martina te escucha en vivo: habla con naturalidad, sin pulsar el micrófono. Usa Finalizar si quieres enviar una nota de voz después.",
+        []
+      );
+      return;
+    }
     if (voiceState.recorder && voiceState.recorder.state === "recording") {
       voiceState.recorder.stop();
       return;
