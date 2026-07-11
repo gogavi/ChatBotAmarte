@@ -12,6 +12,10 @@ assert.strictEqual(TOKEN_RATE_LIMIT.windowMs, 10 * 60 * 1000);
 
 assert.strictEqual(isAllowedPageHost("amartesuite.com"), true);
 assert.strictEqual(isAllowedPageHost("www.amartesuite.com"), true);
+assert.strictEqual(
+  isAllowedPageHost("chatbotamarte-production.up.railway.app"),
+  true
+);
 assert.strictEqual(isAllowedPageHost("evil.com"), false);
 
 const prevLive = process.env.ELEVENLABS_LIVE_ENABLED;

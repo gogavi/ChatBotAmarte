@@ -30,6 +30,8 @@ const elevenlabsPostCallRouter = require("./routes/elevenlabsPostCall");
 
 const PORT = process.env.PORT || 3000;
 const app = express();
+// Railway / proxies envían X-Forwarded-For; necesario para express-rate-limit.
+app.set("trust proxy", 1);
 
 const ELEVENLABS_VOICE_ID_DEFAULT = "VmejBeYhbrcTPwDniox7";
 /** Máx. caracteres enviados a ElevenLabs por respuesta (evita payloads enormes). */

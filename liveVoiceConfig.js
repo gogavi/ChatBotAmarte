@@ -4,7 +4,25 @@
  * Secretos nunca se exportan al navegador.
  */
 
-const ALLOWED_PAGE_HOSTS = new Set(["amartesuite.com", "www.amartesuite.com"]);
+const ALLOWED_PAGE_HOSTS = new Set([
+  "amartesuite.com",
+  "www.amartesuite.com",
+  // Demo embebido en Railway (embed-demo.html)
+  "chatbotamarte-production.up.railway.app",
+]);
+
+/**
+ * Hosts extra desde env (coma-separados), p. ej. previews.
+ * @returns {string[]}
+ */
+function getExtraAllowedPageHosts() {
+  const raw = String(process.env.ELEVENLABS_ALLOWED_PAGE_HOSTS || "").trim();
+  if (!raw) return [];
+  return raw
+    .split(",")
+    .map((h) => h.trim().toLowerCase())
+    .filter(Boolean);
+}
 
 /** Rate limit del endpoint de token WebRTC. */
 const TOKEN_RATE_LIMIT = Object.freeze({
@@ -98,6 +116,9 @@ function isAllowedPageHost(hostname) {
     return false;
   }
   if (ALLOWED_PAGE_HOSTS.has(host)) {
+    return true;
+  }
+  if (getExtraAllowedPageHosts().includes(host)) {
     return true;
   }
   if (allowLocalPageHosts()) {

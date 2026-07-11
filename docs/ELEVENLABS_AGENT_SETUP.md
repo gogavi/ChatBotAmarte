@@ -127,6 +127,8 @@ El chat escrito y la nota de voz siguen funcionando.
 5. Abre el widget → **Hablar en vivo con Martina** → confirmar → permitir micrófono.
 
 En local, `pageUrl` en `localhost` se acepta si `NODE_ENV !== production` o `ELEVENLABS_ALLOW_LOCAL_PAGE_HOSTS=true`.
+El demo en Railway (`chatbotamarte-production.up.railway.app`) también está en la lista de hosts permitidos.
+Hosts adicionales: `ELEVENLABS_ALLOWED_PAGE_HOSTS=host1,host2`.
 
 ## Checklist de despliegue (Martina Live)
 

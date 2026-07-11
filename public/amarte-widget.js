@@ -511,17 +511,27 @@
 
   /**
    * Muestra fallback cuando falla el modo en vivo.
+   * @param {string} [detail]
    */
-  function showLiveFallback() {
+  function showLiveFallback(detail) {
     var wa = pickQuickUrl("AMARTE_QUICK_WHATSAPP_URL", DEFAULT_QUICK_WHATSAPP);
+    var text =
+      "No fue posible iniciar la conversación en vivo. Puedes escribirle a Martina o enviar una nota de voz.";
+    if (detail && /dominio|pageUrl|no permitido/i.test(detail)) {
+      text =
+        "No fue posible iniciar la conversación en vivo desde esta página. Prueba en amartesuite.com o en el demo oficial.";
+    }
     appendMessage(
       "bot",
-      "No fue posible iniciar la conversación en vivo. Puedes escribirle a Martina o enviar una nota de voz.",
+      text,
       [
         { label: "💬 WhatsApp", url: wa },
       ]
     );
-    trackLiveEvent("live_voice_error", { reason: "fallback_shown" });
+    trackLiveEvent("live_voice_error", {
+      reason: "fallback_shown",
+      detail: detail ? String(detail).slice(0, 120) : "",
+    });
   }
 
   /**
@@ -686,10 +696,10 @@
           onDisconnected: function () {
             endLiveSession("remote");
           },
-          onError: function () {
+          onError: function (message) {
             trackLiveEvent("live_voice_error", {});
             endLiveSession("error");
-            showLiveFallback();
+            showLiveFallback(message);
           },
         });
       })
@@ -701,7 +711,7 @@
           trackLiveEvent("live_voice_error", { message: msg.slice(0, 120) });
         }
         endLiveSession("error");
-        showLiveFallback();
+        showLiveFallback(msg);
       });
   }
 
