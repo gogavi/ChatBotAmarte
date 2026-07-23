@@ -349,6 +349,12 @@
     endBtn: null,
   };
 
+  /**
+   * Kill-switch temporal: desactiva voz en vivo y muestra “Próximamente”.
+   * Volver a false cuando indiquen reactivar.
+   */
+  var LIVE_VOICE_COMING_SOON = true;
+
   var LIVE_ACTION_URLS = {
     reservation: DEFAULT_QUICK_RESERVE,
     reserve: DEFAULT_QUICK_RESERVE,
@@ -790,6 +796,10 @@
    * Consulta config pública y muestra el botón en vivo si aplica.
    */
   function initLiveVoiceFeature() {
+    if (LIVE_VOICE_COMING_SOON) {
+      applyLiveComingSoonUi();
+      return;
+    }
     fetch(BACKEND_URL + "/api/widget-config")
       .then(function (res) {
         return res.json();
@@ -808,6 +818,19 @@
       .catch(function () {
         // Silencioso: el chat sigue funcionando
       });
+  }
+
+  /** UI temporal: botón visible pero deshabilitado (“Próximamente”). */
+  function applyLiveComingSoonUi() {
+    liveState.enabled = false;
+    if (!liveState.liveBtn) return;
+    liveState.liveBtn.style.display = "flex";
+    liveState.liveBtn.disabled = true;
+    liveState.liveBtn.classList.add("amarte-live-soon");
+    liveState.liveBtn.setAttribute("aria-label", "Hablar en vivo con Martina — Próximamente");
+    liveState.liveBtn.setAttribute("title", "Próximamente");
+    var label = liveState.liveBtn.querySelector("span:not(.amarte-live-dot)");
+    if (label) label.textContent = "Próximamente";
   }
 
   /**
@@ -900,7 +923,10 @@
       "background:#1A1A3D;color:#fff;font-size:0.85rem;font-weight:600;}" +
       ".amarte-live-btn:hover{background:#2a2a55;}" +
       ".amarte-live-btn:disabled{opacity:0.5;cursor:not-allowed;}" +
+      ".amarte-live-btn.amarte-live-soon{opacity:0.9;cursor:not-allowed;background:#17172a;color:rgba(255,255,255,0.78);}" +
+      ".amarte-live-btn.amarte-live-soon:hover{background:#17172a;}" +
       ".amarte-live-btn .amarte-live-dot{width:8px;height:8px;border-radius:50%;background:#e53935;flex-shrink:0;}" +
+      ".amarte-live-btn.amarte-live-soon .amarte-live-dot{background:#9e9e9e;}" +
       ".amarte-widget-footer-wrap>.amarte-live-btn{align-self:center;}" +
       ".amarte-live-overlay{position:absolute;inset:0;background:rgba(26,26,61,0.55);z-index:5;" +
       "display:none;align-items:center;justify-content:center;padding:16px;}" +
@@ -1557,7 +1583,7 @@
     });
 
     liveBtn.addEventListener("click", function () {
-      if (liveState.active) return;
+      if (LIVE_VOICE_COMING_SOON || liveState.active) return;
       openLiveConsent();
       liveStartBtn.focus();
     });
@@ -1612,6 +1638,11 @@
         }
       },
       openLive: function () {
+        // Temporalmente desactivado: abre chat de texto en su lugar.
+        if (LIVE_VOICE_COMING_SOON) {
+          window.AmarteChatbot.openChat();
+          return;
+        }
         if (liveState.active) return;
         if (!panel.classList.contains("amarte-open")) {
           panel.classList.add("amarte-open");
