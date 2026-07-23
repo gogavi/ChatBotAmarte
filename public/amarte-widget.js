@@ -844,7 +844,7 @@
     // Texto CSS: variables de color y layout del widget
     style.textContent =
       /* CSS del widget Amarte */
-      ".amarte-widget-root{font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;}" +
+      ".amarte-widget-root{font-family:'Jost',system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;}" +
       ".amarte-widget-launcher{position:fixed;right:24px;left:auto;bottom:calc(24px + env(safe-area-inset-bottom,0px));" +
       "display:flex;align-items:center;gap:10px;padding:8px 8px 8px 18px;border:none;border-radius:999px;" +
       "background:#D81B60;color:#ffffff;cursor:pointer;z-index:99998;" +
@@ -895,7 +895,11 @@
       ".amarte-widget-quick-row .amarte-opt-link{text-align:center;}" +
       "@media (min-width:769px){.amarte-quick-call{display:none !important;}}" +
       ".amarte-widget-input{flex:1;border:1px solid rgba(0,0,0,0.12);border-radius:999px;" +
-      "padding:12px 16px;font-size:0.95rem;outline:none;background:rgba(255,255,255,0.9);box-shadow:none;}" +
+      "padding:12px 16px;font-size:0.95rem;outline:none;background:rgba(255,255,255,0.95);" +
+      "box-shadow:none;color:#0D0D11;caret-color:#0D0D11;" +
+      "font-family:'Jost',system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;" +
+      "font-weight:400;-webkit-text-fill-color:#0D0D11;}" +
+      ".amarte-widget-input::placeholder{color:#929095;opacity:1;-webkit-text-fill-color:#929095;}" +
       ".amarte-widget-input:focus{border-color:#D81B60;}" +
       ".amarte-widget-mic{background:transparent;color:#D81B60;border:none;border-radius:50%;" +
       "width:40px;height:40px;padding:0;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;" +
