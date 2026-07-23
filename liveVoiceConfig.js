@@ -9,6 +9,9 @@ const ALLOWED_PAGE_HOSTS = new Set([
   "www.amartesuite.com",
   // Demo embebido en Railway (embed-demo.html)
   "chatbotamarte-production.up.railway.app",
+  // Front Vite del rediseño (dev)
+  "localhost",
+  "127.0.0.1",
 ]);
 
 /**
