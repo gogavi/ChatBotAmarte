@@ -47,6 +47,24 @@ Desactivar solo el modo en vivo: `ELEVENLABS_LIVE_ENABLED=false`.
 
 No incluyas API keys en el embed.
 
+## API pública del widget (`window.AmarteChatbot`)
+
+Tras cargar `amarte-widget.js`, el sitio puede abrir Martina sin usar solo el launcher flotante:
+
+```js
+// Chat de texto (opcional: mensaje inicial que se envía al backend)
+window.AmarteChatbot.openChat("Quiero reservar una suite");
+
+// Voz en vivo — llamar en el mismo click del usuario (permiso de micrófono)
+window.AmarteChatbot.openLive();
+
+window.AmarteChatbot.close();
+```
+
+Ejemplo React / Vite: define `window.AMARTE_CHATBOT_URL`, carga el script una vez, y en el CTA «HABLA CON MARTINA» invoca `openLive()` de forma síncrona en el `onClick`.
+
+CORS: orígenes locales (`localhost:3000`, `5173`, …) están permitidos. Añade más con `CORS_ORIGINS=https://tu-preview.vercel.app`.
+
 ## Documentación
 
 - [DOSIER.md](DOSIER.md) — arquitectura completa

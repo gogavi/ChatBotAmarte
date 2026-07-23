@@ -50,15 +50,21 @@ const upload = multer({
 const corsOrigins = [
   "https://amartesuite.com",
   "https://www.amartesuite.com",
+  // Front Vite (rediseño) y demos locales — también en producción Railway
+  "http://localhost:3000",
+  "http://127.0.0.1:3000",
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+  "http://localhost:5500",
+  "http://127.0.0.1:5500",
 ];
-if (process.env.NODE_ENV !== "production") {
-  corsOrigins.push(
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "http://localhost:5500",
-    "http://127.0.0.1:5500"
-  );
-}
+const extraCorsOrigins = String(process.env.CORS_ORIGINS || "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+extraCorsOrigins.forEach((origin) => {
+  if (!corsOrigins.includes(origin)) corsOrigins.push(origin);
+});
 
 app.use(
   cors({

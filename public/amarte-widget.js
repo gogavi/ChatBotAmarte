@@ -1591,6 +1591,46 @@
     });
 
     initLiveVoiceFeature();
+
+    /**
+     * API pública para embeds React/Vite (CTA del sitio, no solo el launcher).
+     * openLive() debe llamarse en el mismo gesto de clic del usuario (micrófono).
+     */
+    window.AmarteChatbot = {
+      openChat: function (initialMessage) {
+        if (!panel.classList.contains("amarte-open")) {
+          panel.classList.add("amarte-open");
+          rootEl.classList.add("amarte-chat-open");
+          launcher.setAttribute("aria-expanded", "true");
+        }
+        inputEl.focus();
+        scrollMessagesToBottom();
+        var msg = initialMessage != null ? String(initialMessage).trim() : "";
+        if (msg) {
+          inputEl.value = msg;
+          sendUserMessage();
+        }
+      },
+      openLive: function () {
+        if (liveState.active) return;
+        if (!panel.classList.contains("amarte-open")) {
+          panel.classList.add("amarte-open");
+          rootEl.classList.add("amarte-chat-open");
+          launcher.setAttribute("aria-expanded", "true");
+        }
+        // Mismo gesto de usuario: iniciar en vivo sin segundo clic de consentimiento.
+        beginLiveConversation();
+      },
+      close: function () {
+        panel.classList.remove("amarte-open");
+        rootEl.classList.remove("amarte-chat-open");
+        launcher.setAttribute("aria-expanded", "false");
+        if (liveState.active) {
+          endLiveSession("api_close");
+        }
+        closeLiveConsent();
+      },
+    };
   }
 
   /**
