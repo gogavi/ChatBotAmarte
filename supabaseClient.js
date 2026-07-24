@@ -4,11 +4,22 @@ const { createClient } = require("@supabase/supabase-js");
 let client = null;
 
 /**
+ * Normaliza env: trim + quita comillas envolventes (común en Railway/Docker).
  * @param {unknown} value
  * @returns {string}
  */
 function trimEnv(value) {
-  return typeof value === "string" ? value.trim() : "";
+  if (typeof value !== "string") {
+    return "";
+  }
+  let s = value.trim();
+  if (
+    (s.startsWith('"') && s.endsWith('"') && s.length >= 2) ||
+    (s.startsWith("'") && s.endsWith("'") && s.length >= 2)
+  ) {
+    s = s.slice(1, -1).trim();
+  }
+  return s;
 }
 
 function getSupabaseUrl() {
@@ -54,4 +65,5 @@ module.exports = {
   getSupabase,
   isSupabaseConfigured,
   resetSupabaseClient,
+  trimEnv,
 };

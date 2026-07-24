@@ -1,58 +1,196 @@
 const { getSupabase, isSupabaseConfigured } = require("./supabaseClient");
 
-const DEFAULT_HISTORY_LIMIT = 40;
+const DEFAULT_HISTORY_LIMIT = Math.max(
+  10,
+  Math.min(200, Number(process.env.CHAT_HISTORY_LIMIT) || 40)
+);
+const MEMORY_TTL_MS = Math.max(
+  5 * 60 * 1000,
+  Number(process.env.CHAT_HISTORY_MEMORY_TTL_MS) || 2 * 60 * 60 * 1000
+);
+const MEMORY_MAX_CONVERSATIONS = Math.max(
+  50,
+  Number(process.env.CHAT_HISTORY_MEMORY_MAX) || 500
+);
 
-/** @type {boolean} */
-let ready = false;
+/** @type {boolean} memoria siempre disponible tras init */
+let memoryReady = false;
+/** @type {boolean} persistencia Supabase */
+let supabaseReady = false;
+/** @type {string | null} */
+let lastInitError = null;
 
 /**
- * Inicializa el store de historial (Supabase). Idempotente.
+ * @typedef {{ role: string; content: string }} ChatMessage
+ * @typedef {{ messages: ChatMessage[]; updatedAt: number }} MemoryEntry
+ */
+
+/** @type {Map<string, MemoryEntry>} */
+const memoryCache = new Map();
+
+/** @type {Set<string>} */
+const bridgedLiveIds = new Set();
+
+const metrics = {
+  history_read_ok: 0,
+  history_read_failed: 0,
+  history_write_ok: 0,
+  history_write_failed: 0,
+  history_memory_hit: 0,
+  history_memory_miss: 0,
+  live_bridge_ok: 0,
+  live_bridge_failed: 0,
+};
+
+/**
+ * @param {string} event
+ * @param {Record<string, unknown>} [detail]
+ */
+function logHistoryEvent(event, detail = {}) {
+  console.warn(
+    JSON.stringify({
+      event,
+      ts: new Date().toISOString(),
+      ...detail,
+    })
+  );
+}
+
+/**
+ * @param {number} [limit]
+ */
+function resolveLimit(limit) {
+  if (typeof limit === "number" && Number.isFinite(limit) && limit > 0) {
+    return Math.min(200, Math.floor(limit));
+  }
+  return DEFAULT_HISTORY_LIMIT;
+}
+
+function pruneMemory() {
+  const now = Date.now();
+  for (const [id, entry] of memoryCache) {
+    if (now - entry.updatedAt > MEMORY_TTL_MS) {
+      memoryCache.delete(id);
+    }
+  }
+  while (memoryCache.size > MEMORY_MAX_CONVERSATIONS) {
+    let oldestId = null;
+    let oldestAt = Infinity;
+    for (const [id, entry] of memoryCache) {
+      if (entry.updatedAt < oldestAt) {
+        oldestAt = entry.updatedAt;
+        oldestId = id;
+      }
+    }
+    if (!oldestId) {
+      break;
+    }
+    memoryCache.delete(oldestId);
+  }
+}
+
+/**
+ * @param {string} conversationId
+ * @param {ChatMessage[]} messages
+ */
+function setMemory(conversationId, messages) {
+  memoryCache.set(conversationId, {
+    messages: messages.slice(-DEFAULT_HISTORY_LIMIT * 2),
+    updatedAt: Date.now(),
+  });
+  pruneMemory();
+}
+
+/**
+ * @param {string} conversationId
+ * @param {ChatMessage[]} extra
+ */
+function appendToMemory(conversationId, extra) {
+  const prev = memoryCache.get(conversationId);
+  const base = prev ? prev.messages.slice() : [];
+  for (const m of extra) {
+    if (
+      m &&
+      (m.role === "user" || m.role === "assistant") &&
+      typeof m.content === "string"
+    ) {
+      base.push({ role: m.role, content: m.content });
+    }
+  }
+  setMemory(conversationId, base);
+}
+
+/**
+ * Inicializa el store (memoria siempre; Supabase si hay credenciales).
  * @returns {boolean}
  */
 function initConversationStore() {
-  if (ready && getSupabase()) {
-    return true;
-  }
+  memoryReady = true;
+  lastInitError = null;
+  supabaseReady = false;
+
   if (!isSupabaseConfigured()) {
-    throw new Error(
-      "SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY no configuradas"
-    );
+    lastInitError =
+      "SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY no configuradas (tras trim/comillas)";
+    return true;
   }
   const sb = getSupabase();
   if (!sb) {
-    throw new Error("No se pudo crear el cliente Supabase");
+    lastInitError = "No se pudo crear el cliente Supabase";
+    return true;
   }
-  ready = true;
+  supabaseReady = true;
   return true;
 }
 
 /**
- * Intenta habilitar el store si aún no lo está (p.ej. env disponible más tarde).
  * @returns {boolean}
  */
 function ensureStoreReady() {
-  if (ready && getSupabase()) {
+  if (memoryReady) {
+    if (!supabaseReady && isSupabaseConfigured()) {
+      try {
+        initConversationStore();
+      } catch (e) {
+        lastInitError =
+          e && e.message ? String(e.message) : "Error al reiniciar store";
+      }
+    }
     return true;
   }
   try {
     return initConversationStore();
-  } catch {
-    return false;
+  } catch (e) {
+    lastInitError =
+      e && e.message ? String(e.message) : "Error al inicializar store";
+    memoryReady = true;
+    return true;
   }
 }
 
 function isStoreReady() {
-  return ready && Boolean(getSupabase());
+  return memoryReady;
+}
+
+function isSupabasePersistenceEnabled() {
+  return supabaseReady && Boolean(getSupabase());
+}
+
+function getLastInitError() {
+  return lastInitError;
+}
+
+function getHistoryMetrics() {
+  return { ...metrics, memoryConversations: memoryCache.size };
 }
 
 /**
- * Asegura que exista la fila de conversación.
  * @param {string} conversationId
  * @param {{ pageUrl?: string; roomName?: string }} [meta]
  */
 async function ensureConversation(conversationId, meta = {}) {
   const sb = getSupabase();
-  if (!sb || !conversationId) {
+  if (!sb || !supabaseReady || !conversationId) {
     return;
   }
   const row = {
@@ -77,28 +215,76 @@ async function ensureConversation(conversationId, meta = {}) {
 /**
  * @param {string} conversationId
  * @param {number} [limit]
- * @returns {Promise<Array<{ role: string; content: string }>>}
+ * @returns {Promise<ChatMessage[]>}
  */
-async function getPriorMessages(conversationId, limit = DEFAULT_HISTORY_LIMIT) {
+async function getPriorMessages(conversationId, limit) {
+  const capped = resolveLimit(limit);
+  if (!conversationId) {
+    return [];
+  }
+  ensureStoreReady();
+  pruneMemory();
+
+  const cached = memoryCache.get(conversationId);
+  if (cached && cached.messages.length > 0) {
+    metrics.history_memory_hit += 1;
+    metrics.history_read_ok += 1;
+    cached.updatedAt = Date.now();
+    return cached.messages.slice(-capped);
+  }
+  metrics.history_memory_miss += 1;
+
   const sb = getSupabase();
-  if (!sb || !conversationId) {
+  if (!sb || !supabaseReady) {
+    metrics.history_read_ok += 1;
+    return cached ? cached.messages.slice(-capped) : [];
+  }
+
+  try {
+    let query = sb
+      .from("chatbot_messages")
+      .select("role, content, created_at, id")
+      .eq("conversation_id", conversationId)
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .limit(capped);
+
+    let { data, error } = await query;
+    if (error) {
+      // Fallback si created_at no existe en algún entorno legado
+      const fallback = await sb
+        .from("chatbot_messages")
+        .select("role, content")
+        .eq("conversation_id", conversationId)
+        .order("id", { ascending: false })
+        .limit(capped);
+      data = fallback.data;
+      error = fallback.error;
+    }
+    if (error) {
+      metrics.history_read_failed += 1;
+      logHistoryEvent("history_read_failed", {
+        conversationId: conversationId.slice(0, 8),
+        message: error.message,
+      });
+      return [];
+    }
+    const rows = Array.isArray(data) ? data : [];
+    const messages = rows.reverse().map((r) => ({
+      role: r.role,
+      content: r.content,
+    }));
+    setMemory(conversationId, messages);
+    metrics.history_read_ok += 1;
+    return messages.slice(-capped);
+  } catch (err) {
+    metrics.history_read_failed += 1;
+    logHistoryEvent("history_read_failed", {
+      conversationId: conversationId.slice(0, 8),
+      message: err && err.message ? err.message : String(err),
+    });
     return [];
   }
-  const { data, error } = await sb
-    .from("chatbot_messages")
-    .select("role, content")
-    .eq("conversation_id", conversationId)
-    .order("id", { ascending: false })
-    .limit(limit);
-  if (error) {
-    console.warn("getPriorMessages:", error.message);
-    return [];
-  }
-  const rows = Array.isArray(data) ? data : [];
-  return rows.reverse().map((r) => ({
-    role: r.role,
-    content: r.content,
-  }));
 }
 
 /**
@@ -113,36 +299,241 @@ async function appendTurn(
   assistantRawContent,
   meta = {}
 ) {
-  const sb = getSupabase();
-  if (!sb || !conversationId) {
+  if (!conversationId) {
     return;
   }
-  await ensureConversation(conversationId, meta);
-  const { error } = await sb.from("chatbot_messages").insert([
-    { conversation_id: conversationId, role: "user", content: userContent },
-    {
-      conversation_id: conversationId,
-      role: "assistant",
-      content: assistantRawContent,
-    },
+  ensureStoreReady();
+
+  appendToMemory(conversationId, [
+    { role: "user", content: userContent },
+    { role: "assistant", content: assistantRawContent },
   ]);
-  if (error) {
-    throw new Error(`chatbot_messages insert: ${error.message}`);
+
+  const sb = getSupabase();
+  if (!sb || !supabaseReady) {
+    metrics.history_write_ok += 1;
+    return;
   }
-  await sb
-    .from("chatbot_conversations")
-    .update({ updated_at: new Date().toISOString() })
-    .eq("id", conversationId);
+
+  try {
+    await ensureConversation(conversationId, meta);
+    const { error } = await sb.from("chatbot_messages").insert([
+      { conversation_id: conversationId, role: "user", content: userContent },
+      {
+        conversation_id: conversationId,
+        role: "assistant",
+        content: assistantRawContent,
+      },
+    ]);
+    if (error) {
+      throw new Error(`chatbot_messages insert: ${error.message}`);
+    }
+    await sb
+      .from("chatbot_conversations")
+      .update({ updated_at: new Date().toISOString() })
+      .eq("id", conversationId);
+    metrics.history_write_ok += 1;
+  } catch (err) {
+    metrics.history_write_failed += 1;
+    logHistoryEvent("history_write_failed", {
+      conversationId: conversationId.slice(0, 8),
+      message: err && err.message ? err.message : String(err),
+    });
+    throw err;
+  }
 }
 
 /**
- * Vincula una reserva creada a la conversación.
+ * Inserta mensajes sueltos (p.ej. puente live → chat).
+ * @param {string} conversationId
+ * @param {ChatMessage[]} messages
+ * @param {{ pageUrl?: string; roomName?: string }} [meta]
+ */
+async function appendMessages(conversationId, messages, meta = {}) {
+  if (!conversationId || !Array.isArray(messages) || !messages.length) {
+    return;
+  }
+  ensureStoreReady();
+  const clean = messages.filter(
+    (m) =>
+      m &&
+      (m.role === "user" || m.role === "assistant") &&
+      typeof m.content === "string" &&
+      m.content.trim()
+  );
+  if (!clean.length) {
+    return;
+  }
+
+  appendToMemory(conversationId, clean);
+
+  const sb = getSupabase();
+  if (!sb || !supabaseReady) {
+    metrics.history_write_ok += 1;
+    return;
+  }
+
+  try {
+    await ensureConversation(conversationId, meta);
+    const { error } = await sb.from("chatbot_messages").insert(
+      clean.map((m) => ({
+        conversation_id: conversationId,
+        role: m.role,
+        content: m.content,
+      }))
+    );
+    if (error) {
+      throw new Error(`chatbot_messages insert: ${error.message}`);
+    }
+    await sb
+      .from("chatbot_conversations")
+      .update({ updated_at: new Date().toISOString() })
+      .eq("id", conversationId);
+    metrics.history_write_ok += 1;
+  } catch (err) {
+    metrics.history_write_failed += 1;
+    logHistoryEvent("history_write_failed", {
+      conversationId: conversationId.slice(0, 8),
+      message: err && err.message ? err.message : String(err),
+    });
+    throw err;
+  }
+}
+
+/**
+ * Normaliza transcript ElevenLabs → turnos user/assistant.
+ * @param {unknown} transcript
+ * @returns {ChatMessage[]}
+ */
+function transcriptToTurns(transcript) {
+  if (typeof transcript === "string" && transcript.trim()) {
+    return [
+      {
+        role: "assistant",
+        content: `[Resumen llamada en vivo]\n${transcript.trim().slice(0, 4000)}`,
+      },
+    ];
+  }
+  if (!Array.isArray(transcript)) {
+    return [];
+  }
+  /** @type {ChatMessage[]} */
+  const turns = [];
+  for (const item of transcript) {
+    if (!item || typeof item !== "object") {
+      continue;
+    }
+    const text =
+      (typeof item.message === "string" && item.message) ||
+      (typeof item.content === "string" && item.content) ||
+      (typeof item.text === "string" && item.text) ||
+      "";
+    if (!text.trim()) {
+      continue;
+    }
+    const rawRole = String(item.role || item.speaker || "").toLowerCase();
+    let role = null;
+    if (
+      rawRole === "agent" ||
+      rawRole === "assistant" ||
+      rawRole === "bot" ||
+      rawRole === "ai"
+    ) {
+      role = "assistant";
+    } else if (
+      rawRole === "user" ||
+      rawRole === "customer" ||
+      rawRole === "human"
+    ) {
+      role = "user";
+    } else {
+      continue;
+    }
+    turns.push({ role, content: text.trim().slice(0, 8000) });
+  }
+  return turns;
+}
+
+/**
+ * Volca transcript/summary de live a chatbot_messages (mismo conversationId).
+ * @param {{
+ *   localConversationId?: string|null;
+ *   elevenlabsConversationId: string;
+ *   transcript?: unknown;
+ *   summary?: string|null;
+ * }} data
+ */
+async function bridgeLiveToChatHistory(data) {
+  const localId =
+    typeof data.localConversationId === "string"
+      ? data.localConversationId.trim()
+      : "";
+  const elId =
+    typeof data.elevenlabsConversationId === "string"
+      ? data.elevenlabsConversationId.trim()
+      : "";
+  if (!localId || !elId) {
+    return false;
+  }
+
+  const marker = `[live:${elId}]`;
+  if (bridgedLiveIds.has(elId)) {
+    return false;
+  }
+
+  const existing = await getPriorMessages(localId, DEFAULT_HISTORY_LIMIT);
+  if (existing.some((m) => typeof m.content === "string" && m.content.includes(marker))) {
+    bridgedLiveIds.add(elId);
+    return false;
+  }
+
+  let turns = transcriptToTurns(data.transcript);
+  if (!turns.length && data.summary && String(data.summary).trim()) {
+    turns = [
+      {
+        role: "assistant",
+        content: `${marker}\n[Resumen de la llamada en vivo]\n${String(data.summary).trim().slice(0, 4000)}`,
+      },
+    ];
+  } else if (turns.length) {
+    turns = turns.map((t, i) =>
+      i === 0
+        ? { ...t, content: `${marker}\n${t.content}` }
+        : t
+    );
+  }
+
+  if (!turns.length) {
+    return false;
+  }
+
+  try {
+    await appendMessages(localId, turns);
+    bridgedLiveIds.add(elId);
+    metrics.live_bridge_ok += 1;
+    logHistoryEvent("live_bridge_ok", {
+      conversationId: localId.slice(0, 8),
+      elevenlabsId: elId.slice(0, 12),
+      turns: turns.length,
+    });
+    return true;
+  } catch (err) {
+    metrics.live_bridge_failed += 1;
+    logHistoryEvent("live_bridge_failed", {
+      conversationId: localId.slice(0, 8),
+      message: err && err.message ? err.message : String(err),
+    });
+    return false;
+  }
+}
+
+/**
  * @param {string} conversationId
  * @param {string} reservationId
  */
 async function linkReservation(conversationId, reservationId) {
   const sb = getSupabase();
-  if (!sb || !conversationId || !reservationId) {
+  if (!sb || !supabaseReady || !conversationId || !reservationId) {
     return;
   }
   await ensureConversation(conversationId);
@@ -164,7 +555,7 @@ async function linkReservation(conversationId, reservationId) {
  */
 async function getLinkedReservationId(conversationId) {
   const sb = getSupabase();
-  if (!sb || !conversationId) {
+  if (!sb || !supabaseReady || !conversationId) {
     return null;
   }
   const { data, error } = await sb
@@ -179,7 +570,6 @@ async function getLinkedReservationId(conversationId) {
 }
 
 /**
- * Crea o actualiza una fila de conversación en vivo (idempotente por elevenlabs id).
  * @param {{
  *   localConversationId?: string|null;
  *   elevenlabsConversationId: string;
@@ -190,7 +580,7 @@ async function getLinkedReservationId(conversationId) {
  */
 async function createLiveConversation(data) {
   const sb = getSupabase();
-  if (!sb || !data?.elevenlabsConversationId) {
+  if (!sb || !supabaseReady || !data?.elevenlabsConversationId) {
     return null;
   }
   const row = {
@@ -225,13 +615,12 @@ async function createLiveConversation(data) {
 }
 
 /**
- * Actualiza campos de una conversación en vivo.
  * @param {string} elevenlabsConversationId
  * @param {Record<string, unknown>} patch
  */
 async function updateLiveConversation(elevenlabsConversationId, patch = {}) {
   const sb = getSupabase();
-  if (!sb || !elevenlabsConversationId) {
+  if (!sb || !supabaseReady || !elevenlabsConversationId) {
     return null;
   }
   const row = {
@@ -279,7 +668,6 @@ async function updateLiveConversation(elevenlabsConversationId, patch = {}) {
 }
 
 /**
- * Upsert idempotente con datos del webhook post-call.
  * @param {{
  *   localConversationId?: string|null;
  *   elevenlabsConversationId: string;
@@ -295,7 +683,16 @@ async function updateLiveConversation(elevenlabsConversationId, patch = {}) {
  */
 async function savePostCallData(data) {
   const sb = getSupabase();
-  if (!sb || !data?.elevenlabsConversationId) {
+  if (!sb || !supabaseReady || !data?.elevenlabsConversationId) {
+    // Aun sin Supabase, puentear a memoria del chat escrito
+    if (data?.elevenlabsConversationId) {
+      await bridgeLiveToChatHistory({
+        localConversationId: data.localConversationId,
+        elevenlabsConversationId: data.elevenlabsConversationId,
+        transcript: data.transcript,
+        summary: data.summary,
+      });
+    }
     return null;
   }
   const row = {
@@ -340,9 +737,16 @@ async function savePostCallData(data) {
     .maybeSingle();
   if (error) {
     console.warn("savePostCallData:", error.message);
-    return null;
   }
-  return upserted;
+
+  await bridgeLiveToChatHistory({
+    localConversationId: data.localConversationId,
+    elevenlabsConversationId: data.elevenlabsConversationId,
+    transcript: data.transcript,
+    summary: data.summary,
+  });
+
+  return upserted || null;
 }
 
 /**
@@ -350,7 +754,7 @@ async function savePostCallData(data) {
  */
 async function getLiveConversation(elevenlabsConversationId) {
   const sb = getSupabase();
-  if (!sb || !elevenlabsConversationId) {
+  if (!sb || !supabaseReady || !elevenlabsConversationId) {
     return null;
   }
   const { data, error } = await sb
@@ -365,12 +769,30 @@ async function getLiveConversation(elevenlabsConversationId) {
   return data;
 }
 
+/** Solo tests: limpia caché y métricas. */
+function _resetForTests() {
+  memoryCache.clear();
+  bridgedLiveIds.clear();
+  memoryReady = false;
+  supabaseReady = false;
+  lastInitError = null;
+  for (const k of Object.keys(metrics)) {
+    metrics[k] = 0;
+  }
+}
+
 module.exports = {
   initConversationStore,
   ensureStoreReady,
   isStoreReady,
+  isSupabasePersistenceEnabled,
+  getLastInitError,
+  getHistoryMetrics,
   getPriorMessages,
   appendTurn,
+  appendMessages,
+  transcriptToTurns,
+  bridgeLiveToChatHistory,
   linkReservation,
   getLinkedReservationId,
   ensureConversation,
@@ -378,4 +800,6 @@ module.exports = {
   updateLiveConversation,
   savePostCallData,
   getLiveConversation,
+  DEFAULT_HISTORY_LIMIT,
+  _resetForTests,
 };

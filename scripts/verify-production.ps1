@@ -6,6 +6,19 @@ try {
   $health = Invoke-RestMethod -Uri "$BaseUrl/health" -TimeoutSec 20
   Write-Host "[OK] /health" -ForegroundColor Green
   $health | ConvertTo-Json -Compress
+  if (-not $health.chatHistoryEnabled) {
+    Write-Host "[FAIL] chatHistoryEnabled=false (el chat olvidará el contexto)" -ForegroundColor Red
+    exit 1
+  }
+  Write-Host "[OK] chatHistoryEnabled=true" -ForegroundColor Green
+  if (-not $health.supabasePersistenceEnabled) {
+    Write-Host "[WARN] supabasePersistenceEnabled=false — historial solo en memoria del proceso" -ForegroundColor Yellow
+    if ($health.chatHistoryInitError) {
+      Write-Host "       initError: $($health.chatHistoryInitError)" -ForegroundColor Yellow
+    }
+  } else {
+    Write-Host "[OK] supabasePersistenceEnabled=true" -ForegroundColor Green
+  }
 } catch {
   Write-Host "[FAIL] /health -> $($_.Exception.Message)" -ForegroundColor Red
   exit 1

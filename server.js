@@ -14,6 +14,7 @@ const {
   resolveChatActions,
 } = require("./config/chatActions");
 const conversationStore = require("./conversationStore");
+const { isSupabaseConfigured } = require("./supabaseClient");
 const { normalizeAssistantPaymentLinks } = require("./paymentLinks");
 const { normalizeTextForTts } = require("./ttsNormalize");
 const {
@@ -97,6 +98,9 @@ app.use("/api", elevenlabsTokenRouter);
 app.use("/api/agent-tools", agentToolsRouter);
 
 app.get("/health", (_req, res) => {
+  const histStore = getChatHistoryStore();
+  const persist = conversationStore.isSupabasePersistenceEnabled();
+  const initError = conversationStore.getLastInitError();
   res.json({
     ok: true,
     service: "amarte-chatbot",
@@ -104,10 +108,11 @@ app.get("/health", (_req, res) => {
     elevenLabsConfigured: Boolean(process.env.ELEVENLABS_API_KEY),
     elevenLabsAgentConfigured: isElevenLabsAgentConfigured(),
     liveVoiceEnabled: isLiveVoiceEnabled(),
-    chatHistoryEnabled: Boolean(getChatHistoryStore()),
-    supabaseConfigured: Boolean(
-      process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
-    ),
+    chatHistoryEnabled: Boolean(histStore && conversationStore.isStoreReady()),
+    supabaseConfigured: isSupabaseConfigured(),
+    supabasePersistenceEnabled: persist,
+    chatHistoryInitError: persist ? null : initError,
+    chatHistoryMetrics: conversationStore.getHistoryMetrics(),
   });
 });
 
@@ -121,13 +126,13 @@ app.get("/", (_req, res) => {
 </head>
 <body style="font-family:system-ui,sans-serif;max-width:720px;margin:2rem auto;padding:0 1rem;line-height:1.5;">
   <h1>Amarte Chatbot</h1>
-  <p>Backend activo. Endpoints: <code>/chat</code>, <code>/chat/audio</code>, <code>/api/widget-config</code>, <code>/health</code>.</p>
+  <p>Backend activo. Endpoints: <code>/chat</code>, <code>/chat/history</code>, <code>/chat/audio</code>, <code>/api/widget-config</code>, <code>/health</code>.</p>
   <p>Widget: <a href="/amarte-widget.js">/amarte-widget.js</a> · Live: <a href="/amarte-live-agent.bundle.js">/amarte-live-agent.bundle.js</a> · Demo: <a href="/embed-demo.html">/embed-demo.html</a></p>
   <h2>Embed en amartesuite.com</h2>
   <pre style="background:#f4f4f4;padding:1rem;overflow:auto;border-radius:8px;"><code>&lt;script&gt;
   window.AMARTE_CHATBOT_URL = "https://chatbotamarte-production.up.railway.app";
 &lt;/script&gt;
-&lt;script src="https://chatbotamarte-production.up.railway.app/amarte-widget.js?v=710f9a2"&gt;&lt;/script&gt;</code></pre>
+&lt;script src="https://chatbotamarte-production.up.railway.app/amarte-widget.js?v=20260724"&gt;&lt;/script&gt;</code></pre>
 </body>
 </html>`);
 });
@@ -142,21 +147,34 @@ function enableChatHistoryStore(reason) {
   try {
     conversationStore.initConversationStore();
     chatHistoryStore = conversationStore;
+    const persist = conversationStore.isSupabasePersistenceEnabled();
     console.log(
-      `Historial de chat: Supabase (chatbot_conversations / chatbot_messages)${reason ? ` [${reason}]` : ""}`
+      `Historial de chat: memoria=on supabase=${persist ? "on" : "off"}${reason ? ` [${reason}]` : ""}`
     );
+    if (!persist) {
+      console.warn(
+        "Historial: sin persistencia Supabase:",
+        conversationStore.getLastInitError() || "desconocido"
+      );
+    }
     return true;
   } catch (e) {
-    chatHistoryStore = null;
-    console.warn("Historial de chat deshabilitado:", e.message);
-    return false;
+    // Memoria debe seguir disponible; reintento mínimo
+    try {
+      conversationStore.ensureStoreReady();
+      chatHistoryStore = conversationStore;
+    } catch {
+      chatHistoryStore = null;
+    }
+    console.warn("Historial de chat: init parcial:", e.message);
+    return Boolean(chatHistoryStore);
   }
 }
 
 enableChatHistoryStore("startup");
 
 /**
- * Asegura store de historial antes de leer/escribir (reintento lazy).
+ * Store de historial (memoria + Supabase opcional). Siempre intenta habilitar.
  */
 function getChatHistoryStore() {
   if (chatHistoryStore && conversationStore.isStoreReady()) {
@@ -164,7 +182,14 @@ function getChatHistoryStore() {
   }
   if (conversationStore.ensureStoreReady()) {
     chatHistoryStore = conversationStore;
-    console.log("Historial de chat: Supabase habilitado (lazy)");
+    if (!conversationStore.isSupabasePersistenceEnabled()) {
+      console.warn(
+        "Historial: memoria activa sin Supabase:",
+        conversationStore.getLastInitError() || "desconocido"
+      );
+    } else {
+      console.log("Historial de chat: Supabase habilitado (lazy)");
+    }
     return chatHistoryStore;
   }
   return null;
@@ -418,6 +443,60 @@ async function synthesizeElevenLabs(text) {
   return Buffer.from(ab);
 }
 
+/**
+ * Formatea mensajes de historial para la UI del widget.
+ * @param {Array<{ role: string; content: string }>} rows
+ */
+function formatHistoryForUi(rows) {
+  return (Array.isArray(rows) ? rows : [])
+    .filter(
+      (m) =>
+        m &&
+        (m.role === "user" || m.role === "assistant") &&
+        typeof m.content === "string"
+    )
+    .map((m) => {
+      if (m.role === "user") {
+        return { role: "user", content: m.content, options: [] };
+      }
+      const built = buildAssistantResponse(m.content);
+      const reply = normalizeAssistantPaymentLinks(
+        stripOptionsBlock(built.reply || m.content)
+      );
+      // Quitar marcador interno de puente live en la UI
+      const content = reply.replace(/^\[live:[^\]]+\]\s*/i, "").trim();
+      return {
+        role: "assistant",
+        content: content || reply,
+        options: Array.isArray(built.options) ? built.options : [],
+      };
+    });
+}
+
+// GET /chat/history — rehidratar panel del widget
+app.get("/chat/history", async (req, res) => {
+  try {
+    const conversationId = sanitizeConversationId(req.query.conversationId);
+    if (!conversationId) {
+      return res.status(400).json({ error: "conversationId inválido", messages: [] });
+    }
+    const histStore = getChatHistoryStore();
+    if (!histStore) {
+      return res.json({ messages: [], historyEnabled: false });
+    }
+    const prior = await histStore.getPriorMessages(conversationId);
+    return res.json({
+      messages: formatHistoryForUi(prior),
+      historyEnabled: true,
+      supabasePersistenceEnabled:
+        conversationStore.isSupabasePersistenceEnabled(),
+    });
+  } catch (err) {
+    console.error("Error en /chat/history:", err);
+    return res.status(500).json({ error: "No se pudo cargar el historial", messages: [] });
+  }
+});
+
 // POST /chat — solo texto, sin audio de respuesta
 app.post("/chat", async (req, res) => {
   try {
@@ -431,13 +510,22 @@ app.post("/chat", async (req, res) => {
     }
     const conversationId = sanitizeConversationId(rawConvId);
     const histStore = getChatHistoryStore();
+    if (conversationId && !histStore) {
+      console.warn(
+        JSON.stringify({
+          event: "history_store_unavailable",
+          conversationId: conversationId.slice(0, 8),
+          ts: new Date().toISOString(),
+        })
+      );
+    }
     const priorMessages =
       conversationId && histStore
         ? await histStore.getPriorMessages(conversationId)
         : [];
     if (conversationId) {
       console.log(
-        `Historial ${conversationId.slice(0, 8)}…: ${priorMessages.length} msgs (store=${Boolean(histStore)})`
+        `Historial ${conversationId.slice(0, 8)}…: ${priorMessages.length} msgs (store=${Boolean(histStore)} persist=${conversationStore.isSupabasePersistenceEnabled()})`
       );
     }
 
@@ -465,7 +553,14 @@ app.post("/chat", async (req, res) => {
           { pageUrl, roomName }
         );
       } catch (histErr) {
-        console.warn("appendTurn:", histErr.message || histErr);
+        console.warn(
+          JSON.stringify({
+            event: "history_write_failed",
+            conversationId: conversationId.slice(0, 8),
+            message: histErr.message || String(histErr),
+            ts: new Date().toISOString(),
+          })
+        );
       }
     }
 
@@ -551,7 +646,14 @@ app.post(
             { pageUrl, roomName }
           );
         } catch (histErr) {
-          console.warn("appendTurn:", histErr.message || histErr);
+          console.warn(
+            JSON.stringify({
+              event: "history_write_failed",
+              conversationId: conversationId.slice(0, 8),
+              message: histErr.message || String(histErr),
+              ts: new Date().toISOString(),
+            })
+          );
         }
       }
 

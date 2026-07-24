@@ -108,6 +108,10 @@
     }
   }
 
+  /** Evita rehidratar el historial más de una vez por carga de página. */
+  var historyHydrated = false;
+  var historyHydrating = false;
+
   /** Zona horaria del hotel (cotizaciones y “hoy/mañana”). */
   var BOGOTA_TZ = "America/Bogota";
 
@@ -1051,6 +1055,65 @@
   }
 
   /**
+   * Restaura burbujas desde el servidor (mismo conversationId en localStorage).
+   */
+  function hydrateHistoryFromServer() {
+    if (historyHydrated || historyHydrating || !BACKEND_URL) {
+      return;
+    }
+    if (typeof messagesEl === "undefined" || !messagesEl) {
+      return;
+    }
+    if (messagesEl.querySelector(".amarte-msg")) {
+      historyHydrated = true;
+      return;
+    }
+    historyHydrating = true;
+    var id = getConversationId();
+    fetch(
+      BACKEND_URL +
+        "/chat/history?conversationId=" +
+        encodeURIComponent(id),
+      { method: "GET", credentials: "omit" }
+    )
+      .then(function (res) {
+        return res.json().catch(function () {
+          return { messages: [] };
+        });
+      })
+      .then(function (data) {
+        historyHydrating = false;
+        historyHydrated = true;
+        if (!data || !Array.isArray(data.messages) || !data.messages.length) {
+          return;
+        }
+        if (messagesEl.querySelector(".amarte-msg")) {
+          return;
+        }
+        for (var i = 0; i < data.messages.length; i++) {
+          var m = data.messages[i];
+          if (!m || typeof m.content !== "string" || !m.content.trim()) {
+            continue;
+          }
+          if (m.role === "user") {
+            appendMessage("user", m.content, null);
+          } else {
+            appendMessage(
+              "bot",
+              m.content,
+              Array.isArray(m.options) ? m.options : []
+            );
+          }
+        }
+        scrollMessagesToBottom();
+      })
+      .catch(function () {
+        historyHydrating = false;
+        historyHydrated = true;
+      });
+  }
+
+  /**
    * Muestra u oculta el indicador de escritura del asistente.
    * @param {boolean} show - true para mostrar, false para ocultar
    */
@@ -1556,6 +1619,7 @@
       rootEl.classList.toggle("amarte-chat-open", isOpen);
       launcher.setAttribute("aria-expanded", isOpen ? "true" : "false");
       if (isOpen) {
+        hydrateHistoryFromServer();
         inputEl.focus();
         scrollMessagesToBottom();
       }
@@ -1633,6 +1697,7 @@
           rootEl.classList.add("amarte-chat-open");
           launcher.setAttribute("aria-expanded", "true");
         }
+        hydrateHistoryFromServer();
         inputEl.focus();
         scrollMessagesToBottom();
         var msg = initialMessage != null ? String(initialMessage).trim() : "";
@@ -1653,6 +1718,7 @@
           rootEl.classList.add("amarte-chat-open");
           launcher.setAttribute("aria-expanded", "true");
         }
+        hydrateHistoryFromServer();
         // Mismo gesto de usuario: iniciar en vivo sin segundo clic de consentimiento.
         beginLiveConversation();
       },
@@ -1666,6 +1732,9 @@
         closeLiveConsent();
       },
     };
+
+    // Precarga historial en segundo plano tras montar el DOM del widget
+    hydrateHistoryFromServer();
   }
 
   /**
