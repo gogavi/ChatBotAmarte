@@ -1297,9 +1297,9 @@
     }
 
     addField("nombre", "Nombre completo", "text", true);
-    addField("whatsapp", "WhatsApp", "tel", true);
+    addField("documento", "Documento de identidad", "text", true);
     addField("correo", "Correo (opcional)", "email", false);
-    addField("documento", "Documento (opcional)", "text", false);
+    addField("whatsapp", "WhatsApp", "tel", true);
     addSelect("tipo", "Suite o plan", reservationFormCatalog.tipos);
     addSelect("pack_tiempo", "Duración", reservationFormCatalog.packs);
 
@@ -1355,10 +1355,16 @@
       errEl.textContent = "";
 
       var nombre = String(formControl(form, "nombre").value || "").trim();
+      var documento = String(formControl(form, "documento").value || "").trim();
       var whatsapp = String(formControl(form, "whatsapp").value || "").trim();
       var digits = whatsapp.replace(/\D/g, "");
       if (!nombre) {
         errEl.textContent = "Indica tu nombre completo.";
+        errEl.classList.add("amarte-show");
+        return;
+      }
+      if (!documento) {
+        errEl.textContent = "Indica tu documento de identidad.";
         errEl.classList.add("amarte-show");
         return;
       }
@@ -1375,7 +1381,7 @@
         nombre: nombre,
         whatsapp: whatsapp,
         correo: String(formControl(form, "correo").value || "").trim(),
-        documento: String(formControl(form, "documento").value || "").trim(),
+        documento: documento,
         tipo: String(formControl(form, "tipo").value || "").trim(),
         pack_tiempo: String(formControl(form, "pack_tiempo").value || "").trim(),
         fecha_reserva: String(

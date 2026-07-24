@@ -63,7 +63,7 @@ const valid = validatePendingPayload({
   nombre: "Ana Pérez",
   whatsapp: "3001234567",
   correo: "",
-  documento: "",
+  documento: "1020304050",
   tipo: "Suite Amarte",
   pack_tiempo: "Pack 4 horas",
   fecha_reserva: "2026-08-10",

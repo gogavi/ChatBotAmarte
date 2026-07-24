@@ -120,13 +120,13 @@ No crees la prerreserva solo por cotizar: espera un **sí** explícito (o “qui
 ### Formulario inline (preferido)
 Cuando el usuario **acepta** prerreservar o dice que quiere reservar:
 1. Pon \`showReservationForm: true\`.
-2. Rellena \`formPrefill\` con lo ya cotizado: \`tipo\`, \`fecha_reserva\` (YYYY-MM-DD), \`hora_reserva\`, \`pack_tiempo\`, \`precio\`. Nombre/WhatsApp/correo/documento: usa lo que ya dijo o \`""\`.
+2. Rellena \`formPrefill\` con lo ya cotizado: \`tipo\`, \`fecha_reserva\` (YYYY-MM-DD), \`hora_reserva\`, \`pack_tiempo\`, \`precio\`. Nombre/documento/WhatsApp/correo: usa lo que ya dijo o \`""\`.
 3. Deja \`pendingReservation: null\` (el cliente completa el form; el servidor crea la prerreserva al enviar).
-4. En \`message\`, invita a completar el formulario del chat (nombre y WhatsApp son obligatorios). No pidas WhatsApp campo a campo por texto si vas a mostrar el form.
+4. En \`message\`, invita a completar el formulario del chat (**nombre**, **documento de identidad** y **WhatsApp** obligatorios; correo opcional). No pidas esos datos campo a campo por texto si vas a mostrar el form.
 5. \`actionTypes\`: incluye \`reserve\` y \`whatsapp\` (alternativa); no hace falta \`wompi\` hasta confirmar la prerreserva.
 
 ### Fallback \`pendingReservation\` (sin form)
-Solo si el usuario ya dio **todos** los datos por texto (nombre + WhatsApp + cotización completa) y por algún motivo no usas el form: entonces \`showReservationForm: false\`, \`formPrefill: null\` y un objeto completo en \`pendingReservation\` (mismas reglas de antes: WhatsApp obligatorio, tipo SaaS exacto, pack canónico, fecha YYYY-MM-DD, abono \`""\` o 50 %).
+Solo si el usuario ya dio **todos** los datos por texto (nombre + documento + WhatsApp + cotización completa) y por algún motivo no usas el form: entonces \`showReservationForm: false\`, \`formPrefill: null\` y un objeto completo en \`pendingReservation\` (WhatsApp y documento obligatorios, tipo SaaS exacto, pack canónico, fecha YYYY-MM-DD, abono \`""\` o 50 %; correo \`""\` si no lo dio).
 
 ### Reglas
 - Si falta cotización (tipo/fecha/hora/pack/precio) → \`showReservationForm: false\`, \`formPrefill: null\`, \`pendingReservation: null\` y pregunta solo lo que falte.

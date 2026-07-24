@@ -260,6 +260,9 @@ function validatePendingPayload(payload) {
     typeof p.correo === "string" ? p.correo.trim().slice(0, 200) : "";
   const documento =
     typeof p.documento === "string" ? p.documento.trim().slice(0, 40) : "";
+  if (!documento) {
+    return { ok: false, error: "Falta el documento de identidad" };
+  }
 
   const precioNum = parseInt(precio, 10);
   const abonoRaw =

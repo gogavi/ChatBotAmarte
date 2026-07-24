@@ -30,7 +30,7 @@ const ok = validatePendingPayload({
   nombre: "Ana Pérez",
   whatsapp: "3001234567",
   correo: "ana@example.com",
-  documento: "",
+  documento: "1234567890",
   tipo: "Suite VIP Jacuzzi",
   fecha_reserva: "2026-07-20",
   hora_reserva: "2:00 PM",
@@ -42,11 +42,26 @@ assert.strictEqual(ok.ok, true);
 if (ok.ok) {
   assert.strictEqual(ok.data.tipo, "Suite Jacuzzi");
   assert.strictEqual(ok.data.abono, "120000");
+  assert.strictEqual(ok.data.documento, "1234567890");
 }
+
+const noDoc = validatePendingPayload({
+  nombre: "Ana Pérez",
+  whatsapp: "3001234567",
+  correo: "",
+  documento: "",
+  tipo: "Suite Amarte",
+  fecha_reserva: "2026-07-20",
+  hora_reserva: "14:00",
+  pack_tiempo: "Pack 4 horas",
+  precio: "90000",
+});
+assert.strictEqual(noDoc.ok, false);
 
 const bad = validatePendingPayload({
   nombre: "Ana",
   whatsapp: "1",
+  documento: "123",
   tipo: "Suite Amarte",
   fecha_reserva: "2026-07-20",
   hora_reserva: "14:00",
