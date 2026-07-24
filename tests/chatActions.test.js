@@ -42,23 +42,64 @@ const structured = tryParseStructuredMartinaReply(
     message: "La Suite VIP Jacuzzi está disponible.",
     actionTypes: ["reserve", "wompi"],
     pendingReservation: null,
+    showReservationForm: false,
+    formPrefill: null,
   })
 );
 assert.ok(structured);
 assert.strictEqual(structured.message, "La Suite VIP Jacuzzi está disponible.");
 assert.strictEqual(structured.pendingReservation, null);
+assert.strictEqual(structured.showReservationForm, false);
 
 const built = buildAssistantResponse(
   JSON.stringify({
     message: "Cotización lista.",
     actionTypes: ["reserve"],
     pendingReservation: null,
+    showReservationForm: false,
+    formPrefill: null,
   })
 );
 assert.strictEqual(built.reply, "Cotización lista.");
 assert.strictEqual(built.options.length, 1);
 assert.strictEqual(built.options[0].url, CHAT_ACTIONS.reserve.url);
 assert.ok(!built.options[0].url.includes("checkout.wompi"));
+assert.strictEqual(built.showReservationForm, false);
+
+const withForm = buildAssistantResponse(
+  JSON.stringify({
+    message: "Completa el formulario.",
+    actionTypes: ["reserve", "whatsapp"],
+    pendingReservation: {
+      nombre: "X",
+      whatsapp: "300",
+      correo: "",
+      documento: "",
+      tipo: "Suite Amarte",
+      fecha_reserva: "2026-08-01",
+      hora_reserva: "14:00",
+      pack_tiempo: "Pack 4 horas",
+      precio: "90000",
+      abono: "",
+    },
+    showReservationForm: true,
+    formPrefill: {
+      nombre: "",
+      whatsapp: "",
+      correo: "",
+      documento: "",
+      tipo: "Suite Amarte",
+      fecha_reserva: "2026-08-01",
+      hora_reserva: "14:00",
+      pack_tiempo: "Pack 4 horas",
+      precio: "90000",
+    },
+  })
+);
+assert.strictEqual(withForm.showReservationForm, true);
+assert.strictEqual(withForm.pendingReservation, null);
+assert.ok(withForm.formPrefill);
+assert.strictEqual(withForm.formPrefill.tipo, "Suite Amarte");
 
 const legacy = buildAssistantResponse(
   `Texto visible\n[OPTIONS]\n[{"label":"X","url":"https://evil.example/pay"}]\n[/OPTIONS]`

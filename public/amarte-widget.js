@@ -359,6 +359,40 @@
    */
   var LIVE_VOICE_COMING_SOON = true;
 
+  /** Catálogo para el formulario de prerreserva (desde /api/widget-config). */
+  var reservationFormCatalog = {
+    tipos: [
+      "Suite Amarte",
+      "Suite Árabe",
+      "Suite Cabaña",
+      "Suite Diamante",
+      "Suite Gamer",
+      "Suite Gold",
+      "Suite Gótica",
+      "Suite Jacuzzi",
+      "Suite Movimiento",
+      "Suite Queen",
+      "Suite Rubí",
+      "Suite Sencilla",
+      "Suite Zafiro",
+      "Plan Amarte",
+      "Plan Cabaña",
+      "Plan Cama Movimiento",
+      "Plan Cumpleaños",
+      "Plan Erótico",
+      "Plan Húmedo",
+      "Plan Movimiento",
+      "Plan Romántico",
+    ],
+    packs: [
+      "Pack 4 horas",
+      "Pack 6 horas",
+      "Pack 8 horas",
+      "Pack 12 horas",
+      "Día Hotelero",
+    ],
+  };
+
   var LIVE_ACTION_URLS = {
     reservation: DEFAULT_QUICK_RESERVE,
     reserve: DEFAULT_QUICK_RESERVE,
@@ -797,18 +831,33 @@
   }
 
   /**
-   * Consulta config pública y muestra el botón en vivo si aplica.
+   * Consulta config pública: catálogo del form + voz en vivo si aplica.
    */
-  function initLiveVoiceFeature() {
-    if (LIVE_VOICE_COMING_SOON) {
-      applyLiveComingSoonUi();
-      return;
-    }
+  function loadWidgetConfig() {
     fetch(BACKEND_URL + "/api/widget-config")
       .then(function (res) {
         return res.json();
       })
       .then(function (cfg) {
+        if (
+          cfg &&
+          cfg.reservationForm &&
+          Array.isArray(cfg.reservationForm.tipos) &&
+          cfg.reservationForm.tipos.length
+        ) {
+          reservationFormCatalog.tipos = cfg.reservationForm.tipos.slice();
+        }
+        if (
+          cfg &&
+          cfg.reservationForm &&
+          Array.isArray(cfg.reservationForm.packs) &&
+          cfg.reservationForm.packs.length
+        ) {
+          reservationFormCatalog.packs = cfg.reservationForm.packs.slice();
+        }
+        if (LIVE_VOICE_COMING_SOON) {
+          return;
+        }
         if (cfg && cfg.voiceAgentProvider) {
           liveState.provider = String(cfg.voiceAgentProvider);
         }
@@ -820,8 +869,18 @@
         }
       })
       .catch(function () {
-        // Silencioso: el chat sigue funcionando
+        // Silencioso: el chat sigue con catálogo embebido
       });
+  }
+
+  /**
+   * Consulta config pública y muestra el botón en vivo si aplica.
+   */
+  function initLiveVoiceFeature() {
+    if (LIVE_VOICE_COMING_SOON) {
+      applyLiveComingSoonUi();
+    }
+    loadWidgetConfig();
   }
 
   /** UI temporal: botón visible pero deshabilitado (“Próximamente”). */
@@ -918,6 +977,24 @@
       "box-shadow:0 4px 12px rgba(216,27,96,0.35);transition:background 0.2s ease,transform 0.15s ease;}" +
       ".amarte-widget-send:hover{background:#AD1457;transform:scale(1.05);}" +
       ".amarte-widget-send:disabled{opacity:0.5;cursor:not-allowed;}" +
+      ".amarte-rsv-form{width:100%;max-width:100%;margin-top:4px;padding:12px;" +
+      "background:#fff;border:1px solid #e0e0e0;border-radius:14px;box-sizing:border-box;}" +
+      ".amarte-rsv-form-title{margin:0 0 10px;font-size:0.9rem;font-weight:600;color:#1A1A3D;}" +
+      ".amarte-rsv-field{display:flex;flex-direction:column;gap:4px;margin-bottom:10px;}" +
+      ".amarte-rsv-field label{font-size:0.75rem;font-weight:600;color:#555;}" +
+      ".amarte-rsv-field input,.amarte-rsv-field select{width:100%;box-sizing:border-box;" +
+      "border:1px solid rgba(0,0,0,0.12);border-radius:10px;padding:9px 11px;font-size:0.9rem;" +
+      "font-family:inherit;color:#0D0D11;background:#fff;outline:none;}" +
+      ".amarte-rsv-field input:focus,.amarte-rsv-field select:focus{border-color:#D81B60;}" +
+      ".amarte-rsv-field input:disabled,.amarte-rsv-field select:disabled{opacity:0.7;background:#f5f5f5;}" +
+      ".amarte-rsv-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;}" +
+      ".amarte-rsv-error{display:none;margin:0 0 8px;font-size:0.8rem;color:#c62828;}" +
+      ".amarte-rsv-error.amarte-show{display:block;}" +
+      ".amarte-rsv-submit{width:100%;border:none;border-radius:999px;padding:11px 14px;" +
+      "background:#D81B60;color:#fff;font-weight:600;font-size:0.9rem;cursor:pointer;}" +
+      ".amarte-rsv-submit:hover{background:#AD1457;}" +
+      ".amarte-rsv-submit:disabled{opacity:0.55;cursor:not-allowed;}" +
+      ".amarte-rsv-form.amarte-done{opacity:0.72;pointer-events:none;}" +
       "@media (max-width:768px){.amarte-widget-launcher{right:16px;font-size:0.82rem;padding:6px 6px 6px 14px;" +
       "bottom:calc(16px + env(safe-area-inset-bottom,0px));max-width:min(92vw,320px);}" +
       ".amarte-widget-launcher-icon{width:40px;height:40px;}" +
@@ -1114,6 +1191,285 @@
   }
 
   /**
+   * @param {HTMLElement} selectEl
+   * @param {string[]} options
+   * @param {string} selected
+   */
+  function fillSelectOptions(selectEl, options, selected) {
+    selectEl.innerHTML = "";
+    var empty = document.createElement("option");
+    empty.value = "";
+    empty.textContent = "Selecciona…";
+    selectEl.appendChild(empty);
+    var list = Array.isArray(options) ? options : [];
+    var found = false;
+    for (var i = 0; i < list.length; i++) {
+      var opt = document.createElement("option");
+      opt.value = list[i];
+      opt.textContent = list[i];
+      if (selected && list[i] === selected) {
+        opt.selected = true;
+        found = true;
+      }
+      selectEl.appendChild(opt);
+    }
+    if (selected && !found) {
+      var extra = document.createElement("option");
+      extra.value = selected;
+      extra.textContent = selected;
+      extra.selected = true;
+      selectEl.appendChild(extra);
+    }
+  }
+
+  /**
+   * @param {HTMLElement} formEl
+   * @param {string} name
+   * @returns {HTMLInputElement|HTMLSelectElement|null}
+   */
+  function formControl(formEl, name) {
+    return formEl.querySelector('[name="' + name + '"]');
+  }
+
+  /**
+   * Formulario inline de prerreserva en el hilo del chat.
+   * @param {Record<string, string>|null|undefined} prefill
+   */
+  function appendReservationForm(prefill) {
+    if (!messagesEl) return;
+    var data = prefill && typeof prefill === "object" ? prefill : {};
+    var row = document.createElement("div");
+    row.className = "amarte-msg amarte-msg-bot";
+
+    var form = document.createElement("form");
+    form.className = "amarte-rsv-form";
+    form.setAttribute("novalidate", "novalidate");
+    form.setAttribute("aria-label", "Formulario de prerreserva");
+
+    var title = document.createElement("p");
+    title.className = "amarte-rsv-form-title";
+    title.textContent = "Completa tu prerreserva";
+    form.appendChild(title);
+
+    function addField(name, labelText, type, required) {
+      var wrap = document.createElement("div");
+      wrap.className = "amarte-rsv-field";
+      var lab = document.createElement("label");
+      lab.setAttribute("for", "amarte-rsv-" + name);
+      lab.textContent = labelText + (required ? " *" : "");
+      var input = document.createElement("input");
+      input.type = type || "text";
+      input.name = name;
+      input.id = "amarte-rsv-" + name;
+      input.autocomplete = "on";
+      if (required) input.required = true;
+      if (typeof data[name] === "string" && data[name]) {
+        input.value = data[name];
+      }
+      if (name === "precio" && data.precio) {
+        input.readOnly = true;
+      }
+      wrap.appendChild(lab);
+      wrap.appendChild(input);
+      form.appendChild(wrap);
+      return input;
+    }
+
+    function addSelect(name, labelText, options) {
+      var wrap = document.createElement("div");
+      wrap.className = "amarte-rsv-field";
+      var lab = document.createElement("label");
+      lab.setAttribute("for", "amarte-rsv-" + name);
+      lab.textContent = labelText + " *";
+      var sel = document.createElement("select");
+      sel.name = name;
+      sel.id = "amarte-rsv-" + name;
+      sel.required = true;
+      fillSelectOptions(
+        sel,
+        options,
+        typeof data[name] === "string" ? data[name] : ""
+      );
+      wrap.appendChild(lab);
+      wrap.appendChild(sel);
+      form.appendChild(wrap);
+      return sel;
+    }
+
+    addField("nombre", "Nombre completo", "text", true);
+    addField("whatsapp", "WhatsApp", "tel", true);
+    addField("correo", "Correo (opcional)", "email", false);
+    addField("documento", "Documento (opcional)", "text", false);
+    addSelect("tipo", "Suite o plan", reservationFormCatalog.tipos);
+    addSelect("pack_tiempo", "Duración", reservationFormCatalog.packs);
+
+    var rowDates = document.createElement("div");
+    rowDates.className = "amarte-rsv-row";
+    var fechaWrap = document.createElement("div");
+    fechaWrap.className = "amarte-rsv-field";
+    var fechaLab = document.createElement("label");
+    fechaLab.setAttribute("for", "amarte-rsv-fecha_reserva");
+    fechaLab.textContent = "Fecha *";
+    var fechaInput = document.createElement("input");
+    fechaInput.type = "date";
+    fechaInput.name = "fecha_reserva";
+    fechaInput.id = "amarte-rsv-fecha_reserva";
+    fechaInput.required = true;
+    if (data.fecha_reserva) fechaInput.value = data.fecha_reserva;
+    fechaWrap.appendChild(fechaLab);
+    fechaWrap.appendChild(fechaInput);
+    var horaWrap = document.createElement("div");
+    horaWrap.className = "amarte-rsv-field";
+    var horaLab = document.createElement("label");
+    horaLab.setAttribute("for", "amarte-rsv-hora_reserva");
+    horaLab.textContent = "Hora *";
+    var horaInput = document.createElement("input");
+    horaInput.type = "text";
+    horaInput.name = "hora_reserva";
+    horaInput.id = "amarte-rsv-hora_reserva";
+    horaInput.placeholder = "2:00 PM";
+    horaInput.required = true;
+    if (data.hora_reserva) horaInput.value = data.hora_reserva;
+    horaWrap.appendChild(horaLab);
+    horaWrap.appendChild(horaInput);
+    rowDates.appendChild(fechaWrap);
+    rowDates.appendChild(horaWrap);
+    form.appendChild(rowDates);
+
+    addField("precio", "Precio cotizado (COP)", "text", true);
+
+    var errEl = document.createElement("p");
+    errEl.className = "amarte-rsv-error";
+    errEl.setAttribute("role", "alert");
+    form.appendChild(errEl);
+
+    var submitBtn = document.createElement("button");
+    submitBtn.type = "submit";
+    submitBtn.className = "amarte-rsv-submit";
+    submitBtn.textContent = "Confirmar prerreserva";
+    form.appendChild(submitBtn);
+
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      errEl.classList.remove("amarte-show");
+      errEl.textContent = "";
+
+      var nombre = String(formControl(form, "nombre").value || "").trim();
+      var whatsapp = String(formControl(form, "whatsapp").value || "").trim();
+      var digits = whatsapp.replace(/\D/g, "");
+      if (!nombre) {
+        errEl.textContent = "Indica tu nombre completo.";
+        errEl.classList.add("amarte-show");
+        return;
+      }
+      if (digits.length < 7) {
+        errEl.textContent = "Indica un WhatsApp válido (mín. 7 dígitos).";
+        errEl.classList.add("amarte-show");
+        return;
+      }
+
+      var payload = {
+        conversationId: getConversationId(),
+        pageUrl: window.location.href || "",
+        roomName: document.title || "",
+        nombre: nombre,
+        whatsapp: whatsapp,
+        correo: String(formControl(form, "correo").value || "").trim(),
+        documento: String(formControl(form, "documento").value || "").trim(),
+        tipo: String(formControl(form, "tipo").value || "").trim(),
+        pack_tiempo: String(formControl(form, "pack_tiempo").value || "").trim(),
+        fecha_reserva: String(
+          formControl(form, "fecha_reserva").value || ""
+        ).trim(),
+        hora_reserva: String(
+          formControl(form, "hora_reserva").value || ""
+        ).trim(),
+        precio: String(formControl(form, "precio").value || "").trim(),
+        abono: "",
+      };
+
+      if (
+        !payload.tipo ||
+        !payload.pack_tiempo ||
+        !payload.fecha_reserva ||
+        !payload.hora_reserva ||
+        !payload.precio
+      ) {
+        errEl.textContent = "Completa suite, duración, fecha, hora y precio.";
+        errEl.classList.add("amarte-show");
+        return;
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Registrando…";
+
+      fetch(BACKEND_URL + "/reservations/pending", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+        .then(function (res) {
+          return res.json().then(function (body) {
+            return { res: res, body: body };
+          });
+        })
+        .then(function (result) {
+          var body = result.body || {};
+          var reply =
+            typeof body.reply === "string" && body.reply
+              ? body.reply
+              : body.error
+                ? String(body.error)
+                : "No se pudo registrar la prerreserva.";
+          var options = Array.isArray(body.options) ? body.options : [];
+          if (result.res.ok && body.ok) {
+            form.classList.add("amarte-done");
+            submitBtn.textContent = "Prerreserva enviada";
+            appendMessage("bot", reply, options);
+          } else if (result.res.status === 409) {
+            form.classList.add("amarte-done");
+            submitBtn.textContent = "Ya registrada";
+            appendMessage("bot", reply, options);
+          } else {
+            submitBtn.disabled = false;
+            submitBtn.textContent = "Confirmar prerreserva";
+            errEl.textContent = body.error || reply;
+            errEl.classList.add("amarte-show");
+          }
+        })
+        .catch(function (err) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = "Confirmar prerreserva";
+          errEl.textContent = "Error de conexión. Inténtalo de nuevo.";
+          errEl.classList.add("amarte-show");
+          console.error("Amarte reservation form:", err);
+        });
+    });
+
+    row.appendChild(form);
+    if (typingEl && typingEl.parentNode === messagesEl) {
+      messagesEl.insertBefore(row, typingEl);
+    } else {
+      messagesEl.appendChild(row);
+    }
+    scrollMessagesToBottom();
+  }
+
+  /**
+   * Tras respuesta del bot: burbuja + formulario si aplica.
+   * @param {object} data
+   * @param {{audioBase64?: string, audioMimeType?: string}|null} [extras]
+   */
+  function handleBotChatPayload(data, extras) {
+    var reply = typeof data.reply === "string" ? data.reply : "";
+    var options = Array.isArray(data.options) ? data.options : [];
+    appendMessage("bot", reply || " ", options, extras || null);
+    if (data.showReservationForm) {
+      appendReservationForm(data.formPrefill || {});
+    }
+  }
+
+  /**
    * Muestra u oculta el indicador de escritura del asistente.
    * @param {boolean} show - true para mostrar, false para ocultar
    */
@@ -1160,8 +1516,6 @@
         var transcript =
           typeof data.transcript === "string" ? data.transcript : "";
         appendMessage("user", transcript || "(Nota de voz)", null);
-        var reply = typeof data.reply === "string" ? data.reply : "";
-        var options = Array.isArray(data.options) ? data.options : [];
         var extras = null;
         if (data.audioBase64 && data.audioMimeType) {
           extras = {
@@ -1169,7 +1523,7 @@
             audioMimeType: data.audioMimeType,
           };
         }
-        appendMessage("bot", reply || " ", options, extras);
+        handleBotChatPayload(data, extras);
       })
       .catch(function (err) {
         setTyping(false);
@@ -1357,12 +1711,7 @@
       .then(function (data) {
         // Oculta el indicador de escritura
         setTyping(false);
-        // Extrae texto de respuesta o cadena vacía
-        var reply = typeof data.reply === "string" ? data.reply : "";
-        // Extrae array de opciones o lista vacía
-        var options = Array.isArray(data.options) ? data.options : [];
-        // Muestra mensaje del bot con enlaces opcionales
-        appendMessage("bot", reply || " ", options);
+        handleBotChatPayload(data, null);
       })
       .catch(function (err) {
         // Oculta typing en caso de error

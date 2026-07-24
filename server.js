@@ -19,6 +19,7 @@ const { normalizeAssistantPaymentLinks } = require("./paymentLinks");
 const { normalizeTextForTts } = require("./ttsNormalize");
 const {
   createPendingReservation,
+  buildPrereservaConfirmMessage,
 } = require("./reservationService");
 const {
   isLiveVoiceEnabled,
@@ -281,6 +282,8 @@ function sanitizeHistoryContent(content) {
  *   options: Array<{label:string;url:string}>;
  *   rawText: string;
  *   reservationId?: string | null;
+ *   showReservationForm: boolean;
+ *   formPrefill: Record<string, string> | null;
  * }>}
  */
 async function runChat(input) {
@@ -340,6 +343,8 @@ async function runChat(input) {
   let reply = normalizeAssistantPaymentLinks(built.reply);
   let options = built.options;
   let reservationId = null;
+  let showReservationForm = Boolean(built.showReservationForm);
+  let formPrefill = built.formPrefill || null;
 
   const histForLink = getChatHistoryStore();
   const existingReservationId =
@@ -347,7 +352,13 @@ async function runChat(input) {
       ? await histForLink.getLinkedReservationId(conversationId)
       : null;
 
+  if (existingReservationId) {
+    showReservationForm = false;
+    formPrefill = null;
+  }
+
   if (
+    !showReservationForm &&
     built.pendingReservation &&
     !existingReservationId &&
     process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -360,10 +371,7 @@ async function runChat(input) {
       if (conversationId && histForLink) {
         await histForLink.linkReservation(conversationId, created.id);
       }
-      const confirmLine = `\n\n✅ Dejé tu prerreserva pendiente de pago en nuestro sistema (**${created.row.tipo}**, ${created.row.fecha_reserva} ${created.row.hora_reserva}, ${created.row.pack_tiempo}). Un asesor la verá en el panel. Puedes abonar con Wompi o continuar por WhatsApp.`;
-      if (!reply.includes("prerreserva")) {
-        reply = `${reply.trim()}${confirmLine}`;
-      }
+      reply = buildPrereservaConfirmMessage(created.row);
       options = resolveChatActions(["wompi", "whatsapp"]);
       console.log(`Prerreserva creada: ${created.id} (${created.row.tipo})`);
     } else {
@@ -377,12 +385,23 @@ async function runChat(input) {
     );
   }
 
+  if (showReservationForm) {
+    options = resolveChatActions(["reserve", "whatsapp"]);
+  }
+
   // Historial: solo el texto visible (sin JSON ni URLs de botones).
   const rawText = reply;
   console.log(
-    `IA respondió a ${safeRoom}: ${options.length} botones (${built.actionTypes.join(", ")}).`
+    `IA respondió a ${safeRoom}: ${options.length} botones (${built.actionTypes.join(", ")})${showReservationForm ? " +form" : ""}.`
   );
-  return { reply, options, rawText, reservationId };
+  return {
+    reply,
+    options,
+    rawText,
+    reservationId,
+    showReservationForm,
+    formPrefill: showReservationForm ? formPrefill || {} : null,
+  };
 }
 
 /**
@@ -568,10 +587,103 @@ app.post("/chat", async (req, res) => {
       reply: result.reply,
       options: result.options,
       ...(result.reservationId ? { reservationId: result.reservationId } : {}),
+      showReservationForm: Boolean(result.showReservationForm),
+      formPrefill: result.showReservationForm
+        ? result.formPrefill || {}
+        : null,
     });
   } catch (err) {
     console.error("Error en /chat:", err);
     return res.status(500).json({ error: "No se pudo procesar la conversación" });
+  }
+});
+
+/**
+ * Crea prerreserva desde el formulario inline del widget.
+ */
+app.post("/reservations/pending", async (req, res) => {
+  try {
+    const body = req.body || {};
+    const conversationId = sanitizeConversationId(body.conversationId);
+    if (!conversationId) {
+      return res.status(400).json({ ok: false, error: "conversationId inválido" });
+    }
+
+    const histStore = getChatHistoryStore();
+    const existingReservationId = histStore
+      ? await histStore.getLinkedReservationId(conversationId)
+      : null;
+    if (existingReservationId) {
+      return res.status(409).json({
+        ok: false,
+        error: "Ya existe una prerreserva en esta conversación",
+        reservationId: existingReservationId,
+        reply:
+          "Ya tienes una prerreserva registrada en esta conversación. Un asesor la verá en el panel; puedes abonar con Wompi o escribir por WhatsApp.",
+        options: resolveChatActions(["wompi", "whatsapp"]),
+      });
+    }
+
+    const payload = {
+      nombre: body.nombre,
+      whatsapp: body.whatsapp,
+      correo: body.correo || "",
+      documento: body.documento || "",
+      tipo: body.tipo,
+      fecha_reserva: body.fecha_reserva,
+      hora_reserva: body.hora_reserva,
+      pack_tiempo: body.pack_tiempo,
+      precio: body.precio,
+      abono: body.abono || "",
+    };
+
+    const created = await createPendingReservation(payload, {
+      conversationId,
+    });
+    if (!created.ok) {
+      return res.status(400).json({
+        ok: false,
+        error: created.error,
+        reply: `No pude registrar la prerreserva (${created.error}). Revisa los datos o usa WhatsApp.`,
+        options: resolveChatActions(["reserve", "whatsapp", "wompi"]),
+      });
+    }
+
+    if (histStore) {
+      await histStore.linkReservation(conversationId, created.id);
+      try {
+        const pageUrl =
+          typeof body.pageUrl === "string" ? body.pageUrl : "";
+        const roomName =
+          typeof body.roomName === "string" ? body.roomName : "";
+        await histStore.appendTurn(
+          conversationId,
+          "[Formulario de reserva enviado]",
+          buildPrereservaConfirmMessage(created.row),
+          { pageUrl, roomName }
+        );
+      } catch (histErr) {
+        console.warn(
+          "appendTurn form:",
+          histErr && histErr.message ? histErr.message : histErr
+        );
+      }
+    }
+
+    const reply = buildPrereservaConfirmMessage(created.row);
+    console.log(`Prerreserva (form): ${created.id} (${created.row.tipo})`);
+    return res.json({
+      ok: true,
+      reservationId: created.id,
+      reply,
+      options: resolveChatActions(["wompi", "whatsapp"]),
+    });
+  } catch (err) {
+    console.error("Error en /reservations/pending:", err);
+    return res.status(500).json({
+      ok: false,
+      error: "No se pudo crear la prerreserva",
+    });
   }
 });
 
@@ -624,7 +736,14 @@ app.post(
 
       const temporal = extractTemporalContext(req.body || {});
 
-      const { reply, options, rawText, reservationId } = await runChat({
+      const {
+        reply,
+        options,
+        rawText,
+        reservationId,
+        showReservationForm,
+        formPrefill,
+      } = await runChat({
         message: transcript,
         roomName,
         pageUrl,
@@ -681,6 +800,8 @@ app.post(
         transcript,
         ttsStatus,
         ...(reservationId ? { reservationId } : {}),
+        showReservationForm: Boolean(showReservationForm),
+        formPrefill: showReservationForm ? formPrefill || {} : null,
         ...(audioBase64
           ? { audioBase64, audioMimeType }
           : {}),

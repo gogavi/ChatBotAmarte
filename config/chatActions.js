@@ -95,6 +95,42 @@ const PENDING_RESERVATION_SCHEMA = {
   ],
 };
 
+/** Prefill del formulario inline (null = no mostrar form). */
+const FORM_PREFILL_SCHEMA = {
+  anyOf: [
+    { type: "null" },
+    {
+      type: "object",
+      properties: {
+        nombre: { type: "string" },
+        whatsapp: { type: "string" },
+        correo: { type: "string" },
+        documento: { type: "string" },
+        tipo: { type: "string" },
+        fecha_reserva: {
+          type: "string",
+          description: "YYYY-MM-DD o vacío",
+        },
+        hora_reserva: { type: "string" },
+        pack_tiempo: { type: "string" },
+        precio: { type: "string" },
+      },
+      required: [
+        "nombre",
+        "whatsapp",
+        "correo",
+        "documento",
+        "tipo",
+        "fecha_reserva",
+        "hora_reserva",
+        "pack_tiempo",
+        "precio",
+      ],
+      additionalProperties: false,
+    },
+  ],
+};
+
 const MARTINA_REPLY_JSON_SCHEMA = {
   name: "martina_reply",
   strict: true,
@@ -116,11 +152,52 @@ const MARTINA_REPLY_JSON_SCHEMA = {
         },
       },
       pendingReservation: PENDING_RESERVATION_SCHEMA,
+      showReservationForm: {
+        type: "boolean",
+        description:
+          "true = el widget muestra el formulario inline de prerreserva",
+      },
+      formPrefill: FORM_PREFILL_SCHEMA,
     },
-    required: ["message", "actionTypes", "pendingReservation"],
+    required: [
+      "message",
+      "actionTypes",
+      "pendingReservation",
+      "showReservationForm",
+      "formPrefill",
+    ],
     additionalProperties: false,
   },
 };
+
+/**
+ * @param {unknown} raw
+ * @returns {Record<string, string> | null}
+ */
+function normalizeFormPrefill(raw) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return null;
+  }
+  const p = /** @type {Record<string, unknown>} */ (raw);
+  const keys = [
+    "nombre",
+    "whatsapp",
+    "correo",
+    "documento",
+    "tipo",
+    "fecha_reserva",
+    "hora_reserva",
+    "pack_tiempo",
+    "precio",
+  ];
+  /** @type {Record<string, string>} */
+  const out = {};
+  for (const k of keys) {
+    const v = typeof p[k] === "string" ? p[k].trim() : "";
+    out[k] = v.slice(0, k === "nombre" || k === "correo" ? 200 : 80);
+  }
+  return out;
+}
 
 /**
  * @param {unknown} actionTypes
@@ -195,6 +272,9 @@ function tryParseStructuredMartinaReply(content) {
         parsed.pendingReservation === undefined
           ? null
           : parsed.pendingReservation,
+      showReservationForm: Boolean(parsed.showReservationForm),
+      formPrefill:
+        parsed.formPrefill === undefined ? null : parsed.formPrefill,
     };
   } catch {
     return null;
@@ -249,6 +329,8 @@ function parseLegacyOptionsReply(rawText) {
  *   options: ChatOption[];
  *   actionTypes: ChatActionType[];
  *   pendingReservation: unknown;
+ *   showReservationForm: boolean;
+ *   formPrefill: Record<string, string> | null;
  * }}
  */
 function buildAssistantResponse(modelContent) {
@@ -261,11 +343,20 @@ function buildAssistantResponse(modelContent) {
             structured.actionTypes.filter((t) => ACTION_TYPE_SET.has(t))
           )
         : [...DEFAULT_ACTION_TYPES];
+    const showReservationForm = Boolean(structured.showReservationForm);
+    const formPrefill = showReservationForm
+      ? normalizeFormPrefill(structured.formPrefill)
+      : null;
     return {
       reply: stripOptionsBlock(structured.message),
       options,
       actionTypes: actionTypes.length ? actionTypes : [...DEFAULT_ACTION_TYPES],
-      pendingReservation: structured.pendingReservation ?? null,
+      // Si se muestra el form, no crear prerreserva automática desde el JSON
+      pendingReservation: showReservationForm
+        ? null
+        : structured.pendingReservation ?? null,
+      showReservationForm,
+      formPrefill: formPrefill || (showReservationForm ? normalizeFormPrefill({}) : null),
     };
   }
 
@@ -277,6 +368,8 @@ function buildAssistantResponse(modelContent) {
     options,
     actionTypes: [...DEFAULT_ACTION_TYPES],
     pendingReservation: null,
+    showReservationForm: false,
+    formPrefill: null,
   };
 }
 
@@ -290,4 +383,5 @@ module.exports = {
   tryParseStructuredMartinaReply,
   parseLegacyOptionsReply,
   buildAssistantResponse,
+  normalizeFormPrefill,
 };

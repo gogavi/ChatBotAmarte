@@ -5,7 +5,10 @@ const {
   resolveFecha,
   resolvePrecio,
   validatePendingPayload,
+  buildPrereservaConfirmMessage,
+  firstNameUpper,
 } = require("../reservationService");
+const { payment } = require("../config/amarteCatalog");
 
 assert.strictEqual(resolveTipo("Suite VIP Jacuzzi"), "Suite Jacuzzi");
 assert.strictEqual(resolveTipo("suite diamante"), "Suite Diamante");
@@ -51,5 +54,18 @@ const bad = validatePendingPayload({
   precio: "90000",
 });
 assert.strictEqual(bad.ok, false);
+
+assert.strictEqual(firstNameUpper("John Doe"), "JOHN");
+const confirm = buildPrereservaConfirmMessage({
+  nombre: "John Doe",
+  precio: "420000",
+  abono: "210000",
+});
+assert.ok(confirm.includes("Hola JOHN,"));
+assert.ok(confirm.includes("pre-reserva"));
+assert.ok(confirm.includes("$210.000"));
+assert.ok(confirm.includes("$315.000"));
+assert.ok(confirm.includes(payment.checkoutUrl));
+assert.ok(confirm.includes("Compártenos el comprobante"));
 
 console.log("reservationService tests passed");

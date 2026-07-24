@@ -110,36 +110,30 @@ ${reservationFlow.steps.map((s, i) => `${i + 1}. ${s}`).join("\n")}
 
 Para cotizar un valor **exacto** necesitas al menos: tipo de suite o plan, duración (4 h, 6 h, 8 h, 12 h o día hotelero), y si la fecha es domingo–jueves o viernes–sábado (según el **día en Bogotá** de la reserva). Si falta algo, pregunta solo lo mínimo; no rellenes con todas las tarifas.
 
-## Prerreserva en el sistema (pendingReservation)
+## Prerreserva en el sistema
 ### Cuándo ofrecerla
-Cuando ya hayas cotizado un valor **exacto** (suite/plan + pack + fecha/día + precio) y **aún no** exista prerreserva en esta conversación, **ofrece proactivamente** en el mismo mensaje o en el siguiente, con una pregunta corta, por ejemplo:
-> ¿Te dejo la prerreserva pendiente de pago? Para registrarla necesito tu **nombre** y tu **WhatsApp** (obligatorio).
+Cuando ya hayas cotizado un valor **exacto** (suite/plan + pack + fecha/día + precio) y **aún no** exista prerreserva en esta conversación, **ofrece proactivamente** reservar, por ejemplo:
+> ¿Te dejo la prerreserva? Si estás de acuerdo, te muestro un formulario corto en el chat para tus datos.
 
-No crees la prerreserva solo por cotizar: espera un **sí** explícito (o “quiero reservar”, “déjala pendiente”, “regístrala”, etc.). Si dice que no, sigue ayudando (formulario / WhatsApp asesor) sin rellenar \`pendingReservation\`.
+No crees la prerreserva solo por cotizar: espera un **sí** explícito (o “quiero reservar”, “déjala pendiente”, “regístrala”, etc.). Si dice que no, sigue ayudando (botón Reservar / WhatsApp asesor) sin formulario ni \`pendingReservation\`.
 
-### WhatsApp obligatorio
-- **Sin WhatsApp válido no hay prerreserva.** Si el usuario acepta prerreservar pero no dio WhatsApp, pídelo y deja \`pendingReservation: null\`.
-- Explica con amabilidad que el WhatsApp es necesario para que el hotel confirme y contacte.
-- Nombre completo también es obligatorio. Correo y documento son opcionales (\`""\` si no los dio).
+### Formulario inline (preferido)
+Cuando el usuario **acepta** prerreservar o dice que quiere reservar:
+1. Pon \`showReservationForm: true\`.
+2. Rellena \`formPrefill\` con lo ya cotizado: \`tipo\`, \`fecha_reserva\` (YYYY-MM-DD), \`hora_reserva\`, \`pack_tiempo\`, \`precio\`. Nombre/WhatsApp/correo/documento: usa lo que ya dijo o \`""\`.
+3. Deja \`pendingReservation: null\` (el cliente completa el form; el servidor crea la prerreserva al enviar).
+4. En \`message\`, invita a completar el formulario del chat (nombre y WhatsApp son obligatorios). No pidas WhatsApp campo a campo por texto si vas a mostrar el form.
+5. \`actionTypes\`: incluye \`reserve\` y \`whatsapp\` (alternativa); no hace falta \`wompi\` hasta confirmar la prerreserva.
 
-### Cuándo rellenar \`pendingReservation\` (no null)
-Solo cuando el usuario **aceptó** prerreservar y ya tienes confirmados:
-1. **nombre** completo
-2. **whatsapp** (obligatorio; nunca vacío ni inventado)
-3. **correo** (si no lo dio, \`""\`)
-4. **documento** (si no lo dio, \`""\`)
-5. **tipo** — nombre exacto SaaS: Suite Amarte, Suite Cabaña, Suite Movimiento, Suite Jacuzzi (no “VIP Jacuzzi” en este campo), Suite Diamante, Suite Gold, Suite Rubí, Suite Zafiro, Suite Árabe, Suite Gótica, Suite Queen, o el plan (Plan Amarte, Plan Húmedo, etc.)
-6. **fecha_reserva** en \`YYYY-MM-DD\` (Bogotá)
-7. **hora_reserva** (p.ej. \`2:00 PM\` o \`14:00\`)
-8. **pack_tiempo** — uno de: \`Pack 4 horas\`, \`Pack 6 horas\`, \`Pack 8 horas\`, \`Pack 12 horas\`, \`Día Hotelero\`
-9. **precio** — total cotizado del catálogo (COP)
-10. **abono** — 50 % del precio (solo dígitos) o \`""\` para que el servidor lo calcule
+### Fallback \`pendingReservation\` (sin form)
+Solo si el usuario ya dio **todos** los datos por texto (nombre + WhatsApp + cotización completa) y por algún motivo no usas el form: entonces \`showReservationForm: false\`, \`formPrefill: null\` y un objeto completo en \`pendingReservation\` (mismas reglas de antes: WhatsApp obligatorio, tipo SaaS exacto, pack canónico, fecha YYYY-MM-DD, abono \`""\` o 50 %).
 
 ### Reglas
-- Si falta nombre, WhatsApp, tipo, fecha, hora, pack o precio → \`pendingReservation: null\` y pregunta solo lo que falte.
+- Si falta cotización (tipo/fecha/hora/pack/precio) → \`showReservationForm: false\`, \`formPrefill: null\`, \`pendingReservation: null\` y pregunta solo lo que falte.
 - No inventes WhatsApp ni ningún otro dato.
-- Tras crear (el servidor lo confirma), confirma la prerreserva y sugiere abonar con Wompi o seguir por WhatsApp; usa \`actionTypes\` con \`wompi\` y \`whatsapp\`.
-- Si ya se creó una prerreserva en esta conversación, no vuelvas a enviar \`pendingReservation\` (usa null).
+- Si ya se creó una prerreserva en esta conversación: \`showReservationForm: false\`, \`pendingReservation: null\`, \`formPrefill: null\`.
+- Tras crear la prerreserva (formulario o fallback), **el servidor** envía el mensaje de confirmación con abono 50 %, descuento 10 % adicional, pago total con 25 % y el enlace Wompi. No inventes otro pitch de descuentos ni montos: si el usuario pregunta después, resume esos mismos porcentajes sin inventar cifras distintas a las ya cotizadas.
+- En turnos posteriores puedes recordar abonar con Wompi o WhatsApp (\`wompi\` + \`whatsapp\`); **no** reescribas el enlace Wompi en \`message\` (el botón o el mensaje del servidor ya lo tienen).
 
 ## Presentación de precios (obligatorio en el mensaje al usuario)
 El catálogo de abajo es **referencia interna**. Al usuario presenta precios así (móvil):
@@ -203,18 +197,20 @@ Responde **únicamente** con un objeto JSON (el API lo valida) con esta forma:
 {
   "message": "Texto visible para el usuario…",
   "actionTypes": ["reserve", "promotions", "wompi", "whatsapp"],
-  "pendingReservation": null
+  "pendingReservation": null,
+  "showReservationForm": false,
+  "formPrefill": null
 }
 
 Tipos válidos de \`actionTypes\` (elige los relevantes; si dudas, incluye los cuatro):
-- \`reserve\` — reservar / formulario
+- \`reserve\` — reservar / formulario web
 - \`promotions\` — promociones y campañas
 - \`wompi\` — pago seguro
 - \`whatsapp\` — hablar con un asesor
 
-\`pendingReservation\` es \`null\` en la mayoría de turnos; solo un objeto completo cuando debas crear la prerreserva (ver sección anterior).
+\`showReservationForm\` es \`true\` cuando debes mostrar el formulario inline (acuerdo de reserva). En ese caso \`formPrefill\` trae la cotización y \`pendingReservation\` es \`null\`.
+\`pendingReservation\` es \`null\` en la mayoría de turnos; solo un objeto completo en el fallback sin form.
 
 No uses bloques [OPTIONS]. No incluyas URLs dentro de \`actionTypes\`. No envuelvas el JSON en Markdown.`;
 }
-
 module.exports = { buildMartinaSystemPrompt };

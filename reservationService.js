@@ -1,4 +1,5 @@
 const { getSupabase, isSupabaseConfigured } = require("./supabaseClient");
+const { payment, formatCop } = require("./config/amarteCatalog");
 
 /** Packs válidos en el SaaS (`rate_types`). */
 const VALID_PACKS = Object.freeze([
@@ -348,6 +349,63 @@ async function createPendingReservation(payload, opts = {}) {
   return { ok: true, id: data.id, row: data };
 }
 
+/**
+ * Primer nombre en mayúsculas para el saludo (ej. "John Doe" → "JOHN").
+ * @param {unknown} nombre
+ */
+function firstNameUpper(nombre) {
+  const raw = typeof nombre === "string" ? nombre.trim() : "";
+  if (!raw) {
+    return "HUÉSPED";
+  }
+  const first = raw.split(/\s+/)[0] || raw;
+  return first.toLocaleUpperCase("es-CO");
+}
+
+/**
+ * Mensaje post-prerreserva: abono 50% (+10% dto hotel) y pago total 25% dto.
+ * @param {{ nombre?: unknown; precio?: unknown; abono?: unknown }} row
+ * @returns {string}
+ */
+function buildPrereservaConfirmMessage(row) {
+  const precioNum = parseInt(String(row?.precio ?? "").replace(/\D/g, ""), 10);
+  const abonoNum = parseInt(String(row?.abono ?? "").replace(/\D/g, ""), 10);
+  const total =
+    Number.isFinite(precioNum) && precioNum > 0 ? precioNum : 0;
+  const abono =
+    Number.isFinite(abonoNum) && abonoNum > 0
+      ? abonoNum
+      : total > 0
+        ? Math.round(total * 0.5)
+        : 0;
+  const totalConDto =
+    total > 0 ? Math.round(total * 0.75) : 0;
+  const name = firstNameUpper(row?.nombre);
+  const checkoutUrl = payment.checkoutUrl;
+
+  return [
+    `Hola ${name},`,
+    ``,
+    `Tienes una pre-reserva con nosotros.`,
+    `¿Quieres confirmarla?`,
+    ``,
+    `DESCUENTO ESPECIAL!`,
+    `Separa tu reserva abonando el 50% (${formatCop(abono)})`,
+    `y recibe un 10% de descuento adicional en el hotel.`,
+    ``,
+    `────────`,
+    `¿QUIERES AHORRAR AÚN MÁS?`,
+    `Pago total con 25% de descuento.`,
+    `Valor a pagar: ${formatCop(totalConDto)}`,
+    ``,
+    `────────`,
+    `Realiza el abono/pago aquí:`,
+    checkoutUrl,
+    ``,
+    `Compártenos el comprobante al finalizar el abono/pago`,
+  ].join("\n");
+}
+
 module.exports = {
   VALID_PACKS,
   VALID_TIPOS,
@@ -357,4 +415,6 @@ module.exports = {
   resolvePrecio,
   validatePendingPayload,
   createPendingReservation,
+  buildPrereservaConfirmMessage,
+  firstNameUpper,
 };
