@@ -66,19 +66,46 @@ function resolveSuiteVideoFromShowcase(showcase) {
 }
 
 /**
- * Si hay cotización exacta ($X.XXX) y aún no está el bloque promo, lo anexa.
+ * Quita bloques de descuento (IA o canónicos) para reinsertar el formato oficial.
+ * @param {string} text
+ * @returns {string}
+ */
+function stripPaymentPromoBlocks(text) {
+  let t = String(text || "");
+  const markers = [
+    /\n*##\s*[^\n]*DESCUENTO ESPECIAL[^\n]*/i,
+    /\n*(?:🔥\s*)?¡?DESCUENTO ESPECIAL!?/i,
+    /\n*##\s*[^\n]*[Qq]uieres ahorrar[^\n]*/i,
+    /\n*¿?QUIERES AHORRAR AÚN MÁS\??/i,
+    /\n*─{3,}/,
+  ];
+  let cut = -1;
+  for (let i = 0; i < markers.length; i++) {
+    const m = t.match(markers[i]);
+    if (m && typeof m.index === "number") {
+      cut = cut === -1 ? m.index : Math.min(cut, m.index);
+    }
+  }
+  if (cut >= 0) {
+    t = t.slice(0, cut);
+  }
+  return t.replace(/\n{3,}/g, "\n\n").trim();
+}
+
+/**
+ * Si hay cotización exacta, asegura el bloque canónico de abono/25% (con títulos ##).
+ * Reemplaza versiones planas de la IA. No aplica a Promo Jacuzzi ni listas de packs.
  * @param {string} reply
  * @returns {string}
  */
 function ensurePromoBlockOnExactQuote(reply) {
-  const text = String(reply || "");
+  let text = String(reply || "");
   if (!text.trim()) return text;
-  if (/DESCUENTO ESPECIAL/i.test(text)) return text;
-  if (/¿Quieres ahorrar aún más\?/i.test(text)) return text;
-  if (/Pago total con 25%/i.test(text)) return text;
-  if (/25%\s*OFF/i.test(text)) return text;
-  // Promo Jacuzzi: no acumular abono 50%+10% ni 25% OFF
-  if (isPromoJacuzziQuoteText(text)) return text;
+
+  // Promo Jacuzzi: no acumular; además limpia si la IA inventó descuentos
+  if (isPromoJacuzziQuoteText(text)) {
+    return stripPaymentPromoBlocks(text);
+  }
 
   const packPriceLines =
     (text.match(/(4|6|8|12)\s*h[^\n]*\$[\d.]+/gi) || []).length +
@@ -92,6 +119,8 @@ function ensurePromoBlockOnExactQuote(reply) {
       text
     );
   if (!exactQuote) return text;
+
+  text = stripPaymentPromoBlocks(text);
 
   const amounts = [...text.matchAll(/\$\s*([\d.]+)/g)].map((m) =>
     parseInt(String(m[1]).replace(/\./g, ""), 10)
@@ -117,9 +146,10 @@ function enrichChatReply(reply, suiteShowcase) {
   return { reply: withPromo, suiteVideo };
 }
 
-module.exports = {
+  module.exports = {
   sanitizeProductLinksInReply,
   resolveSuiteVideoFromShowcase,
+  stripPaymentPromoBlocks,
   ensurePromoBlockOnExactQuote,
   enrichChatReply,
 };

@@ -38,6 +38,8 @@ const promo = formatQuoteWithPaymentOptions(240000);
 assert.ok(promo.includes("DESCUENTO ESPECIAL"));
 assert.ok(promo.includes("$120.000"));
 assert.ok(promo.includes("$180.000"));
+assert.ok(promo.includes("Valor a pagar en el hotel"));
+assert.ok(promo.includes("$108.000"));
 
 const withPromo = ensurePromoBlockOnExactQuote(
   "**Suite VIP Jacuzzi** · 8 h · domingo–jueves: **$240.000**"
@@ -46,6 +48,24 @@ assert.ok(withPromo.includes("DESCUENTO ESPECIAL"));
 assert.ok(withPromo.includes("Valor a pagar"));
 assert.ok(withPromo.includes("## 🔥"));
 assert.ok(withPromo.includes("## 💎"));
+assert.ok(withPromo.includes("Valor a pagar en el hotel"));
+
+const plainAiDiscount = ensurePromoBlockOnExactQuote(
+  [
+    "Suite Amarte · 4 h · viernes–sábado: $120.000",
+    "DESCUENTO ESPECIAL!",
+    "Separa tu reserva abonando el 50% ($60.000)",
+    "y recibe un 10% de descuento adicional en el hotel.",
+    "────────",
+    "¿QUIERES AHORRAR AÚN MÁS?",
+    "Pago total con 25% de descuento.",
+    "Valor a pagar: $90.000",
+  ].join("\n")
+);
+assert.ok(plainAiDiscount.includes("## 🔥"));
+assert.ok(plainAiDiscount.includes("Valor a pagar en el hotel"));
+assert.ok(plainAiDiscount.includes("$54.000"));
+assert.ok(!plainAiDiscount.includes("────────"));
 
 const packList = ensurePromoBlockOnExactQuote(
   [

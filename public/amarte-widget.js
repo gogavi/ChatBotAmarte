@@ -331,7 +331,7 @@
    */
   function renderBotMessageHtml(raw) {
     var t = escapeHtml(String(raw || ""));
-    // Títulos de oferta (## …) → magenta con énfasis
+    // Títulos de oferta (## …) → magenta
     t = t.replace(
       /(^|\n)##\s+([^\n]+)/g,
       function (_full, lead, title) {
@@ -341,6 +341,25 @@
           title.trim() +
           "</span>"
         );
+      }
+    );
+    // Fallback: títulos planos (si la IA no usó ##)
+    t = t.replace(
+      /(^|\n)((?:🔥\s*)?¡?DESCUENTO ESPECIAL!?)/gi,
+      function (_full, lead, title) {
+        return lead + '<span class="amarte-promo-title">' + title.trim() + "</span>";
+      }
+    );
+    t = t.replace(
+      /(^|\n)((?:💎\s*)?¿?QUIERES AHORRAR AÚN MÁS\??)/gi,
+      function (_full, lead, title) {
+        return lead + '<span class="amarte-promo-title">' + title.trim() + "</span>";
+      }
+    );
+    t = t.replace(
+      /(^|\n)((?:🔥\s*)?Promo ya aplicada)/gi,
+      function (_full, lead, title) {
+        return lead + '<span class="amarte-promo-title">' + title.trim() + "</span>";
       }
     );
     // Enlaces Markdown [etiqueta](https://...) — fichas de suite → botón de video

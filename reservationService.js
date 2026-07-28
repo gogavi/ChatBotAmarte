@@ -466,11 +466,15 @@ function formatQuoteWithPaymentOptions(totalCop, opts = {}) {
     Number.isFinite(abonoOpt) && abonoOpt > 0
       ? Math.round(abonoOpt)
       : Math.round(total * 0.5);
+  const restante = Math.max(total - abono, 0);
+  // 10% de descuento adicional sobre el saldo a pagar en el hotel
+  const hotelConDto = Math.round(restante * 0.9);
   const totalConDto = Math.round(total * 0.75);
   const lines = [
     `## 🔥 ¡DESCUENTO ESPECIAL!`,
     `Separa tu reserva abonando solo el **50%** (**${formatCop(abono)}**)`,
     `y al llegar al hotel recibes un **10% adicional** de descuento. 💖🥂`,
+    `Valor a pagar en el hotel: **${formatCop(hotelConDto)}**`,
     ``,
     `## 💎 ¿Quieres ahorrar aún más?`,
     `Paga el total hoy y llévate **25% OFF**. ✨`,
