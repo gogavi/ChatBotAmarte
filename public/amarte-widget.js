@@ -331,6 +331,18 @@
    */
   function renderBotMessageHtml(raw) {
     var t = escapeHtml(String(raw || ""));
+    // Títulos de oferta (## …) → magenta con énfasis
+    t = t.replace(
+      /(^|\n)##\s+([^\n]+)/g,
+      function (_full, lead, title) {
+        return (
+          lead +
+          '<span class="amarte-promo-title">' +
+          title.trim() +
+          "</span>"
+        );
+      }
+    );
     // Enlaces Markdown [etiqueta](https://...) — fichas de suite → botón de video
     t = t.replace(
       /\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,
@@ -1081,10 +1093,10 @@
       "background:rgba(255,255,255,0.15);display:flex;align-items:center;justify-content:center;}" +
       ".amarte-widget-root.amarte-chat-open .amarte-widget-launcher{opacity:0;visibility:hidden;pointer-events:none;transform:scale(0.92);}" +
       ".amarte-widget-panel{position:fixed;right:24px;left:auto;bottom:96px;width:min(380px,calc(100vw - 32px));" +
-      "max-height:min(560px,calc(100vh - 120px));background:rgba(255,255,255,0.75);border:1px solid #fff;" +
+      "max-height:min(560px,calc(100vh - 120px));background:rgba(255,255,255,0.92);border:1px solid #fff;" +
       "border-radius:25px;box-shadow:0 12px 40px rgba(0,0,0,0.1);backdrop-filter:blur(15px);-webkit-backdrop-filter:blur(15px);" +
       "z-index:99999;display:flex;flex-direction:column;overflow:hidden;opacity:0;" +
-      "transform:translateY(12px) scale(0.98);pointer-events:none;" +
+      "transform:translateY(12px) scale(0.98);pointer-events:none;color:#1a1a1a;color-scheme:light;" +
       "transition:opacity 0.25s ease,transform 0.25s ease;}" +
       ".amarte-widget-panel.amarte-open{opacity:1;transform:translateY(0) scale(1);pointer-events:auto;}" +
       ".amarte-widget-header{background:transparent;padding:16px 18px 12px;" +
@@ -1123,6 +1135,9 @@
       ".amarte-suite-video-close:hover{color:#E91E63;}" +
       ".amarte-suite-video-player{display:block;width:100%;max-height:min(70vh,560px);background:#000;}" +
       ".amarte-msg-bot .amarte-bubble-inner{background:#fff;border:1px solid #e0e0e0;color:#1a1a1a;}" +
+      ".amarte-msg-bot .amarte-promo-title{display:block;margin:12px 0 6px;color:#D81B60;" +
+      "font-weight:800;font-size:1.05rem;letter-spacing:0.01em;line-height:1.3;}" +
+      ".amarte-msg-bot .amarte-promo-title:first-child{margin-top:2px;}" +
       ".amarte-msg-user .amarte-bubble-inner{background:linear-gradient(145deg,#E91E63,#D81B60);color:#ffffff;}" +
       ".amarte-typing{font-size:0.85rem;color:#666;font-style:italic;padding:4px 0 8px;}" +
       ".amarte-options{margin-top:8px;display:flex;flex-wrap:wrap;gap:8px;}" +
@@ -1138,8 +1153,10 @@
       ".amarte-dt-field label{font-size:0.72rem;font-weight:600;color:#555;}" +
       ".amarte-dt-field input,.amarte-dt-field select{width:100%;box-sizing:border-box;" +
       "border:1px solid rgba(0,0,0,0.12);border-radius:10px;padding:9px 10px;font-size:0.88rem;" +
-      "background:#fff;color:#1a1a1a;}" +
+      "background:#fff !important;color:#1a1a1a !important;-webkit-text-fill-color:#1a1a1a !important;" +
+      "caret-color:#1a1a1a !important;opacity:1 !important;color-scheme:light;}" +
       ".amarte-dt-field input:focus,.amarte-dt-field select:focus{border-color:#D81B60;outline:none;}" +
+      ".amarte-dt-field select option{color:#1a1a1a !important;background:#fff !important;}" +
       ".amarte-dt-time-row{display:flex;gap:6px;}" +
       ".amarte-dt-time-row select{flex:1;min-width:0;}" +
       ".amarte-dt-submit{width:100%;margin-top:4px;padding:11px 14px;border:none;border-radius:999px;" +
@@ -1156,12 +1173,15 @@
       ".amarte-widget-quick-row .amarte-opt-link{text-align:center;}" +
       "@media (min-width:769px){.amarte-quick-call{display:none !important;}}" +
       ".amarte-widget-input{flex:1;border:1px solid rgba(0,0,0,0.12);border-radius:999px;" +
-      "padding:12px 16px;font-size:0.95rem;outline:none;background:rgba(255,255,255,0.95);" +
-      "box-shadow:none;color:#0D0D11;caret-color:#0D0D11;" +
+      "padding:12px 16px;font-size:0.95rem;outline:none;background:#fff !important;" +
+      "box-shadow:none;color:#0D0D11 !important;caret-color:#0D0D11 !important;" +
       "font-family:'Jost',system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;" +
-      "font-weight:400;-webkit-text-fill-color:#0D0D11;}" +
-      ".amarte-widget-input::placeholder{color:#929095;opacity:1;-webkit-text-fill-color:#929095;}" +
+      "font-weight:400;-webkit-text-fill-color:#0D0D11 !important;opacity:1 !important;color-scheme:light;}" +
+      ".amarte-widget-input::placeholder{color:#929095 !important;opacity:1;-webkit-text-fill-color:#929095 !important;}" +
       ".amarte-widget-input:focus{border-color:#D81B60;}" +
+      ".amarte-widget-input:-webkit-autofill,.amarte-widget-input:-webkit-autofill:hover," +
+      ".amarte-widget-input:-webkit-autofill:focus{-webkit-text-fill-color:#0D0D11 !important;" +
+      "box-shadow:0 0 0 1000px #fff inset !important;transition:background-color 9999s ease-out 0s;}" +
       ".amarte-widget-mic{background:transparent;color:#D81B60;border:none;border-radius:50%;" +
       "width:40px;height:40px;padding:0;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;" +
       "transition:background 0.2s ease,color 0.2s ease;}" +
@@ -1176,25 +1196,32 @@
       ".amarte-widget-send:hover{background:#AD1457;transform:scale(1.05);}" +
       ".amarte-widget-send:disabled{opacity:0.5;cursor:not-allowed;}" +
       ".amarte-rsv-form{width:100%;max-width:100%;margin-top:4px;padding:12px;" +
-      "background:#fff;border:1px solid #e0e0e0;border-radius:14px;box-sizing:border-box;}" +
+      "background:#fff;border:1px solid #e0e0e0;border-radius:14px;box-sizing:border-box;color:#1a1a1a;}" +
       ".amarte-rsv-form-title{margin:0 0 10px;font-size:0.9rem;font-weight:600;color:#1A1A3D;}" +
       ".amarte-rsv-field{display:flex;flex-direction:column;gap:4px;margin-bottom:10px;}" +
-      ".amarte-rsv-field label{font-size:0.75rem;font-weight:600;color:#555;}" +
+      ".amarte-rsv-field label,.amarte-rsv-field > div{font-size:0.75rem;font-weight:600;color:#555 !important;}" +
       ".amarte-rsv-field input,.amarte-rsv-field select{width:100%;box-sizing:border-box;" +
       "border:1px solid rgba(0,0,0,0.12);border-radius:10px;padding:9px 11px;font-size:0.9rem;" +
-      "font-family:inherit;color:#0D0D11;background:#fff;outline:none;}" +
+      "font-family:inherit;color:#0D0D11 !important;background:#fff !important;outline:none;" +
+      "-webkit-text-fill-color:#0D0D11 !important;caret-color:#0D0D11 !important;opacity:1 !important;color-scheme:light;}" +
       ".amarte-rsv-field input:focus,.amarte-rsv-field select:focus{border-color:#D81B60;}" +
-      ".amarte-rsv-field input:disabled,.amarte-rsv-field select:disabled{opacity:0.7;background:#f5f5f5;}" +
+      ".amarte-rsv-field input:disabled,.amarte-rsv-field select:disabled{opacity:0.7 !important;background:#f5f5f5 !important;}" +
+      ".amarte-rsv-field input:-webkit-autofill,.amarte-rsv-field input:-webkit-autofill:hover," +
+      ".amarte-rsv-field input:-webkit-autofill:focus{-webkit-text-fill-color:#0D0D11 !important;" +
+      "box-shadow:0 0 0 1000px #fff inset !important;transition:background-color 9999s ease-out 0s;}" +
+      ".amarte-rsv-field select option{color:#0D0D11 !important;background:#fff !important;}" +
       ".amarte-rsv-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;}" +
       ".amarte-rsv-pack-options{display:flex;flex-wrap:wrap;gap:6px;margin-top:2px;}" +
-      ".amarte-rsv-pack-opt{display:inline-flex;cursor:pointer;margin:0;}" +
-      ".amarte-rsv-pack-opt input{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none;}" +
+      ".amarte-rsv-pack-opt{display:inline-flex;cursor:pointer;margin:0;position:relative;}" +
+      ".amarte-rsv-pack-opt input{position:absolute;opacity:0;width:1px;height:1px;margin:0;clip:rect(0,0,0,0);}" +
       ".amarte-rsv-pack-opt span{display:inline-block;padding:8px 11px;border:1px solid rgba(0,0,0,0.14);" +
-      "border-radius:999px;font-size:0.8rem;font-weight:600;color:#1A1A3D;background:#fff;" +
-      "line-height:1.2;transition:background 0.15s ease,color 0.15s ease,border-color 0.15s ease;}" +
+      "border-radius:999px;font-size:0.8rem;font-weight:600;color:#1A1A3D !important;background:#fff !important;" +
+      "line-height:1.2;transition:background 0.15s ease,color 0.15s ease,border-color 0.15s ease;" +
+      "-webkit-text-fill-color:#1A1A3D !important;}" +
       ".amarte-rsv-pack-opt:hover span{border-color:#D81B60;}" +
       ".amarte-rsv-pack-opt input:focus-visible + span{outline:2px solid #D81B60;outline-offset:2px;}" +
-      ".amarte-rsv-pack-opt input:checked + span{background:#D81B60;color:#fff;border-color:#D81B60;}" +
+      ".amarte-rsv-pack-opt input:checked + span{background:#D81B60 !important;color:#fff !important;" +
+      "border-color:#D81B60;-webkit-text-fill-color:#fff !important;}" +
       ".amarte-rsv-error{display:none;margin:0 0 8px;font-size:0.8rem;color:#c62828;}" +
       ".amarte-rsv-error.amarte-show{display:block;}" +
       ".amarte-rsv-submit{width:100%;border:none;border-radius:999px;padding:11px 14px;" +
@@ -1593,18 +1620,37 @@
     return formEl.querySelector('[name="' + name + '"]');
   }
 
+  /** Contador para IDs únicos en formularios de prerreserva (evita choques entre formularios). */
+  var reservationFormSeq = 0;
+
   /**
    * Formulario inline de prerreserva en el hilo del chat.
    * @param {Record<string, string>|null|undefined} prefill
    */
   function appendReservationForm(prefill) {
     if (!messagesEl) return;
+    // Cierra formularios previos aún abiertos para no duplicar IDs ni confundir al usuario
+    var prevForms = messagesEl.querySelectorAll(".amarte-rsv-form:not(.amarte-done)");
+    for (var pf = 0; pf < prevForms.length; pf++) {
+      var prev = prevForms[pf];
+      var prevRow =
+        prev && prev.closest ? prev.closest(".amarte-msg") : null;
+      if (prevRow && prevRow.parentNode) {
+        prevRow.parentNode.removeChild(prevRow);
+      } else if (prev && prev.parentNode) {
+        prev.parentNode.removeChild(prev);
+      }
+    }
+
+    reservationFormSeq += 1;
+    var formId = "amarte-rsv-" + reservationFormSeq;
     var data = prefill && typeof prefill === "object" ? prefill : {};
     var row = document.createElement("div");
     row.className = "amarte-msg amarte-msg-bot";
 
     var form = document.createElement("form");
     form.className = "amarte-rsv-form";
+    form.id = formId;
     form.setAttribute("novalidate", "novalidate");
     form.setAttribute("aria-label", "Formulario de prerreserva");
 
@@ -1613,16 +1659,20 @@
     title.textContent = "Completa tu prerreserva";
     form.appendChild(title);
 
+    function fieldId(name) {
+      return formId + "-" + name;
+    }
+
     function addField(name, labelText, type, required) {
       var wrap = document.createElement("div");
       wrap.className = "amarte-rsv-field";
       var lab = document.createElement("label");
-      lab.setAttribute("for", "amarte-rsv-" + name);
+      lab.setAttribute("for", fieldId(name));
       lab.textContent = labelText + (required ? " *" : "");
       var input = document.createElement("input");
       input.type = type || "text";
       input.name = name;
-      input.id = "amarte-rsv-" + name;
+      input.id = fieldId(name);
       input.autocomplete = "on";
       if (required) input.required = true;
       if (typeof data[name] === "string" && data[name]) {
@@ -1641,11 +1691,11 @@
       var wrap = document.createElement("div");
       wrap.className = "amarte-rsv-field";
       var lab = document.createElement("label");
-      lab.setAttribute("for", "amarte-rsv-" + name);
+      lab.setAttribute("for", fieldId(name));
       lab.textContent = labelText + " *";
       var sel = document.createElement("select");
       sel.name = name;
-      sel.id = "amarte-rsv-" + name;
+      sel.id = fieldId(name);
       sel.required = true;
       fillSelectOptions(
         sel,
@@ -1667,12 +1717,12 @@
       var wrap = document.createElement("div");
       wrap.className = "amarte-rsv-field";
       var lab = document.createElement("div");
-      lab.id = "amarte-rsv-pack_tiempo-label";
+      lab.id = fieldId("pack_tiempo-label");
       lab.textContent = "Duración *";
       var group = document.createElement("div");
       group.className = "amarte-rsv-pack-options";
       group.setAttribute("role", "radiogroup");
-      group.setAttribute("aria-labelledby", "amarte-rsv-pack_tiempo-label");
+      group.setAttribute("aria-labelledby", fieldId("pack_tiempo-label"));
       for (var i = 0; i < packs.length; i++) {
         var pack = packs[i];
         var optLab = document.createElement("label");
@@ -1681,6 +1731,7 @@
         radio.type = "radio";
         radio.name = "pack_tiempo";
         radio.value = pack;
+        radio.id = fieldId("pack_tiempo-" + i);
         radio.setAttribute("aria-label", pack);
         if (i === 0) radio.required = true;
         if (selected && pack === selected) radio.checked = true;
@@ -1708,12 +1759,12 @@
     var fechaWrap = document.createElement("div");
     fechaWrap.className = "amarte-rsv-field";
     var fechaLab = document.createElement("label");
-    fechaLab.setAttribute("for", "amarte-rsv-fecha_reserva");
+    fechaLab.setAttribute("for", fieldId("fecha_reserva"));
     fechaLab.textContent = "Fecha *";
     var fechaInput = document.createElement("input");
     fechaInput.type = "date";
     fechaInput.name = "fecha_reserva";
-    fechaInput.id = "amarte-rsv-fecha_reserva";
+    fechaInput.id = fieldId("fecha_reserva");
     fechaInput.required = true;
     if (data.fecha_reserva) fechaInput.value = data.fecha_reserva;
     fechaWrap.appendChild(fechaLab);
@@ -1721,11 +1772,11 @@
     var horaWrap = document.createElement("div");
     horaWrap.className = "amarte-rsv-field";
     var horaLab = document.createElement("label");
-    horaLab.setAttribute("for", "amarte-rsv-hora_reserva");
+    horaLab.setAttribute("for", fieldId("hora_reserva"));
     horaLab.textContent = "Hora *";
     var horaSelect = document.createElement("select");
     horaSelect.name = "hora_reserva";
-    horaSelect.id = "amarte-rsv-hora_reserva";
+    horaSelect.id = fieldId("hora_reserva");
     horaSelect.required = true;
     fillHourSelectOptions(
       horaSelect,

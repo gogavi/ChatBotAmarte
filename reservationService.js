@@ -413,6 +413,7 @@ function firstNameUpper(nombre) {
 
 /**
  * Bloque de oferta canónica: abono 50% (+10% hotel) y pago total con 25% dto.
+ * Títulos con ## para que el widget los pinte en magenta + emojis.
  * @param {number} totalCop precio de lista
  * @param {{ abono?: number; includeCheckoutLine?: boolean }} [opts]
  * @returns {string}
@@ -430,17 +431,21 @@ function formatQuoteWithPaymentOptions(totalCop, opts = {}) {
       : Math.round(total * 0.5);
   const totalConDto = Math.round(total * 0.75);
   const lines = [
-    `DESCUENTO ESPECIAL!`,
-    `Separa tu reserva abonando el 50% (${formatCop(abono)})`,
-    `y recibe un 10% de descuento adicional en el hotel.`,
+    `## 🔥 ¡DESCUENTO ESPECIAL!`,
+    `Separa tu reserva abonando solo el **50%** (**${formatCop(abono)}**)`,
+    `y al llegar al hotel recibes un **10% adicional** de descuento. 💖🥂`,
     ``,
-    `────────`,
-    `¿QUIERES AHORRAR AÚN MÁS?`,
-    `Pago total con 25% de descuento.`,
-    `Valor a pagar: ${formatCop(totalConDto)}`,
+    `## 💎 ¿Quieres ahorrar aún más?`,
+    `Paga el total hoy y llévate **25% OFF**. ✨`,
+    `Valor a pagar: **${formatCop(totalConDto)}**`,
   ];
   if (opts.includeCheckoutLine) {
-    lines.push(``, `────────`, `Realiza el abono/pago aquí:`, payment.checkoutUrl);
+    lines.push(
+      ``,
+      `## 💳 Paga seguro aquí`,
+      `Realiza el abono o el pago total:`,
+      payment.checkoutUrl
+    );
   }
   return lines.join("\n");
 }

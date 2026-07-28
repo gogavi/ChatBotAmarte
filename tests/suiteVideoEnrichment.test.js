@@ -44,6 +44,20 @@ const withPromo = ensurePromoBlockOnExactQuote(
 );
 assert.ok(withPromo.includes("DESCUENTO ESPECIAL"));
 assert.ok(withPromo.includes("Valor a pagar"));
+assert.ok(withPromo.includes("## 🔥"));
+assert.ok(withPromo.includes("## 💎"));
+
+const packList = ensurePromoBlockOnExactQuote(
+  [
+    "**Suite Diamante** — máximo lujo",
+    "Domingo–jueves:",
+    "- 4 h: **$200.000**",
+    "- 8 h: **$230.000**",
+    "- 12 h: **$280.000**",
+    "- Día hotelero: **$350.000**",
+  ].join("\n")
+);
+assert.ok(!packList.includes("DESCUENTO ESPECIAL"));
 
 const enriched = enrichChatReply(
   "Te recomiendo [Suite VIP Jacuzzi](https://amartesuite.com/producto/suite-vip-jacuzzi/).\n**Suite VIP Jacuzzi** · 8 h · domingo–jueves: **$240.000**",

@@ -415,7 +415,7 @@ function formatPricingForPrompt() {
     `Persona adicional: ${formatCop(extraPersonFee)}. Decoración: sencillas/cabaña +${formatCop(decorationFees.sencillasCabana)}; VIP/temáticas/jacuzzi/sauna +${formatCop(decorationFees.vipTematicasJacuzziSauna)}.`
   );
   lines.push(
-    "IMPORTANTE: este bloque es referencia interna. NO copies al usuario el formato con | ni matrices densas; presenta precios según las reglas de «Presentación de precios» (desde / una línea / lista por viñetas)."
+    "IMPORTANTE: este bloque es referencia interna. NO copies al usuario el formato con | ni matrices densas; al ofrecer una suite/plan presenta precios por pack en viñetas (4/8/12 h y día hotelero; weekday y weekend)."
   );
   lines.push("");
   lines.push("— SUITES (por duración) —");

@@ -74,9 +74,17 @@ function ensurePromoBlockOnExactQuote(reply) {
   const text = String(reply || "");
   if (!text.trim()) return text;
   if (/DESCUENTO ESPECIAL/i.test(text)) return text;
+  if (/¿Quieres ahorrar aún más\?/i.test(text)) return text;
   if (/Pago total con 25%/i.test(text)) return text;
+  if (/25%\s*OFF/i.test(text)) return text;
 
-  // Cotización exacta típica: línea con duración/día y un monto en negrita o plano
+  const packPriceLines =
+    (text.match(/(4|6|8|12)\s*h[^\n]*\$[\d.]+/gi) || []).length +
+    (text.match(/D[ií]a hotelero[^\n]*\$[\d.]+/gi) || []).length;
+  // Lista de packs (varios precios): no anexar oferta de abono/25%.
+  if (packPriceLines >= 2) return text;
+
+  // Cotización exacta típica: una sola línea pack + monto
   const exactQuote =
     /(\*\*[^*]+\*\*[^\n]*·[^\n]*\$[\d.]+)|((4|6|8|12)\s*h[^\n]*\$[\d.]+)|(D[ií]a hotelero[^\n]*\$[\d.]+)/i.test(
       text
