@@ -409,7 +409,7 @@ function formatPricingForPrompt() {
   lines.push("TARIFAS (COP Colombia). Domingo a jueves = tarifa entre semana. Viernes y sábado = tarifa fin de semana.");
   lines.push("Día hotelero: de 2:00 p. m. a 12:00 m. del día siguiente.");
   lines.push(
-    `PROMO JACUZZI (pauta, prioridad si piden jacuzzi/4h): ${formatCop(promoJacuzzi.price)} por ${promoJacuzzi.hours} h — ${promoJacuzzi.includes}. Landing: botón PROMOCIONES del pie.`
+    `PROMO JACUZZI (pauta, prioridad si piden jacuzzi/4h): ${formatCop(promoJacuzzi.price)} por ${promoJacuzzi.hours} h — ${promoJacuzzi.includes}. Landing: botón PROMOCIONES del pie. NO ACUMULABLE con 10%/15%, 25% OFF, abono+10% hotel ni otras campañas.`
   );
   lines.push(
     `Persona adicional: ${formatCop(extraPersonFee)}. Decoración: sencillas/cabaña +${formatCop(decorationFees.sencillasCabana)}; VIP/temáticas/jacuzzi/sauna +${formatCop(decorationFees.vipTematicasJacuzziSauna)}.`

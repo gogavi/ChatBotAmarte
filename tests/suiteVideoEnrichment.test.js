@@ -59,6 +59,12 @@ const packList = ensurePromoBlockOnExactQuote(
 );
 assert.ok(!packList.includes("DESCUENTO ESPECIAL"));
 
+const jacuzziPromoQuote = ensurePromoBlockOnExactQuote(
+  "**Promo Jacuzzi** — 4 horas: **$150.000**. Incluye jacuzzi ilimitado + 2 Mimosas."
+);
+assert.ok(!jacuzziPromoQuote.includes("DESCUENTO ESPECIAL"));
+assert.ok(!jacuzziPromoQuote.includes("25% OFF"));
+
 const enriched = enrichChatReply(
   "Te recomiendo [Suite VIP Jacuzzi](https://amartesuite.com/producto/suite-vip-jacuzzi/).\n**Suite VIP Jacuzzi** · 8 h · domingo–jueves: **$240.000**",
   "suite_vip_jacuzzi"

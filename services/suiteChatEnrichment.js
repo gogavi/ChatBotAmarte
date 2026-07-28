@@ -2,7 +2,7 @@ const {
   getSuiteVideoByLabel,
   getSuiteVideoByProductUrl,
 } = require("../config/amarteCatalog");
-const { formatQuoteWithPaymentOptions } = require("../reservationService");
+const { formatQuoteWithPaymentOptions, isPromoJacuzziQuoteText } = require("../reservationService");
 
 const PRODUCT_MD_LINK_RE =
   /\[([^\]]+)\]\((https?:\/\/(?:www\.)?amartesuite\.com\/producto\/[^)\s]+)\)/gi;
@@ -77,6 +77,8 @@ function ensurePromoBlockOnExactQuote(reply) {
   if (/¿Quieres ahorrar aún más\?/i.test(text)) return text;
   if (/Pago total con 25%/i.test(text)) return text;
   if (/25%\s*OFF/i.test(text)) return text;
+  // Promo Jacuzzi: no acumular abono 50%+10% ni 25% OFF
+  if (isPromoJacuzziQuoteText(text)) return text;
 
   const packPriceLines =
     (text.match(/(4|6|8|12)\s*h[^\n]*\$[\d.]+/gi) || []).length +

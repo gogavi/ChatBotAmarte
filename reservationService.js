@@ -1,5 +1,5 @@
 const { getSupabase, isSupabaseConfigured } = require("./supabaseClient");
-const { payment, formatCop } = require("./config/amarteCatalog");
+const { payment, formatCop, promoJacuzzi } = require("./config/amarteCatalog");
 
 /** Packs válidos en el SaaS (`rate_types`). */
 const VALID_PACKS = Object.freeze([
@@ -412,6 +412,43 @@ function firstNameUpper(nombre) {
 }
 
 /**
+ * Detecta si un texto de cotización habla de la Promo Jacuzzi (no acumulable).
+ * @param {string} text
+ * @returns {boolean}
+ */
+function isPromoJacuzziQuoteText(text) {
+  const t = String(text || "");
+  if (!t.trim()) return false;
+  if (/promo\s*jacuzzi/i.test(t)) return true;
+  const amount150 = /\$\s*150\.?000\b/.test(t);
+  if (
+    amount150 &&
+    /jacuzzi/i.test(t) &&
+    (/promo/i.test(t) || /\b4\s*h(oras)?\b/i.test(t))
+  ) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Promo Jacuzzi en prerreserva: Suite Jacuzzi + Pack 4 horas + precio promo.
+ * @param {{ tipo?: unknown; pack_tiempo?: unknown; precio?: unknown }} row
+ * @returns {boolean}
+ */
+function isPromoJacuzziBooking(row) {
+  const precioNum = parseInt(String(row?.precio ?? "").replace(/\D/g, ""), 10);
+  if (precioNum !== promoJacuzzi.price) return false;
+  const tipoRaw = typeof row?.tipo === "string" ? row.tipo : "";
+  if (/promo\s*jacuzzi/i.test(tipoRaw)) return true;
+  const tipo = resolveTipo(tipoRaw);
+  const pack = resolvePack(
+    typeof row?.pack_tiempo === "string" ? row.pack_tiempo : ""
+  );
+  return tipo === "Suite Jacuzzi" && pack === "Pack 4 horas";
+}
+
+/**
  * Bloque de oferta canónica: abono 50% (+10% hotel) y pago total con 25% dto.
  * Títulos con ## para que el widget los pinte en magenta + emojis.
  * @param {number} totalCop precio de lista
@@ -451,11 +488,40 @@ function formatQuoteWithPaymentOptions(totalCop, opts = {}) {
 }
 
 /**
+ * Mensaje post-prerreserva de Promo Jacuzzi (sin 10%/25% adicionales).
+ * @param {{ nombre?: unknown; precio?: unknown }} row
+ * @returns {string}
+ */
+function buildPromoJacuzziConfirmMessage(row) {
+  const name = firstNameUpper(row?.nombre);
+  const total = promoJacuzzi.price;
+  return [
+    `Hola ${name},`,
+    ``,
+    `Tienes una pre-reserva con la **${promoJacuzzi.name}** por **${formatCop(total)}** (${promoJacuzzi.hours} horas).`,
+    `Incluye: ${promoJacuzzi.includes}.`,
+    ``,
+    `## 🔥 Promo ya aplicada`,
+    `Este valor **no es acumulable** con otros descuentos (10%, 25% OFF u otras campañas).`,
+    ``,
+    `## 💳 Paga seguro aquí`,
+    `Realiza el pago de la promo:`,
+    payment.checkoutUrl,
+    ``,
+    `Compártenos el comprobante al finalizar el pago`,
+  ].join("\n");
+}
+
+/**
  * Mensaje post-prerreserva: abono 50% (+10% dto hotel) y pago total 25% dto.
- * @param {{ nombre?: unknown; precio?: unknown; abono?: unknown }} row
+ * Si es Promo Jacuzzi, no apila beneficios adicionales.
+ * @param {{ nombre?: unknown; precio?: unknown; abono?: unknown; tipo?: unknown; pack_tiempo?: unknown }} row
  * @returns {string}
  */
 function buildPrereservaConfirmMessage(row) {
+  if (isPromoJacuzziBooking(row)) {
+    return buildPromoJacuzziConfirmMessage(row);
+  }
   const precioNum = parseInt(String(row?.precio ?? "").replace(/\D/g, ""), 10);
   const abonoNum = parseInt(String(row?.abono ?? "").replace(/\D/g, ""), 10);
   const total =
@@ -496,5 +562,7 @@ module.exports = {
   createPendingReservation,
   buildPrereservaConfirmMessage,
   formatQuoteWithPaymentOptions,
+  isPromoJacuzziQuoteText,
+  isPromoJacuzziBooking,
   firstNameUpper,
 };

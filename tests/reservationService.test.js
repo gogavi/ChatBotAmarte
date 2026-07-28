@@ -7,6 +7,8 @@ const {
   resolvePrecio,
   validatePendingPayload,
   buildPrereservaConfirmMessage,
+  isPromoJacuzziBooking,
+  isPromoJacuzziQuoteText,
   firstNameUpper,
 } = require("../reservationService");
 const { payment } = require("../config/amarteCatalog");
@@ -93,5 +95,38 @@ assert.ok(confirm.includes("$210.000"));
 assert.ok(confirm.includes("$315.000"));
 assert.ok(confirm.includes(payment.checkoutUrl));
 assert.ok(confirm.includes("Compártenos el comprobante"));
+
+assert.strictEqual(
+  isPromoJacuzziBooking({
+    tipo: "Suite Jacuzzi",
+    pack_tiempo: "Pack 4 horas",
+    precio: "150000",
+  }),
+  true
+);
+assert.strictEqual(
+  isPromoJacuzziBooking({
+    tipo: "Suite Cabaña",
+    pack_tiempo: "Pack 8 horas",
+    precio: "150000",
+  }),
+  false
+);
+assert.ok(isPromoJacuzziQuoteText("**Promo Jacuzzi** por **$150.000** (4 horas)"));
+assert.ok(!isPromoJacuzziQuoteText("**Suite Diamante** · 8 h: **$230.000**"));
+
+const promoConfirm = buildPrereservaConfirmMessage({
+  nombre: "Ana Pérez",
+  tipo: "Suite Jacuzzi",
+  pack_tiempo: "Pack 4 horas",
+  precio: "150000",
+  abono: "75000",
+});
+assert.ok(promoConfirm.includes("Promo Jacuzzi"));
+assert.ok(promoConfirm.includes("no es acumulable"));
+assert.ok(promoConfirm.includes("Promo ya aplicada"));
+assert.ok(!promoConfirm.includes("DESCUENTO ESPECIAL"));
+assert.ok(!promoConfirm.includes("llévate **25% OFF**"));
+assert.ok(!promoConfirm.includes("10% adicional"));
 
 console.log("reservationService tests passed");
