@@ -164,6 +164,12 @@ function resolveFecha(raw) {
  * Normaliza hora a texto legible (p.ej. "2:00 PM" o "14:00").
  * @param {string} raw
  */
+/**
+ * Normaliza hora de ingreso a HH:MM (24h) para no romper el SaaS/BD.
+ * Acepta "14:00", "2:00 PM", "2 PM", "6 pm", etc.
+ * @param {unknown} raw
+ * @returns {string | null}
+ */
 function resolveHora(raw) {
   if (!raw || typeof raw !== "string") {
     return null;
@@ -172,7 +178,47 @@ function resolveHora(raw) {
   if (!t) {
     return null;
   }
-  return t;
+
+  const pad = (n) => String(n).padStart(2, "0");
+
+  const as24 = (hour, minute) => {
+    if (
+      !Number.isInteger(hour) ||
+      !Number.isInteger(minute) ||
+      hour < 0 ||
+      hour > 23 ||
+      minute < 0 ||
+      minute > 59
+    ) {
+      return null;
+    }
+    return `${pad(hour)}:${pad(minute)}`;
+  };
+
+  const m24 = t.match(/^(\d{1,2}):(\d{2})\s*$/);
+  if (m24) {
+    return as24(parseInt(m24[1], 10), parseInt(m24[2], 10));
+  }
+
+  const m12 = t.match(
+    /^(\d{1,2})(?::(\d{2}))?\s*(a\.?\s*m\.?|p\.?\s*m\.?|am|pm)\s*$/i
+  );
+  if (m12) {
+    let hour = parseInt(m12[1], 10);
+    const minute = m12[2] ? parseInt(m12[2], 10) : 0;
+    if (hour < 1 || hour > 12) {
+      return null;
+    }
+    const period = m12[3].replace(/\./g, "").replace(/\s/g, "").toLowerCase();
+    if (period === "am") {
+      if (hour === 12) hour = 0;
+    } else if (hour !== 12) {
+      hour += 12;
+    }
+    return as24(hour, minute);
+  }
+
+  return null;
 }
 
 /**
@@ -366,6 +412,40 @@ function firstNameUpper(nombre) {
 }
 
 /**
+ * Bloque de oferta canónica: abono 50% (+10% hotel) y pago total con 25% dto.
+ * @param {number} totalCop precio de lista
+ * @param {{ abono?: number; includeCheckoutLine?: boolean }} [opts]
+ * @returns {string}
+ */
+function formatQuoteWithPaymentOptions(totalCop, opts = {}) {
+  const total =
+    Number.isFinite(totalCop) && totalCop > 0 ? Math.round(totalCop) : 0;
+  if (!total) {
+    return "";
+  }
+  const abonoOpt = opts.abono;
+  const abono =
+    Number.isFinite(abonoOpt) && abonoOpt > 0
+      ? Math.round(abonoOpt)
+      : Math.round(total * 0.5);
+  const totalConDto = Math.round(total * 0.75);
+  const lines = [
+    `DESCUENTO ESPECIAL!`,
+    `Separa tu reserva abonando el 50% (${formatCop(abono)})`,
+    `y recibe un 10% de descuento adicional en el hotel.`,
+    ``,
+    `────────`,
+    `¿QUIERES AHORRAR AÚN MÁS?`,
+    `Pago total con 25% de descuento.`,
+    `Valor a pagar: ${formatCop(totalConDto)}`,
+  ];
+  if (opts.includeCheckoutLine) {
+    lines.push(``, `────────`, `Realiza el abono/pago aquí:`, payment.checkoutUrl);
+  }
+  return lines.join("\n");
+}
+
+/**
  * Mensaje post-prerreserva: abono 50% (+10% dto hotel) y pago total 25% dto.
  * @param {{ nombre?: unknown; precio?: unknown; abono?: unknown }} row
  * @returns {string}
@@ -381,10 +461,11 @@ function buildPrereservaConfirmMessage(row) {
       : total > 0
         ? Math.round(total * 0.5)
         : 0;
-  const totalConDto =
-    total > 0 ? Math.round(total * 0.75) : 0;
   const name = firstNameUpper(row?.nombre);
-  const checkoutUrl = payment.checkoutUrl;
+  const promo = formatQuoteWithPaymentOptions(total, {
+    abono,
+    includeCheckoutLine: true,
+  });
 
   return [
     `Hola ${name},`,
@@ -392,18 +473,7 @@ function buildPrereservaConfirmMessage(row) {
     `Tienes una pre-reserva con nosotros.`,
     `¿Quieres confirmarla?`,
     ``,
-    `DESCUENTO ESPECIAL!`,
-    `Separa tu reserva abonando el 50% (${formatCop(abono)})`,
-    `y recibe un 10% de descuento adicional en el hotel.`,
-    ``,
-    `────────`,
-    `¿QUIERES AHORRAR AÚN MÁS?`,
-    `Pago total con 25% de descuento.`,
-    `Valor a pagar: ${formatCop(totalConDto)}`,
-    ``,
-    `────────`,
-    `Realiza el abono/pago aquí:`,
-    checkoutUrl,
+    promo,
     ``,
     `Compártenos el comprobante al finalizar el abono/pago`,
   ].join("\n");
@@ -415,9 +485,11 @@ module.exports = {
   resolveTipo,
   resolvePack,
   resolveFecha,
+  resolveHora,
   resolvePrecio,
   validatePendingPayload,
   createPendingReservation,
   buildPrereservaConfirmMessage,
+  formatQuoteWithPaymentOptions,
   firstNameUpper,
 };

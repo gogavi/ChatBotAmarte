@@ -3,6 +3,7 @@ const {
   resolveTipo,
   resolvePack,
   resolveFecha,
+  resolveHora,
   resolvePrecio,
   validatePendingPayload,
   buildPrereservaConfirmMessage,
@@ -23,6 +24,15 @@ assert.strictEqual(resolvePack("xyz"), null);
 assert.strictEqual(resolveFecha("2026-07-20"), "2026-07-20");
 assert.strictEqual(resolveFecha("20/07/2026"), null);
 
+assert.strictEqual(resolveHora("14:00"), "14:00");
+assert.strictEqual(resolveHora("2:00 PM"), "14:00");
+assert.strictEqual(resolveHora("2 PM"), "14:00");
+assert.strictEqual(resolveHora("6 pm"), "18:00");
+assert.strictEqual(resolveHora("12:00 AM"), "00:00");
+assert.strictEqual(resolveHora("12:30 PM"), "12:30");
+assert.strictEqual(resolveHora("14:00 "), "14:00");
+assert.strictEqual(resolveHora("dos de la tarde"), null);
+
 assert.strictEqual(resolvePrecio("$160.000"), "160000");
 assert.strictEqual(resolvePrecio(160000), "160000");
 
@@ -41,6 +51,7 @@ const ok = validatePendingPayload({
 assert.strictEqual(ok.ok, true);
 if (ok.ok) {
   assert.strictEqual(ok.data.tipo, "Suite Jacuzzi");
+  assert.strictEqual(ok.data.hora_reserva, "14:00");
   assert.strictEqual(ok.data.abono, "120000");
   assert.strictEqual(ok.data.documento, "1234567890");
 }

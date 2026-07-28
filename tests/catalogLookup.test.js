@@ -22,7 +22,7 @@ const hit = lookupCatalogPrice({
 });
 assert.strictEqual(hit.found, true);
 assert.strictEqual(hit.dateType, "weekday");
-assert.strictEqual(hit.priceCop, 240000);
+assert.strictEqual(hit.priceCop, 200000);
 assert.ok(typeof hit.spokenPrice === "string" && hit.spokenPrice.length > 0);
 assert.ok(Array.isArray(hit.availableDurations));
 assert.ok(hit.bookingUrl.includes("amartesuite.com"));

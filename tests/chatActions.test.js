@@ -8,29 +8,14 @@ const {
   buildAssistantResponse,
 } = require("../config/chatActions");
 
-assert.deepStrictEqual(
-  resolveChatActions(["wompi", "whatsapp"]),
-  [
-    { label: CHAT_ACTIONS.wompi.label, url: CHAT_ACTIONS.wompi.url },
-    { label: CHAT_ACTIONS.whatsapp.label, url: CHAT_ACTIONS.whatsapp.url },
-  ]
-);
-
-assert.deepStrictEqual(
-  resolveChatActions([]),
-  DEFAULT_ACTION_TYPES.map((t) => ({
-    label: CHAT_ACTIONS[t].label,
-    url: CHAT_ACTIONS[t].url,
-  }))
-);
-
+assert.deepStrictEqual(DEFAULT_ACTION_TYPES, []);
+assert.deepStrictEqual(resolveChatActions(["wompi", "whatsapp"]), []);
+assert.deepStrictEqual(resolveChatActions([]), []);
 assert.deepStrictEqual(
   resolveChatActions(["wompi", "fake", "wompi", "reserve"]),
-  [
-    { label: CHAT_ACTIONS.wompi.label, url: CHAT_ACTIONS.wompi.url },
-    { label: CHAT_ACTIONS.reserve.label, url: CHAT_ACTIONS.reserve.url },
-  ]
+  []
 );
+assert.deepStrictEqual(resolveChatActions(["reserve", "whatsapp"]), []);
 
 assert.strictEqual(
   stripOptionsBlock("Hola\n[OPTIONS]\n[]\n[/OPTIONS]"),
@@ -43,13 +28,17 @@ const structured = tryParseStructuredMartinaReply(
     actionTypes: ["reserve", "wompi"],
     pendingReservation: null,
     showReservationForm: false,
+    showDateTimePicker: true,
     formPrefill: null,
+    suiteShowcase: "suite_vip_jacuzzi",
   })
 );
 assert.ok(structured);
 assert.strictEqual(structured.message, "La Suite VIP Jacuzzi está disponible.");
 assert.strictEqual(structured.pendingReservation, null);
 assert.strictEqual(structured.showReservationForm, false);
+assert.strictEqual(structured.showDateTimePicker, true);
+assert.strictEqual(structured.suiteShowcase, "suite_vip_jacuzzi");
 
 const built = buildAssistantResponse(
   JSON.stringify({
@@ -57,14 +46,30 @@ const built = buildAssistantResponse(
     actionTypes: ["reserve"],
     pendingReservation: null,
     showReservationForm: false,
+    showDateTimePicker: false,
     formPrefill: null,
+    suiteShowcase: "",
   })
 );
 assert.strictEqual(built.reply, "Cotización lista.");
-assert.strictEqual(built.options.length, 1);
-assert.strictEqual(built.options[0].url, CHAT_ACTIONS.reserve.url);
-assert.ok(!built.options[0].url.includes("checkout.wompi"));
+assert.strictEqual(built.options.length, 0);
 assert.strictEqual(built.showReservationForm, false);
+assert.strictEqual(built.showDateTimePicker, false);
+assert.strictEqual(built.suiteShowcase, "");
+
+const withPicker = buildAssistantResponse(
+  JSON.stringify({
+    message: "¿Para qué día y a qué hora?",
+    actionTypes: ["promotions"],
+    pendingReservation: null,
+    showReservationForm: false,
+    showDateTimePicker: true,
+    formPrefill: null,
+    suiteShowcase: "",
+  })
+);
+assert.strictEqual(withPicker.showDateTimePicker, true);
+assert.strictEqual(withPicker.options.length, 0);
 
 const withForm = buildAssistantResponse(
   JSON.stringify({
@@ -83,6 +88,7 @@ const withForm = buildAssistantResponse(
       abono: "",
     },
     showReservationForm: true,
+    showDateTimePicker: true,
     formPrefill: {
       nombre: "",
       whatsapp: "",
@@ -94,18 +100,22 @@ const withForm = buildAssistantResponse(
       pack_tiempo: "Pack 4 horas",
       precio: "90000",
     },
+    suiteShowcase: "Suite Amarte",
   })
 );
 assert.strictEqual(withForm.showReservationForm, true);
+assert.strictEqual(withForm.showDateTimePicker, false);
 assert.strictEqual(withForm.pendingReservation, null);
 assert.ok(withForm.formPrefill);
 assert.strictEqual(withForm.formPrefill.tipo, "Suite Amarte");
+assert.strictEqual(withForm.suiteShowcase, "Suite Amarte");
+assert.strictEqual(withForm.options.length, 0);
 
 const legacy = buildAssistantResponse(
   `Texto visible\n[OPTIONS]\n[{"label":"X","url":"https://evil.example/pay"}]\n[/OPTIONS]`
 );
 assert.strictEqual(legacy.reply, "Texto visible");
-assert.strictEqual(legacy.options.length, 4);
-assert.ok(legacy.options.every((o) => !o.url.includes("evil.example")));
+assert.strictEqual(legacy.options.length, 0);
+assert.ok(CHAT_ACTIONS.wompi.url.includes("wompi"));
 
 console.log("chatActions tests passed");

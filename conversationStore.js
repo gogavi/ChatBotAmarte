@@ -1,4 +1,4 @@
-const { getSupabase, isSupabaseConfigured } = require("./supabaseClient");
+const { getSupabase, isSupabaseConfigured, getLastSupabaseClientError } = require("./supabaseClient");
 
 const DEFAULT_HISTORY_LIMIT = Math.max(
   10,
@@ -136,7 +136,8 @@ function initConversationStore() {
   }
   const sb = getSupabase();
   if (!sb) {
-    lastInitError = "No se pudo crear el cliente Supabase";
+    lastInitError =
+      getLastSupabaseClientError() || "No se pudo crear el cliente Supabase";
     return true;
   }
   supabaseReady = true;
@@ -234,7 +235,17 @@ async function getPriorMessages(conversationId, limit) {
   }
   metrics.history_memory_miss += 1;
 
-  const sb = getSupabase();
+  let sb = null;
+  try {
+    sb = getSupabase();
+  } catch (err) {
+    metrics.history_read_failed += 1;
+    logHistoryEvent("history_read_failed", {
+      conversationId: conversationId.slice(0, 8),
+      message: err && err.message ? err.message : String(err),
+    });
+    return cached ? cached.messages.slice(-capped) : [];
+  }
   if (!sb || !supabaseReady) {
     metrics.history_read_ok += 1;
     return cached ? cached.messages.slice(-capped) : [];

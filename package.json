@@ -8,7 +8,7 @@
     "build": "npm run build:voice",
     "prestart": "npm run build:voice",
     "start": "node server.js",
-    "test": "node tests/paymentLinks.test.js && node tests/chatActions.test.js && node tests/ttsNormalize.test.js && node tests/reservationService.test.js && node tests/bogotaTime.test.js && node tests/catalogLookup.test.js && node tests/liveVoiceValidation.test.js && node tests/agentTools.test.js && node tests/elevenlabsPostCall.test.js && node tests/liveVoiceConfig.test.js && node tests/conversationToken.test.js && node tests/rateLimit.test.js && node tests/conversationStore.test.js && node tests/reservationForm.test.js",
+    "test": "node tests/paymentLinks.test.js && node tests/chatActions.test.js && node tests/ttsNormalize.test.js && node tests/reservationService.test.js && node tests/bogotaTime.test.js && node tests/catalogLookup.test.js && node tests/liveVoiceValidation.test.js && node tests/agentTools.test.js && node tests/elevenlabsPostCall.test.js && node tests/liveVoiceConfig.test.js && node tests/conversationToken.test.js && node tests/rateLimit.test.js && node tests/conversationStore.test.js && node tests/reservationForm.test.js && node tests/suiteVideoEnrichment.test.js",
     "verify:prod": "powershell -ExecutionPolicy Bypass -File scripts/verify-production.ps1",
     "railway:up": "railway up",
     "railway:logs": "railway logs"
@@ -32,7 +32,8 @@
     "express": "^4.21.0",
     "express-rate-limit": "^8.5.2",
     "multer": "^1.4.5-lts.1",
-    "openai": "^4.73.0"
+    "openai": "^4.73.0",
+    "ws": "^8.21.1"
   },
   "devDependencies": {
     "esbuild": "^0.28.1"

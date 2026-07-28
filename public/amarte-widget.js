@@ -28,8 +28,8 @@
     "Hola, estuve navegando en la página web y descubrí habitaciones muy interesantes. ¿Me ayudas con más información?";
   var DEFAULT_QUICK_WHATSAPP =
     "https://wa.me/573007416683?text=" + encodeURIComponent(DEFAULT_WHATSAPP_MESSAGE);
-  var DEFAULT_QUICK_RESERVE = "https://amartesuite.com/formulario-reservas-amarte-suite/";
-  var DEFAULT_QUICK_PROMOS = "https://amartesuite.com/suite-jacuzzi-mejor-precio/";
+  var DEFAULT_QUICK_RESERVE = "https://reservas.amartesuite.com";
+  var DEFAULT_QUICK_PROMOS = "https://promojacuzzi.amartesuite.com";
   var DEFAULT_QUICK_TEL = "tel:+573013307909";
 
   /**
@@ -111,6 +111,28 @@
   /** Evita rehidratar el historial más de una vez por carga de página. */
   var historyHydrated = false;
   var historyHydrating = false;
+  /** Evita duplicar el saludo inicial de Martina. */
+  var welcomeShown = false;
+  var WELCOME_TEXT =
+    "¡Hola! ✨ Soy Martina, tu anfitriona digital de Amarte Suite. Estoy aquí para ayudarte a encontrar la experiencia perfecta. ¿Buscas algo romántico, con jacuzzi o una opción más acogedora?";
+
+  /**
+   * Muestra el saludo solo si el panel aún no tiene mensajes (historial vacío).
+   */
+  function ensureWelcomeMessage() {
+    if (welcomeShown) {
+      return;
+    }
+    if (typeof messagesEl === "undefined" || !messagesEl) {
+      return;
+    }
+    if (messagesEl.querySelector(".amarte-msg")) {
+      welcomeShown = true;
+      return;
+    }
+    welcomeShown = true;
+    appendMessage("bot", WELCOME_TEXT, []);
+  }
 
   /** Zona horaria del hotel (cotizaciones y “hoy/mañana”). */
   var BOGOTA_TZ = "America/Bogota";
@@ -258,13 +280,27 @@
           if (!/^https?:\/\//i.test(u)) {
             return full;
           }
-          var safeUrl = normalizeWompiCheckoutUrl(u);
+          var rawUrl = u.replace(/&amp;/g, "&");
+          var suite = findSuiteVideoByProductUrl(rawUrl);
           var tail = full.slice(u.length);
+          if (suite) {
+            return (
+              '<button type="button" class="amarte-suite-video-btn" data-amarte-video-url="' +
+              attrEncode(suite.videoUrl) +
+              '" data-amarte-video-title="' +
+              attrEncode(suite.title) +
+              '">Ver video de la ' +
+              escapeHtml(suite.title) +
+              "</button>" +
+              tail
+            );
+          }
+          var safeUrl = normalizeWompiCheckoutUrl(rawUrl);
           return (
             '<a href="' +
             attrEncode(safeUrl) +
             '" class="amarte-inline-link" target="_blank" rel="noopener noreferrer">' +
-            safeUrl +
+            escapeHtml(safeUrl) +
             "</a>" +
             tail
           );
@@ -295,20 +331,14 @@
    */
   function renderBotMessageHtml(raw) {
     var t = escapeHtml(String(raw || ""));
-    // Enlaces Markdown [etiqueta](https://...)
+    // Enlaces Markdown [etiqueta](https://...) — fichas de suite → botón de video
     t = t.replace(
       /\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,
       function (_, label, url) {
         var safeUrl = isWompiCheckoutLabel(label)
           ? WOMPI_CHECKOUT_URL
-          : normalizeWompiCheckoutUrl(url);
-        return (
-          '<a href="' +
-          attrEncode(safeUrl) +
-          '" class="amarte-inline-link" target="_blank" rel="noopener noreferrer">' +
-          label +
-          "</a>"
-        );
+          : normalizeWompiCheckoutUrl(url.replace(/&amp;/g, "&"));
+        return renderSuiteOrExternalLink(safeUrl, label);
       }
     );
     t = renderInlineMarkdownPlainSegments(t);
@@ -392,6 +422,14 @@
       "Día Hotelero",
     ],
   };
+
+  /** @type {Array<{ id: string; title: string; productUrl: string; videoUrl: string }>} */
+  var suiteVideosCatalog = [];
+
+  /** Modal de video de suite (se crea lazy). */
+  var suiteVideoModalEl = null;
+  var suiteVideoPlayerEl = null;
+  var suiteVideoTitleEl = null;
 
   var LIVE_ACTION_URLS = {
     reservation: DEFAULT_QUICK_RESERVE,
@@ -558,20 +596,13 @@
    * @param {string} [detail]
    */
   function showLiveFallback(detail) {
-    var wa = pickQuickUrl("AMARTE_QUICK_WHATSAPP_URL", DEFAULT_QUICK_WHATSAPP);
     var text =
-      "No fue posible iniciar la conversación en vivo. Puedes escribirle a Martina o enviar una nota de voz.";
+      "No fue posible iniciar la conversación en vivo. Puedes escribirle a Martina o usar WhatsApp / Reservar en el pie del chat.";
     if (detail && /dominio|pageUrl|no permitido/i.test(detail)) {
       text =
         "No fue posible iniciar la conversación en vivo desde esta página. Prueba en amartesuite.com o en el demo oficial.";
     }
-    appendMessage(
-      "bot",
-      text,
-      [
-        { label: "💬 WhatsApp", url: wa },
-      ]
-    );
+    appendMessage("bot", text, []);
     trackLiveEvent("live_voice_error", {
       reason: "fallback_shown",
       detail: detail ? String(detail).slice(0, 120) : "",
@@ -583,25 +614,10 @@
    */
   function showLiveActionButtons(actions) {
     var map = {
-      reservation: {
-        label: "📅 Reservar ahora",
-        url: pickQuickUrl("AMARTE_QUICK_RESERVATIONS_URL", DEFAULT_QUICK_RESERVE),
-        event: "live_voice_reservation_clicked",
-      },
-      reserve: {
-        label: "📅 Reservar ahora",
-        url: pickQuickUrl("AMARTE_QUICK_RESERVATIONS_URL", DEFAULT_QUICK_RESERVE),
-        event: "live_voice_reservation_clicked",
-      },
       promotions: {
-        label: "🎁 PROMOCIONES",
+        label: "🎁 Promociones",
         url: pickQuickUrl("AMARTE_PROMOCIONES_URL", DEFAULT_QUICK_PROMOS),
         event: null,
-      },
-      whatsapp: {
-        label: "💬 WhatsApp",
-        url: pickQuickUrl("AMARTE_QUICK_WHATSAPP_URL", DEFAULT_QUICK_WHATSAPP),
-        event: "live_voice_whatsapp_clicked",
       },
       payment: {
         label: "💳 Pago seguro Wompi",
@@ -618,6 +634,9 @@
     var list = Array.isArray(actions) ? actions : [];
     for (var i = 0; i < list.length; i++) {
       var key = String(list[i] || "").toLowerCase();
+      if (key === "reservation" || key === "reserve" || key === "whatsapp") {
+        continue;
+      }
       if (map[key]) {
         options.push({ label: map[key].label, url: map[key].url, _evt: map[key].event });
       }
@@ -635,7 +654,10 @@
         var href = t.getAttribute("href") || "";
         if (href.indexOf("wa.me") !== -1) {
           trackLiveEvent("live_voice_whatsapp_clicked", {});
-        } else if (href.indexOf("formulario-reservas") !== -1) {
+        } else if (
+          href.indexOf("formulario-reservas") !== -1 ||
+          href.indexOf("reservas.amartesuite.com") !== -1
+        ) {
           trackLiveEvent("live_voice_reservation_clicked", {});
         }
       });
@@ -831,7 +853,7 @@
   }
 
   /**
-   * Consulta config pública: catálogo del form + voz en vivo si aplica.
+   * Consulta config pública: catálogo del form + videos de suite + voz en vivo si aplica.
    */
   function loadWidgetConfig() {
     fetch(BACKEND_URL + "/api/widget-config")
@@ -855,6 +877,9 @@
         ) {
           reservationFormCatalog.packs = cfg.reservationForm.packs.slice();
         }
+        if (cfg && Array.isArray(cfg.suiteVideos) && cfg.suiteVideos.length) {
+          suiteVideosCatalog = cfg.suiteVideos.slice();
+        }
         if (LIVE_VOICE_COMING_SOON) {
           return;
         }
@@ -871,6 +896,142 @@
       .catch(function () {
         // Silencioso: el chat sigue con catálogo embebido
       });
+  }
+
+  /**
+   * @param {string} productUrl
+   * @returns {{ id: string; title: string; productUrl: string; videoUrl: string } | null}
+   */
+  function findSuiteVideoByProductUrl(productUrl) {
+    var raw = String(productUrl || "").trim();
+    if (!raw) return null;
+    var path = "";
+    try {
+      path = new URL(raw).pathname.replace(/\/+$/, "").toLowerCase();
+    } catch (e0) {
+      path = raw.replace(/\/+$/, "").toLowerCase();
+    }
+    for (var i = 0; i < suiteVideosCatalog.length; i++) {
+      var item = suiteVideosCatalog[i];
+      if (!item || !item.productUrl || !item.videoUrl) continue;
+      var itemPath = "";
+      try {
+        itemPath = new URL(item.productUrl)
+          .pathname.replace(/\/+$/, "")
+          .toLowerCase();
+      } catch (e1) {
+        continue;
+      }
+      if (path === itemPath || path.endsWith(itemPath)) {
+        return item;
+      }
+    }
+    return null;
+  }
+
+  function ensureSuiteVideoModal() {
+    if (suiteVideoModalEl) return;
+    suiteVideoModalEl = document.createElement("div");
+    suiteVideoModalEl.className = "amarte-suite-video-modal";
+    suiteVideoModalEl.setAttribute("role", "dialog");
+    suiteVideoModalEl.setAttribute("aria-modal", "true");
+    suiteVideoModalEl.setAttribute("aria-hidden", "true");
+    suiteVideoModalEl.innerHTML =
+      '<div class="amarte-suite-video-backdrop" data-amarte-video-close="1"></div>' +
+      '<div class="amarte-suite-video-dialog">' +
+      '<div class="amarte-suite-video-header">' +
+      '<h4 class="amarte-suite-video-title"></h4>' +
+      '<button type="button" class="amarte-suite-video-close" aria-label="Cerrar video" data-amarte-video-close="1">✕</button>' +
+      "</div>" +
+      '<video class="amarte-suite-video-player" controls playsinline preload="metadata"></video>' +
+      "</div>";
+    document.body.appendChild(suiteVideoModalEl);
+    suiteVideoPlayerEl = suiteVideoModalEl.querySelector(
+      ".amarte-suite-video-player"
+    );
+    suiteVideoTitleEl = suiteVideoModalEl.querySelector(
+      ".amarte-suite-video-title"
+    );
+    suiteVideoModalEl.addEventListener("click", function (ev) {
+      var t = ev.target;
+      if (
+        t &&
+        t.getAttribute &&
+        t.getAttribute("data-amarte-video-close") === "1"
+      ) {
+        closeSuiteVideoModal();
+      }
+    });
+    document.addEventListener("keydown", function (ev) {
+      if (ev.key === "Escape" && suiteVideoModalEl && suiteVideoModalEl.classList.contains("amarte-open")) {
+        closeSuiteVideoModal();
+      }
+    });
+  }
+
+  function closeSuiteVideoModal() {
+    if (!suiteVideoModalEl) return;
+    suiteVideoModalEl.classList.remove("amarte-open");
+    suiteVideoModalEl.setAttribute("aria-hidden", "true");
+    if (suiteVideoPlayerEl) {
+      try {
+        suiteVideoPlayerEl.pause();
+      } catch (e0) {}
+      suiteVideoPlayerEl.removeAttribute("src");
+      try {
+        suiteVideoPlayerEl.load();
+      } catch (e1) {}
+    }
+  }
+
+  /**
+   * @param {{ title?: string; videoUrl: string }} video
+   */
+  function openSuiteVideoModal(video) {
+    if (!video || !video.videoUrl) return;
+    ensureSuiteVideoModal();
+    if (suiteVideoTitleEl) {
+      suiteVideoTitleEl.textContent = video.title
+        ? String(video.title)
+        : "Video de la suite";
+    }
+    if (suiteVideoPlayerEl) {
+      suiteVideoPlayerEl.src = video.videoUrl;
+      suiteVideoPlayerEl.play().catch(function () {});
+    }
+    suiteVideoModalEl.classList.add("amarte-open");
+    suiteVideoModalEl.setAttribute("aria-hidden", "false");
+  }
+
+  /**
+   * @param {string} url maybe HTML-escaped
+   * @param {string} labelHtml already escaped for HTML text
+   * @returns {string} HTML
+   */
+  function renderSuiteOrExternalLink(url, labelHtml) {
+    var rawUrl = String(url || "")
+      .replace(/&amp;/g, "&")
+      .replace(/&quot;/g, '"');
+    var suite = findSuiteVideoByProductUrl(rawUrl);
+    if (suite) {
+      return (
+        '<button type="button" class="amarte-suite-video-btn" data-amarte-video-url="' +
+        attrEncode(suite.videoUrl) +
+        '" data-amarte-video-title="' +
+        attrEncode(suite.title || "") +
+        '">' +
+        (labelHtml || escapeHtml("Ver video de la " + suite.title)) +
+        "</button>"
+      );
+    }
+    var safeUrl = normalizeWompiCheckoutUrl(rawUrl);
+    return (
+      '<a href="' +
+      attrEncode(safeUrl) +
+      '" class="amarte-inline-link" target="_blank" rel="noopener noreferrer">' +
+      labelHtml +
+      "</a>"
+    );
   }
 
   /**
@@ -909,14 +1070,14 @@
       /* CSS del widget Amarte */
       ".amarte-widget-root{font-family:'Jost',system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;}" +
       ".amarte-widget-launcher{position:fixed;right:24px;left:auto;bottom:calc(24px + env(safe-area-inset-bottom,0px));" +
-      "display:flex;align-items:center;gap:10px;padding:8px 8px 8px 18px;border:none;border-radius:999px;" +
+      "display:flex;align-items:center;gap:8px;padding:7px 7px 7px 14px;border:none;border-radius:999px;" +
       "background:#D81B60;color:#ffffff;cursor:pointer;z-index:99998;" +
-      "font-size:0.95rem;font-weight:600;letter-spacing:0.01em;white-space:nowrap;" +
+      "font-size:0.72rem;font-weight:600;letter-spacing:0.01em;white-space:normal;" +
       "box-shadow:0 8px 24px rgba(216,27,96,0.35);" +
       "transition:opacity 0.25s ease,visibility 0.25s ease,transform 0.25s ease,box-shadow 0.2s ease;}" +
       ".amarte-widget-launcher:hover{transform:scale(1.02);box-shadow:0 12px 32px rgba(216,27,96,0.45);}" +
-      ".amarte-widget-launcher-label{line-height:1.2;}" +
-      ".amarte-widget-launcher-icon{width:44px;height:44px;border-radius:50%;flex-shrink:0;" +
+      ".amarte-widget-launcher-label{line-height:1.15;text-align:left;display:block;}" +
+      ".amarte-widget-launcher-icon{width:40px;height:40px;border-radius:50%;flex-shrink:0;" +
       "background:rgba(255,255,255,0.15);display:flex;align-items:center;justify-content:center;}" +
       ".amarte-widget-root.amarte-chat-open .amarte-widget-launcher{opacity:0;visibility:hidden;pointer-events:none;transform:scale(0.92);}" +
       ".amarte-widget-panel{position:fixed;right:24px;left:auto;bottom:96px;width:min(380px,calc(100vw - 32px));" +
@@ -941,6 +1102,26 @@
       "word-break:break-word;font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI','Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji',sans-serif;}" +
       ".amarte-msg-bot .amarte-inline-link{color:#AD1457;text-decoration:underline;font-weight:600;}" +
       ".amarte-msg-bot .amarte-inline-link:hover{color:#1A1A3D;}" +
+      ".amarte-suite-video-btn{display:inline;margin:0;padding:0;border:none;background:none;" +
+      "color:#AD1457;text-decoration:underline;font-weight:600;font:inherit;cursor:pointer;}" +
+      ".amarte-suite-video-btn:hover{color:#1A1A3D;}" +
+      ".amarte-suite-video-cta{display:inline-flex;align-items:center;gap:6px;margin-top:10px;" +
+      "padding:10px 14px;border-radius:999px;border:none;cursor:pointer;font-weight:600;font-size:0.85rem;" +
+      "background:#D81B60;color:#fff;}" +
+      ".amarte-suite-video-cta:hover{background:#AD1457;}" +
+      ".amarte-suite-video-modal{position:fixed;inset:0;z-index:2147483000;display:none;" +
+      "align-items:center;justify-content:center;padding:16px;}" +
+      ".amarte-suite-video-modal.amarte-open{display:flex;}" +
+      ".amarte-suite-video-backdrop{position:absolute;inset:0;background:rgba(13,13,17,0.72);}" +
+      ".amarte-suite-video-dialog{position:relative;z-index:1;width:min(920px,100%);" +
+      "background:#111;border-radius:16px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.45);}" +
+      ".amarte-suite-video-header{display:flex;align-items:center;justify-content:space-between;" +
+      "gap:12px;padding:12px 14px;background:#1a1a1a;}" +
+      ".amarte-suite-video-title{margin:0;color:#fff;font-size:1rem;font-weight:600;}" +
+      ".amarte-suite-video-close{border:none;background:transparent;color:#fff;font-size:1.35rem;" +
+      "cursor:pointer;line-height:1;padding:4px 8px;}" +
+      ".amarte-suite-video-close:hover{color:#E91E63;}" +
+      ".amarte-suite-video-player{display:block;width:100%;max-height:min(70vh,560px);background:#000;}" +
       ".amarte-msg-bot .amarte-bubble-inner{background:#fff;border:1px solid #e0e0e0;color:#1a1a1a;}" +
       ".amarte-msg-user .amarte-bubble-inner{background:linear-gradient(145deg,#E91E63,#D81B60);color:#ffffff;}" +
       ".amarte-typing{font-size:0.85rem;color:#666;font-style:italic;padding:4px 0 8px;}" +
@@ -949,6 +1130,23 @@
       "color:#fff;text-decoration:none;font-size:0.85rem;font-weight:600;background:#D81B60;" +
       "transition:background 0.2s ease,transform 0.15s ease;}" +
       ".amarte-opt-link:hover{background:#AD1457;color:#fff;}" +
+      ".amarte-dt-picker{width:100%;max-width:100%;margin-top:8px;padding:12px;" +
+      "background:#fff;border:1px solid #e0e0e0;border-radius:14px;box-sizing:border-box;}" +
+      ".amarte-dt-picker-title{margin:0 0 10px;font-size:0.85rem;font-weight:600;color:#1A1A3D;}" +
+      ".amarte-dt-stack{display:flex;flex-direction:column;gap:10px;margin-bottom:10px;}" +
+      ".amarte-dt-field{display:flex;flex-direction:column;gap:4px;width:100%;}" +
+      ".amarte-dt-field label{font-size:0.72rem;font-weight:600;color:#555;}" +
+      ".amarte-dt-field input,.amarte-dt-field select{width:100%;box-sizing:border-box;" +
+      "border:1px solid rgba(0,0,0,0.12);border-radius:10px;padding:9px 10px;font-size:0.88rem;" +
+      "background:#fff;color:#1a1a1a;}" +
+      ".amarte-dt-field input:focus,.amarte-dt-field select:focus{border-color:#D81B60;outline:none;}" +
+      ".amarte-dt-time-row{display:flex;gap:6px;}" +
+      ".amarte-dt-time-row select{flex:1;min-width:0;}" +
+      ".amarte-dt-submit{width:100%;margin-top:4px;padding:11px 14px;border:none;border-radius:999px;" +
+      "background:#D81B60;color:#fff;font-weight:600;font-size:0.85rem;cursor:pointer;}" +
+      ".amarte-dt-submit:hover{background:#AD1457;}" +
+      ".amarte-dt-submit:disabled{opacity:0.55;cursor:not-allowed;}" +
+      ".amarte-dt-error{margin:0 0 8px;font-size:0.78rem;color:#c62828;}" +
       ".amarte-widget-footer-wrap{flex-shrink:0;display:flex;flex-direction:column;background:transparent;}" +
       ".amarte-widget-footer-row{display:flex;gap:8px;padding:12px 16px 8px;background:transparent;align-items:center;}" +
       ".amarte-widget-mic-hint{margin:0;padding:0 16px 8px;font-size:0.75rem;line-height:1.35;" +
@@ -988,6 +1186,15 @@
       ".amarte-rsv-field input:focus,.amarte-rsv-field select:focus{border-color:#D81B60;}" +
       ".amarte-rsv-field input:disabled,.amarte-rsv-field select:disabled{opacity:0.7;background:#f5f5f5;}" +
       ".amarte-rsv-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;}" +
+      ".amarte-rsv-pack-options{display:flex;flex-wrap:wrap;gap:6px;margin-top:2px;}" +
+      ".amarte-rsv-pack-opt{display:inline-flex;cursor:pointer;margin:0;}" +
+      ".amarte-rsv-pack-opt input{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none;}" +
+      ".amarte-rsv-pack-opt span{display:inline-block;padding:8px 11px;border:1px solid rgba(0,0,0,0.14);" +
+      "border-radius:999px;font-size:0.8rem;font-weight:600;color:#1A1A3D;background:#fff;" +
+      "line-height:1.2;transition:background 0.15s ease,color 0.15s ease,border-color 0.15s ease;}" +
+      ".amarte-rsv-pack-opt:hover span{border-color:#D81B60;}" +
+      ".amarte-rsv-pack-opt input:focus-visible + span{outline:2px solid #D81B60;outline-offset:2px;}" +
+      ".amarte-rsv-pack-opt input:checked + span{background:#D81B60;color:#fff;border-color:#D81B60;}" +
       ".amarte-rsv-error{display:none;margin:0 0 8px;font-size:0.8rem;color:#c62828;}" +
       ".amarte-rsv-error.amarte-show{display:block;}" +
       ".amarte-rsv-submit{width:100%;border:none;border-radius:999px;padding:11px 14px;" +
@@ -995,10 +1202,10 @@
       ".amarte-rsv-submit:hover{background:#AD1457;}" +
       ".amarte-rsv-submit:disabled{opacity:0.55;cursor:not-allowed;}" +
       ".amarte-rsv-form.amarte-done{opacity:0.72;pointer-events:none;}" +
-      "@media (max-width:768px){.amarte-widget-launcher{right:16px;font-size:0.82rem;padding:6px 6px 6px 14px;" +
-      "bottom:calc(16px + env(safe-area-inset-bottom,0px));max-width:min(92vw,320px);}" +
-      ".amarte-widget-launcher-icon{width:40px;height:40px;}" +
-      ".amarte-widget-launcher-icon svg{width:20px;height:20px;}" +
+      "@media (max-width:768px){.amarte-widget-launcher{right:16px;font-size:0.68rem;padding:6px 6px 6px 12px;" +
+      "bottom:calc(16px + env(safe-area-inset-bottom,0px));}" +
+      ".amarte-widget-launcher-icon{width:36px;height:36px;}" +
+      ".amarte-widget-launcher-icon svg{width:18px;height:18px;}" +
       ".amarte-widget-panel{right:16px;bottom:calc(80px + env(safe-area-inset-bottom,0px));}}" +
       "@media (min-width:769px){.amarte-widget-panel{width:min(420px,calc(100vw - 48px));" +
       "max-height:min(720px,calc(100vh - 140px));}.amarte-widget-messages{min-height:320px;}}" +
@@ -1081,24 +1288,28 @@
     }
     row.appendChild(bubble);
 
-    // Si hay opciones y es mensaje del bot, crea enlaces debajo
-    if (role === "bot" && options && options.length) {
-      var optsWrap = document.createElement("div");
-      optsWrap.className = "amarte-options";
-      for (var i = 0; i < options.length; i++) {
-        var opt = options[i];
-        if (!opt || !opt.label || !opt.url) {
-          continue;
-        }
-        var a = document.createElement("a");
-        a.className = "amarte-opt-link";
-        a.href = opt.url;
-        a.target = "_blank";
-        a.rel = "noopener noreferrer";
-        a.textContent = opt.label;
-        optsWrap.appendChild(a);
-      }
-      row.appendChild(optsWrap);
+    // Solo botón de video bajo la burbuja (CTAs viven en el pie del widget)
+    if (
+      role === "bot" &&
+      extras &&
+      extras.suiteVideo &&
+      extras.suiteVideo.videoUrl
+    ) {
+      var videoBtn = document.createElement("button");
+      videoBtn.type = "button";
+      videoBtn.className = "amarte-suite-video-cta";
+      videoBtn.setAttribute(
+        "data-amarte-video-url",
+        extras.suiteVideo.videoUrl
+      );
+      videoBtn.setAttribute(
+        "data-amarte-video-title",
+        extras.suiteVideo.title || ""
+      );
+      videoBtn.textContent =
+        "Ver video" +
+        (extras.suiteVideo.title ? " · " + extras.suiteVideo.title : "");
+      row.appendChild(videoBtn);
     }
 
     if (
@@ -1162,9 +1373,11 @@
         historyHydrating = false;
         historyHydrated = true;
         if (!data || !Array.isArray(data.messages) || !data.messages.length) {
+          ensureWelcomeMessage();
           return;
         }
         if (messagesEl.querySelector(".amarte-msg")) {
+          welcomeShown = true;
           return;
         }
         for (var i = 0; i < data.messages.length; i++) {
@@ -1182,11 +1395,13 @@
             );
           }
         }
+        welcomeShown = true;
         scrollMessagesToBottom();
       })
       .catch(function () {
         historyHydrating = false;
         historyHydrated = true;
+        ensureWelcomeMessage();
       });
   }
 
@@ -1220,6 +1435,153 @@
       extra.selected = true;
       selectEl.appendChild(extra);
     }
+  }
+
+  /**
+   * Opciones de hora en HH:MM (24h), una por cada hora — formato que usa el SaaS/BD.
+   * @returns {Array<{ value: string, label: string }>}
+   */
+  function buildReservationHourOptions() {
+    var out = [];
+    for (var h = 0; h < 24; h++) {
+      var hh = (h < 10 ? "0" : "") + h;
+      var value = hh + ":00";
+      var hour12 = h % 12 === 0 ? 12 : h % 12;
+      var period = h < 12 ? "AM" : "PM";
+      out.push({
+        value: value,
+        label: hour12 + ":00 " + period + " (" + value + ")",
+      });
+    }
+    return out;
+  }
+
+  /**
+   * Normaliza texto de hora (p.ej. "2:00 PM", "14:00") a HH:00 para el select.
+   * @param {unknown} raw
+   * @returns {string}
+   */
+  function normalizeReservationHourValue(raw) {
+    var t = String(raw || "").trim();
+    if (!t) return "";
+
+    var m24 = t.match(/^(\d{1,2}):(\d{2})\s*$/);
+    if (m24) {
+      var h24 = parseInt(m24[1], 10);
+      if (h24 >= 0 && h24 <= 23) {
+        return (h24 < 10 ? "0" : "") + h24 + ":00";
+      }
+      return "";
+    }
+
+    var m12 = t.match(
+      /^(\d{1,2})(?::(\d{2}))?\s*(a\.?\s*m\.?|p\.?\s*m\.?|am|pm)\s*$/i
+    );
+    if (m12) {
+      var hour = parseInt(m12[1], 10);
+      if (hour < 1 || hour > 12) return "";
+      var period = m12[3].replace(/\./g, "").replace(/\s/g, "").toLowerCase();
+      if (period === "am") {
+        if (hour === 12) hour = 0;
+      } else if (hour !== 12) {
+        hour += 12;
+      }
+      return (hour < 10 ? "0" : "") + hour + ":00";
+    }
+
+    return "";
+  }
+
+  /**
+   * Rellena un select de horas (value HH:MM, label legible).
+   * @param {HTMLSelectElement} selectEl
+   * @param {string} selectedHhMm
+   */
+  function fillHourSelectOptions(selectEl, selectedHhMm) {
+    selectEl.innerHTML = "";
+    var empty = document.createElement("option");
+    empty.value = "";
+    empty.textContent = "Selecciona…";
+    selectEl.appendChild(empty);
+    var list = buildReservationHourOptions();
+    var found = false;
+    for (var i = 0; i < list.length; i++) {
+      var opt = document.createElement("option");
+      opt.value = list[i].value;
+      opt.textContent = list[i].label;
+      if (selectedHhMm && list[i].value === selectedHhMm) {
+        opt.selected = true;
+        found = true;
+      }
+      selectEl.appendChild(opt);
+    }
+    if (selectedHhMm && !found) {
+      var extra = document.createElement("option");
+      extra.value = selectedHhMm;
+      extra.textContent = selectedHhMm;
+      extra.selected = true;
+      selectEl.appendChild(extra);
+    }
+  }
+
+  /**
+   * Packs canónicos del formulario (fallback si el config aún no cargó).
+   * @returns {string[]}
+   */
+  function getReservationPackOptions() {
+    var packs = reservationFormCatalog.packs;
+    if (Array.isArray(packs) && packs.length) {
+      return packs.slice();
+    }
+    return [
+      "Pack 4 horas",
+      "Pack 6 horas",
+      "Pack 8 horas",
+      "Pack 12 horas",
+      "Día Hotelero",
+    ];
+  }
+
+  /**
+   * Empareja prefill de duración con un pack canónico.
+   * @param {unknown} raw
+   * @returns {string}
+   */
+  function matchReservationPackOption(raw) {
+    var packs = getReservationPackOptions();
+    var t = String(raw || "").trim();
+    if (!t) return "";
+    var i;
+    for (i = 0; i < packs.length; i++) {
+      if (packs[i].toLowerCase() === t.toLowerCase()) {
+        return packs[i];
+      }
+    }
+    var hourMatch = t.match(/(\d+)\s*h/i);
+    if (hourMatch) {
+      var target = "Pack " + hourMatch[1] + " horas";
+      for (i = 0; i < packs.length; i++) {
+        if (packs[i] === target) return packs[i];
+      }
+    }
+    if (/d[ií]a\s*hotelero/i.test(t)) {
+      for (i = 0; i < packs.length; i++) {
+        if (/d[ií]a\s*hotelero/i.test(packs[i])) return packs[i];
+      }
+    }
+    return "";
+  }
+
+  /**
+   * Etiqueta corta visible en chips de duración.
+   * @param {string} pack
+   * @returns {string}
+   */
+  function formatPackChipLabel(pack) {
+    var t = String(pack || "");
+    var m = t.match(/^Pack\s+(\d+)\s+horas$/i);
+    if (m) return m[1] + " h";
+    return t;
   }
 
   /**
@@ -1296,12 +1658,50 @@
       return sel;
     }
 
+    /**
+     * Duración visible de una vez (chips), sin abrir un select.
+     */
+    function addPackChoices() {
+      var packs = getReservationPackOptions();
+      var selected = matchReservationPackOption(data.pack_tiempo);
+      var wrap = document.createElement("div");
+      wrap.className = "amarte-rsv-field";
+      var lab = document.createElement("div");
+      lab.id = "amarte-rsv-pack_tiempo-label";
+      lab.textContent = "Duración *";
+      var group = document.createElement("div");
+      group.className = "amarte-rsv-pack-options";
+      group.setAttribute("role", "radiogroup");
+      group.setAttribute("aria-labelledby", "amarte-rsv-pack_tiempo-label");
+      for (var i = 0; i < packs.length; i++) {
+        var pack = packs[i];
+        var optLab = document.createElement("label");
+        optLab.className = "amarte-rsv-pack-opt";
+        var radio = document.createElement("input");
+        radio.type = "radio";
+        radio.name = "pack_tiempo";
+        radio.value = pack;
+        radio.setAttribute("aria-label", pack);
+        if (i === 0) radio.required = true;
+        if (selected && pack === selected) radio.checked = true;
+        var chip = document.createElement("span");
+        chip.textContent = formatPackChipLabel(pack);
+        chip.title = pack;
+        optLab.appendChild(radio);
+        optLab.appendChild(chip);
+        group.appendChild(optLab);
+      }
+      wrap.appendChild(lab);
+      wrap.appendChild(group);
+      form.appendChild(wrap);
+    }
+
     addField("nombre", "Nombre completo", "text", true);
     addField("documento", "Documento de identidad", "text", true);
     addField("correo", "Correo (opcional)", "email", false);
     addField("whatsapp", "WhatsApp", "tel", true);
     addSelect("tipo", "Suite o plan", reservationFormCatalog.tipos);
-    addSelect("pack_tiempo", "Duración", reservationFormCatalog.packs);
+    addPackChoices();
 
     var rowDates = document.createElement("div");
     rowDates.className = "amarte-rsv-row";
@@ -1323,15 +1723,16 @@
     var horaLab = document.createElement("label");
     horaLab.setAttribute("for", "amarte-rsv-hora_reserva");
     horaLab.textContent = "Hora *";
-    var horaInput = document.createElement("input");
-    horaInput.type = "text";
-    horaInput.name = "hora_reserva";
-    horaInput.id = "amarte-rsv-hora_reserva";
-    horaInput.placeholder = "2:00 PM";
-    horaInput.required = true;
-    if (data.hora_reserva) horaInput.value = data.hora_reserva;
+    var horaSelect = document.createElement("select");
+    horaSelect.name = "hora_reserva";
+    horaSelect.id = "amarte-rsv-hora_reserva";
+    horaSelect.required = true;
+    fillHourSelectOptions(
+      horaSelect,
+      normalizeReservationHourValue(data.hora_reserva)
+    );
     horaWrap.appendChild(horaLab);
-    horaWrap.appendChild(horaInput);
+    horaWrap.appendChild(horaSelect);
     rowDates.appendChild(fechaWrap);
     rowDates.appendChild(horaWrap);
     form.appendChild(rowDates);
@@ -1383,7 +1784,13 @@
         correo: String(formControl(form, "correo").value || "").trim(),
         documento: documento,
         tipo: String(formControl(form, "tipo").value || "").trim(),
-        pack_tiempo: String(formControl(form, "pack_tiempo").value || "").trim(),
+        pack_tiempo: String(
+          (
+            form.querySelector('input[name="pack_tiempo"]:checked') ||
+            formControl(form, "pack_tiempo") ||
+            {}
+          ).value || ""
+        ).trim(),
         fecha_reserva: String(
           formControl(form, "fecha_reserva").value || ""
         ).trim(),
@@ -1469,10 +1876,170 @@
   function handleBotChatPayload(data, extras) {
     var reply = typeof data.reply === "string" ? data.reply : "";
     var options = Array.isArray(data.options) ? data.options : [];
-    appendMessage("bot", reply || " ", options, extras || null);
+    var payloadExtras = extras && typeof extras === "object" ? extras : {};
+    if (data.suiteVideo && data.suiteVideo.videoUrl) {
+      payloadExtras.suiteVideo = data.suiteVideo;
+    }
+    appendMessage("bot", reply || " ", options, payloadExtras);
     if (data.showReservationForm) {
       appendReservationForm(data.formPrefill || {});
+    } else if (data.showDateTimePicker) {
+      appendDateTimePicker();
     }
+  }
+
+  /**
+   * Selector de fecha / hora / pack inline; al confirmar envía un mensaje de chat.
+   */
+  function appendDateTimePicker() {
+    var existing = messagesEl.querySelector(".amarte-dt-picker");
+    if (existing && existing.parentNode) {
+      existing.parentNode.removeChild(existing);
+    }
+
+    var wrap = document.createElement("div");
+    wrap.className = "amarte-dt-picker";
+    wrap.setAttribute("role", "group");
+    wrap.setAttribute("aria-label", "Seleccionar fecha, hora y duración");
+
+    var title = document.createElement("p");
+    title.className = "amarte-dt-picker-title";
+    title.textContent = "📅 Elige fecha, hora y duración";
+    wrap.appendChild(title);
+
+    var errEl = document.createElement("p");
+    errEl.className = "amarte-dt-error";
+    errEl.style.display = "none";
+    wrap.appendChild(errEl);
+
+    var stack = document.createElement("div");
+    stack.className = "amarte-dt-stack";
+
+    var fechaField = document.createElement("div");
+    fechaField.className = "amarte-dt-field";
+    var fechaLab = document.createElement("label");
+    fechaLab.setAttribute("for", "amarte-dt-fecha");
+    fechaLab.textContent = "Fecha";
+    var fechaInput = document.createElement("input");
+    fechaInput.type = "date";
+    fechaInput.id = "amarte-dt-fecha";
+    fechaInput.required = true;
+    var bogotaToday = getBogotaReference().referenceDate;
+    if (bogotaToday) {
+      fechaInput.min = bogotaToday;
+      fechaInput.value = bogotaToday;
+    }
+    fechaField.appendChild(fechaLab);
+    fechaField.appendChild(fechaInput);
+    stack.appendChild(fechaField);
+
+    var horaField = document.createElement("div");
+    horaField.className = "amarte-dt-field";
+    var horaLab = document.createElement("label");
+    horaLab.textContent = "Hora";
+    var timeRow = document.createElement("div");
+    timeRow.className = "amarte-dt-time-row";
+
+    var hourSel = document.createElement("select");
+    hourSel.setAttribute("aria-label", "Hora");
+    for (var h = 1; h <= 12; h++) {
+      var ho = document.createElement("option");
+      ho.value = String(h);
+      ho.textContent = String(h);
+      if (h === 2) ho.selected = true;
+      hourSel.appendChild(ho);
+    }
+
+    var minSel = document.createElement("select");
+    minSel.setAttribute("aria-label", "Minutos");
+    ["00", "15", "30", "45"].forEach(function (m) {
+      var mo = document.createElement("option");
+      mo.value = m;
+      mo.textContent = m;
+      minSel.appendChild(mo);
+    });
+
+    var periodSel = document.createElement("select");
+    periodSel.setAttribute("aria-label", "AM o PM");
+    ["AM", "PM"].forEach(function (p) {
+      var po = document.createElement("option");
+      po.value = p;
+      po.textContent = p;
+      if (p === "PM") po.selected = true;
+      periodSel.appendChild(po);
+    });
+
+    timeRow.appendChild(hourSel);
+    timeRow.appendChild(minSel);
+    timeRow.appendChild(periodSel);
+    horaField.appendChild(horaLab);
+    horaField.appendChild(timeRow);
+    stack.appendChild(horaField);
+
+    var packField = document.createElement("div");
+    packField.className = "amarte-dt-field";
+    var packLab = document.createElement("label");
+    packLab.setAttribute("for", "amarte-dt-pack");
+    packLab.textContent = "Pack de tiempo";
+    var packSel = document.createElement("select");
+    packSel.id = "amarte-dt-pack";
+    packSel.setAttribute("aria-label", "Pack de tiempo");
+    packSel.required = true;
+    fillSelectOptions(packSel, getReservationPackOptions(), "");
+    packField.appendChild(packLab);
+    packField.appendChild(packSel);
+    stack.appendChild(packField);
+
+    wrap.appendChild(stack);
+
+    var submitBtn = document.createElement("button");
+    submitBtn.type = "button";
+    submitBtn.className = "amarte-dt-submit";
+    submitBtn.textContent = "Confirmar fecha, hora y duración";
+    submitBtn.addEventListener("click", function () {
+      errEl.style.display = "none";
+      var fecha = String(fechaInput.value || "").trim();
+      if (!fecha) {
+        errEl.textContent = "Selecciona una fecha.";
+        errEl.style.display = "block";
+        return;
+      }
+      var pack = String(packSel.value || "").trim();
+      if (!pack) {
+        errEl.textContent = "Selecciona un pack de tiempo.";
+        errEl.style.display = "block";
+        return;
+      }
+      var hour12 = parseInt(hourSel.value, 10);
+      var hora24;
+      if (periodSel.value === "AM") {
+        hora24 = hour12 === 12 ? 0 : hour12;
+      } else {
+        hora24 = hour12 === 12 ? 12 : hour12 + 12;
+      }
+      var horaHhMm =
+        (hora24 < 10 ? "0" : "") + hora24 + ":" + minSel.value;
+      var horaLabel =
+        hourSel.value + ":" + minSel.value + " " + periodSel.value;
+      var message =
+        "Quiero reservar el " +
+        fecha +
+        " a las " +
+        horaLabel +
+        " (" +
+        horaHhMm +
+        ") con " +
+        pack +
+        ".";
+      if (wrap.parentNode) {
+        wrap.parentNode.removeChild(wrap);
+      }
+      sendUserMessage(message);
+    });
+    wrap.appendChild(submitBtn);
+
+    messagesEl.appendChild(wrap);
+    scrollMessagesToBottom();
   }
 
   /**
@@ -1659,10 +2226,14 @@
 
   /**
    * Envía el mensaje del usuario al backend y muestra la respuesta.
+   * @param {string} [presetText] - Si se pasa, envía ese texto en lugar del input.
    */
-  function sendUserMessage() {
-    // Lee el valor actual del input
-    var text = inputEl.value.trim();
+  function sendUserMessage(presetText) {
+    // Lee el valor actual del input o el texto prefijado
+    var text =
+      typeof presetText === "string" && presetText.trim()
+        ? presetText.trim()
+        : inputEl.value.trim();
     // Si está vacío, no envía
     if (!text) {
       return;
@@ -1755,7 +2326,7 @@
 
     var launcherLabel = document.createElement("span");
     launcherLabel.className = "amarte-widget-launcher-label";
-    launcherLabel.textContent = "Pregúntale a Martina";
+    launcherLabel.innerHTML = "Pregúntale<br>a Martina";
 
     var launcherIcon = document.createElement("span");
     launcherIcon.className = "amarte-widget-launcher-icon";
@@ -1856,14 +2427,16 @@
     var urlWa = pickQuickUrl("AMARTE_QUICK_WHATSAPP_URL", DEFAULT_QUICK_WHATSAPP);
     var urlRes = pickQuickUrl("AMARTE_QUICK_RESERVATIONS_URL", DEFAULT_QUICK_RESERVE);
     var urlPromos = pickQuickUrl("AMARTE_PROMOCIONES_URL", DEFAULT_QUICK_PROMOS);
+    var urlWompi = pickQuickUrl("AMARTE_QUICK_WOMPI_URL", WOMPI_CHECKOUT_URL);
     var telHref = pickQuickUrl("AMARTE_QUICK_CALL_TEL", DEFAULT_QUICK_TEL);
 
-    quickRow.appendChild(buildQuickLink(urlWa, "WhatsApp", ""));
-    var callLink = buildQuickLink(telHref, "Llamar", "amarte-quick-call");
+    quickRow.appendChild(buildQuickLink(urlWa, "💬 WhatsApp", ""));
+    var callLink = buildQuickLink(telHref, "📞 Llamar", "amarte-quick-call");
     callLink.setAttribute("aria-label", "Llamar por teléfono");
     quickRow.appendChild(callLink);
-    quickRow.appendChild(buildQuickLink(urlRes, "Reservar", ""));
-    quickRow.appendChild(buildQuickLink(urlPromos, "PROMOCIONES", ""));
+    quickRow.appendChild(buildQuickLink(urlRes, "📅 Reservar", ""));
+    quickRow.appendChild(buildQuickLink(urlPromos, "🎁 PROMOCIONES", ""));
+    quickRow.appendChild(buildQuickLink(urlWompi, "💳 Wompi", ""));
 
     var liveBtn = document.createElement("button");
     liveBtn.type = "button";
@@ -1965,6 +2538,34 @@
     panel.appendChild(footerWrap);
     panel.appendChild(liveOverlay);
 
+    messagesEl.addEventListener("click", function (ev) {
+      var t = ev.target;
+      if (!t) return;
+      var btn =
+        t.closest &&
+        (t.closest(".amarte-suite-video-btn") ||
+          t.closest(".amarte-suite-video-cta"));
+      if (btn) {
+        ev.preventDefault();
+        openSuiteVideoModal({
+          videoUrl: btn.getAttribute("data-amarte-video-url") || "",
+          title: btn.getAttribute("data-amarte-video-title") || "",
+        });
+        return;
+      }
+      var link = t.closest && t.closest("a.amarte-inline-link");
+      if (link && link.href) {
+        var suite = findSuiteVideoByProductUrl(link.href);
+        if (suite) {
+          ev.preventDefault();
+          openSuiteVideoModal({
+            videoUrl: suite.videoUrl,
+            title: suite.title,
+          });
+        }
+      }
+    });
+
     rootEl.appendChild(launcher);
     rootEl.appendChild(panel);
     document.body.appendChild(rootEl);
@@ -2053,6 +2654,10 @@
           launcher.setAttribute("aria-expanded", "true");
         }
         hydrateHistoryFromServer();
+        // Si el historial ya se resolvió vacío (o falló), saluda al abrir.
+        if (historyHydrated && !historyHydrating) {
+          ensureWelcomeMessage();
+        }
         inputEl.focus();
         scrollMessagesToBottom();
         var msg = initialMessage != null ? String(initialMessage).trim() : "";

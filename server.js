@@ -21,6 +21,7 @@ const {
   createPendingReservation,
   buildPrereservaConfirmMessage,
 } = require("./reservationService");
+const { enrichChatReply } = require("./services/suiteChatEnrichment");
 const {
   isLiveVoiceEnabled,
   isElevenLabsAgentConfigured,
@@ -55,6 +56,8 @@ const corsOrigins = [
   // Front Vite (rediseño) y demos locales — también en producción Railway
   "http://localhost:3000",
   "http://127.0.0.1:3000",
+  "http://localhost:3001",
+  "http://127.0.0.1:3001",
   "http://localhost:5173",
   "http://127.0.0.1:5173",
   "http://localhost:5500",
@@ -68,9 +71,34 @@ extraCorsOrigins.forEach((origin) => {
   if (!corsOrigins.includes(origin)) corsOrigins.push(origin);
 });
 
+/**
+ * Permite orígenes locales (cualquier puerto) y previews de Vercel,
+ * además de la lista fija / CORS_ORIGINS.
+ * Sin esto, localhost:3001 o *.vercel.app fallan en el widget con
+ * "problema al conectar con el concierge".
+ */
+function isAllowedCorsOrigin(origin) {
+  if (!origin) return true;
+  if (corsOrigins.includes(origin)) return true;
+  try {
+    const { hostname } = new URL(origin);
+    if (hostname === "localhost" || hostname === "127.0.0.1") return true;
+    if (hostname.endsWith(".vercel.app")) return true;
+  } catch {
+    return false;
+  }
+  return false;
+}
+
 app.use(
   cors({
-    origin: corsOrigins,
+    origin(origin, callback) {
+      if (isAllowedCorsOrigin(origin)) {
+        callback(null, true);
+        return;
+      }
+      callback(null, false);
+    },
     methods: ["GET", "POST"],
     credentials: true,
   })
@@ -283,7 +311,9 @@ function sanitizeHistoryContent(content) {
  *   rawText: string;
  *   reservationId?: string | null;
  *   showReservationForm: boolean;
+ *   showDateTimePicker: boolean;
  *   formPrefill: Record<string, string> | null;
+ *   suiteVideo: { id: string; title: string; videoUrl: string } | null;
  * }>}
  */
 async function runChat(input) {
@@ -344,7 +374,9 @@ async function runChat(input) {
   let options = built.options;
   let reservationId = null;
   let showReservationForm = Boolean(built.showReservationForm);
+  let showDateTimePicker = Boolean(built.showDateTimePicker);
   let formPrefill = built.formPrefill || null;
+  let suiteVideo = null;
 
   const histForLink = getChatHistoryStore();
   const existingReservationId =
@@ -354,6 +386,7 @@ async function runChat(input) {
 
   if (existingReservationId) {
     showReservationForm = false;
+    showDateTimePicker = false;
     formPrefill = null;
   }
 
@@ -372,12 +405,14 @@ async function runChat(input) {
         await histForLink.linkReservation(conversationId, created.id);
       }
       reply = buildPrereservaConfirmMessage(created.row);
-      options = resolveChatActions(["wompi", "whatsapp"]);
+      options = resolveChatActions(["wompi"]);
+      showDateTimePicker = false;
       console.log(`Prerreserva creada: ${created.id} (${created.row.tipo})`);
     } else {
       console.warn("No se creó prerreserva:", created.error);
-      reply = `${reply.trim()}\n\nAún no pude registrar la prerreserva automáticamente (${created.error}). Puedes usar el formulario o WhatsApp y un asesor te ayuda.`;
-      options = resolveChatActions(["reserve", "whatsapp", "wompi"]);
+      reply = `${reply.trim()}\n\nAún no pude registrar la prerreserva automáticamente (${created.error}). Puedes usar Reservar o WhatsApp en el pie del chat y un asesor te ayuda.`;
+      options = resolveChatActions(["wompi", "promotions"]);
+      showDateTimePicker = false;
     }
   } else if (built.pendingReservation && existingReservationId) {
     console.log(
@@ -386,13 +421,19 @@ async function runChat(input) {
   }
 
   if (showReservationForm) {
-    options = resolveChatActions(["reserve", "whatsapp"]);
+    options = resolveChatActions(["promotions"]);
+    showDateTimePicker = false;
   }
+
+  // Video + sanitizar fichas web + anexar promo canónica si cotizó exacto
+  const enriched = enrichChatReply(reply, built.suiteShowcase);
+  reply = enriched.reply;
+  suiteVideo = enriched.suiteVideo;
 
   // Historial: solo el texto visible (sin JSON ni URLs de botones).
   const rawText = reply;
   console.log(
-    `IA respondió a ${safeRoom}: ${options.length} botones (${built.actionTypes.join(", ")})${showReservationForm ? " +form" : ""}.`
+    `IA respondió a ${safeRoom}: ${options.length} botones (${built.actionTypes.join(", ")})${showReservationForm ? " +form" : ""}${showDateTimePicker ? " +datepicker" : ""}${suiteVideo ? ` +video:${suiteVideo.id}` : ""}.`
   );
   return {
     reply,
@@ -400,7 +441,9 @@ async function runChat(input) {
     rawText,
     reservationId,
     showReservationForm,
+    showDateTimePicker,
     formPrefill: showReservationForm ? formPrefill || {} : null,
+    suiteVideo,
   };
 }
 
@@ -588,9 +631,11 @@ app.post("/chat", async (req, res) => {
       options: result.options,
       ...(result.reservationId ? { reservationId: result.reservationId } : {}),
       showReservationForm: Boolean(result.showReservationForm),
+      showDateTimePicker: Boolean(result.showDateTimePicker),
       formPrefill: result.showReservationForm
         ? result.formPrefill || {}
         : null,
+      suiteVideo: result.suiteVideo || null,
     });
   } catch (err) {
     console.error("Error en /chat:", err);
@@ -620,7 +665,7 @@ app.post("/reservations/pending", async (req, res) => {
         reservationId: existingReservationId,
         reply:
           "Ya tienes una prerreserva registrada en esta conversación. Un asesor la verá en el panel; puedes abonar con Wompi o escribir por WhatsApp.",
-        options: resolveChatActions(["wompi", "whatsapp"]),
+        options: resolveChatActions(["wompi"]),
       });
     }
 
@@ -644,8 +689,8 @@ app.post("/reservations/pending", async (req, res) => {
       return res.status(400).json({
         ok: false,
         error: created.error,
-        reply: `No pude registrar la prerreserva (${created.error}). Revisa los datos o usa WhatsApp.`,
-        options: resolveChatActions(["reserve", "whatsapp", "wompi"]),
+        reply: `No pude registrar la prerreserva (${created.error}). Revisa los datos o usa Reservar / WhatsApp en el pie del chat.`,
+        options: resolveChatActions(["wompi", "promotions"]),
       });
     }
 
@@ -676,7 +721,7 @@ app.post("/reservations/pending", async (req, res) => {
       ok: true,
       reservationId: created.id,
       reply,
-      options: resolveChatActions(["wompi", "whatsapp"]),
+      options: resolveChatActions(["wompi"]),
     });
   } catch (err) {
     console.error("Error en /reservations/pending:", err);
@@ -742,7 +787,9 @@ app.post(
         rawText,
         reservationId,
         showReservationForm,
+        showDateTimePicker,
         formPrefill,
+        suiteVideo,
       } = await runChat({
         message: transcript,
         roomName,
@@ -801,7 +848,9 @@ app.post(
         ttsStatus,
         ...(reservationId ? { reservationId } : {}),
         showReservationForm: Boolean(showReservationForm),
+        showDateTimePicker: Boolean(showDateTimePicker),
         formPrefill: showReservationForm ? formPrefill || {} : null,
+        suiteVideo: suiteVideo || null,
         ...(audioBase64
           ? { audioBase64, audioMimeType }
           : {}),

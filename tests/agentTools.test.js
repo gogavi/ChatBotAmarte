@@ -73,7 +73,7 @@ async function run() {
   );
   assert.strictEqual(catalog.status, 200);
   assert.strictEqual(catalog.body.found, true);
-  assert.strictEqual(catalog.body.priceCop, 240000);
+  assert.strictEqual(catalog.body.priceCop, 200000);
 
   const actions = await request(
     "POST",

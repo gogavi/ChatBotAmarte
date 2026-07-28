@@ -3,7 +3,27 @@
  * Actualiza precios y URLs aquí sin tocar la lógica del servidor.
  */
 
-/** @typedef {{ label: string; url: string }} SuiteLink */
+const GENERATED_VIDEOS_BASE =
+  "https://dftbelnombbtjryqphaa.supabase.co/storage/v1/object/public/generated-videos";
+
+/**
+ * @typedef {{
+ *   id: string;
+ *   label: string;
+ *   url: string;
+ *   videoFile: string;
+ * }} SuiteLink
+ */
+
+/**
+ * @param {string} videoFile
+ * @returns {string}
+ */
+function buildSuiteVideoUrl(videoFile) {
+  const file = String(videoFile || "").trim();
+  if (!file) return "";
+  return `${GENERATED_VIDEOS_BASE}/${encodeURIComponent(file)}`;
+}
 
 /** @type {{ id: string; emoji: string; title: string; description: string; suites: SuiteLink[] }[]} */
 const suiteCategories = [
@@ -13,10 +33,30 @@ const suiteCategories = [
     title: "Deluxe – Máximo lujo y confort",
     description: "Suites premium con máximo confort.",
     suites: [
-      { label: "Suite Diamante", url: "https://amartesuite.com/producto/suite-deluxe-diamante/" },
-      { label: "Suite Gold", url: "https://amartesuite.com/producto/suite-deluxe-gold/" },
-      { label: "Suite Rubí", url: "https://amartesuite.com/producto/suite-deluxe-rubi/" },
-      { label: "Suite Zafiro", url: "https://amartesuite.com/producto/suite-deluxe-zafiro/" },
+      {
+        id: "suite_diamante",
+        label: "Suite Diamante",
+        url: "https://amartesuite.com/producto/suite-deluxe-diamante/",
+        videoFile: "SUITE DELUXE DIAMANTE.mp4",
+      },
+      {
+        id: "suite_gold",
+        label: "Suite Gold",
+        url: "https://amartesuite.com/producto/suite-deluxe-gold/",
+        videoFile: "SUITE DELUXE GOLD.mp4",
+      },
+      {
+        id: "suite_rubi",
+        label: "Suite Rubí",
+        url: "https://amartesuite.com/producto/suite-deluxe-rubi/",
+        videoFile: "SUITE RUBI.mp4",
+      },
+      {
+        id: "suite_zafiro",
+        label: "Suite Zafiro",
+        url: "https://amartesuite.com/producto/suite-deluxe-zafiro/",
+        videoFile: "SUITE DELUXE ZAFIRO.mp4",
+      },
     ],
   },
   {
@@ -25,9 +65,24 @@ const suiteCategories = [
     title: "Temáticas – Diseños exclusivos",
     description: "Ambientes únicos para vivir una fantasía a medida.",
     suites: [
-      { label: "Suite Árabe", url: "https://amartesuite.com/producto/suite-deluxe-arabe/" },
-      { label: "Suite Gótica", url: "https://amartesuite.com/producto/suite-deluxe-gotica/" },
-      { label: "Suite Queen", url: "https://amartesuite.com/producto/suite-deluxe-queen/" },
+      {
+        id: "suite_arabe",
+        label: "Suite Árabe",
+        url: "https://amartesuite.com/producto/suite-deluxe-arabe/",
+        videoFile: "SUITE DELUXE ARABE.mp4",
+      },
+      {
+        id: "suite_gotica",
+        label: "Suite Gótica",
+        url: "https://amartesuite.com/producto/suite-deluxe-gotica/",
+        videoFile: "SUITE GOTICA.mp4",
+      },
+      {
+        id: "suite_queen",
+        label: "Suite Queen",
+        url: "https://amartesuite.com/producto/suite-deluxe-queen/",
+        videoFile: "SUITE DELUXE QUEEN.mp4",
+      },
     ],
   },
   {
@@ -35,7 +90,14 @@ const suiteCategories = [
     emoji: "🛁",
     title: "Jacuzzi – Espacios íntimos con jacuzzi privado",
     description: "Privacidad y relajación con jacuzzi en la suite.",
-    suites: [{ label: "Suite VIP Jacuzzi", url: "https://amartesuite.com/producto/suite-vip-jacuzzi/" }],
+    suites: [
+      {
+        id: "suite_vip_jacuzzi",
+        label: "Suite VIP Jacuzzi",
+        url: "https://amartesuite.com/producto/suite-vip-jacuzzi/",
+        videoFile: "SUITE VIP JACUZZI.mp4",
+      },
+    ],
   },
   {
     id: "sencillas",
@@ -43,35 +105,142 @@ const suiteCategories = [
     title: "Sencillas – Acogedoras, sin jacuzzi en suite",
     description: "Opciones íntimas y acogedoras para parejas.",
     suites: [
-      { label: "Suite Cabaña", url: "https://amartesuite.com/producto/suite-cabana/" },
-      { label: "Suite Movimiento", url: "https://amartesuite.com/producto/suite-cama-en-movimiento/" },
-      { label: "Suite Amarte", url: "https://amartesuite.com/producto/suite-amarte/" },
+      {
+        id: "suite_cabana",
+        label: "Suite Cabaña",
+        url: "https://amartesuite.com/producto/suite-cabana/",
+        videoFile: "SUITE CABANA.mp4",
+      },
+      {
+        id: "suite_movimiento",
+        label: "Suite Movimiento",
+        url: "https://amartesuite.com/producto/suite-cama-en-movimiento/",
+        videoFile: "SUITE MOVIMIENTO.mp4",
+      },
+      {
+        id: "suite_amarte",
+        label: "Suite Amarte",
+        url: "https://amartesuite.com/producto/suite-amarte/",
+        videoFile: "SUITE AMARTE.mp4",
+      },
     ],
   },
 ];
 
-/** Precios en COP (número entero). weekday = domingo a jueves; weekend = viernes y sábado. */
+/** @returns {SuiteLink[]} */
+function flattenSuites() {
+  /** @type {SuiteLink[]} */
+  const out = [];
+  for (const cat of suiteCategories) {
+    for (const suite of cat.suites) {
+      out.push(suite);
+    }
+  }
+  return out;
+}
+
+/**
+ * @param {string} productUrl
+ * @returns {{ id: string; title: string; videoUrl: string; productUrl: string } | null}
+ */
+function getSuiteVideoByProductUrl(productUrl) {
+  const raw = String(productUrl || "").trim();
+  if (!raw) return null;
+  let pathname = "";
+  try {
+    pathname = new URL(raw).pathname.replace(/\/+$/, "").toLowerCase();
+  } catch {
+    pathname = raw.replace(/\/+$/, "").toLowerCase();
+  }
+  for (const suite of flattenSuites()) {
+    let suitePath = "";
+    try {
+      suitePath = new URL(suite.url).pathname.replace(/\/+$/, "").toLowerCase();
+    } catch {
+      continue;
+    }
+    if (pathname === suitePath || pathname.endsWith(suitePath)) {
+      return {
+        id: suite.id,
+        title: suite.label,
+        videoUrl: buildSuiteVideoUrl(suite.videoFile),
+        productUrl: suite.url,
+      };
+    }
+  }
+  return null;
+}
+
+/**
+ * @param {string} nameOrId
+ * @returns {{ id: string; title: string; videoUrl: string; productUrl: string } | null}
+ */
+function getSuiteVideoByLabel(nameOrId) {
+  const raw = String(nameOrId || "").trim();
+  if (!raw) return null;
+  const needle = raw
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ");
+  for (const suite of flattenSuites()) {
+    const id = suite.id.toLowerCase();
+    const label = suite.label
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+    if (
+      needle === id ||
+      needle === label ||
+      label.includes(needle) ||
+      needle.includes(label.replace(/^suite\s+/, ""))
+    ) {
+      return {
+        id: suite.id,
+        title: suite.label,
+        videoUrl: buildSuiteVideoUrl(suite.videoFile),
+        productUrl: suite.url,
+      };
+    }
+  }
+  return null;
+}
+
+/**
+ * Mapa para el widget: productUrl → video.
+ * @returns {Array<{ id: string; title: string; productUrl: string; videoUrl: string }>}
+ */
+function getSuiteVideosForWidget() {
+  return flattenSuites().map((suite) => ({
+    id: suite.id,
+    title: suite.label,
+    productUrl: suite.url,
+    videoUrl: buildSuiteVideoUrl(suite.videoFile),
+  }));
+}
+
+/** Precios en COP (número entero). weekday = domingo a jueves; weekend = viernes y sábado. Matriz oficial V2. */
 const pricing = {
   suites: {
     suite_amarte: {
       name: "Suite Amarte",
-      weekday: { h4: 90000, h8: 120000, h12: 160000, diaHotelero: 200000 },
-      weekend: { h4: 120000, h8: 160000, h12: 220000, diaHotelero: 260000 },
+      weekday: { h4: 78000, h8: 100000, h12: 134000, diaHotelero: 165000 },
+      weekend: { h4: 100000, h8: 134000, h12: 180000, diaHotelero: 220000 },
     },
     suite_cabana_o_movimiento: {
       name: "Suite Cabaña o Suite Movimiento",
-      weekday: { h4: 120000, h8: 160000, h12: 190000, diaHotelero: 240000 },
-      weekend: { h4: 150000, h8: 180000, h12: 260000, diaHotelero: 320000 },
+      weekday: { h4: 100000, h8: 130000, h12: 160000, diaHotelero: 200000 },
+      weekend: { h4: 120000, h8: 150000, h12: 220000, diaHotelero: 270000 },
     },
     suite_jacuzzi: {
       name: "Suite VIP Jacuzzi",
-      weekday: { h4: 200000, h8: 240000, h12: 300000, diaHotelero: 380000 },
-      weekend: { h4: 240000, h8: 290000, h12: 360000, diaHotelero: 420000 },
+      weekday: { h4: 175000, h8: 200000, h12: 250000, diaHotelero: 320000 },
+      weekend: { h4: 200000, h8: 240000, h12: 300000, diaHotelero: 350000 },
     },
     suites_deluxe_tematicas: {
-      name: "Suite Temática (Jacuzzi + Sauna)",
-      weekday: { h4: 240000, h8: 280000, h12: 340000, diaHotelero: 420000 },
-      weekend: { h4: 300000, h8: 350000, h12: 420000, diaHotelero: 470000 },
+      name: "Suites Deluxe o Temáticas",
+      weekday: { h4: 200000, h8: 230000, h12: 280000, diaHotelero: 350000 },
+      weekend: { h4: 250000, h8: 290000, h12: 350000, diaHotelero: 390000 },
     },
   },
   plans: {
@@ -79,67 +248,102 @@ const pricing = {
       name: "Plan Amarte",
       includes: [
         { emoji: "🌹", label: "Pétalos de rosas" },
-        { emoji: "🕯️", label: "Velas aromáticas" },
         { emoji: "🎈", label: "Globos" },
-        { emoji: "🍾", label: "Una botella de vino espumoso" },
-        { emoji: "🍫", label: "Un par de chocolates" },
+        { emoji: "🍾", label: "Champaña" },
+        { emoji: "🍫", label: "Chocolates (2)" },
+        { emoji: "🍿", label: "Crispetas (80gr)" },
       ],
-      weekday: { h6: 210000, h12: 280000, diaHotelero: 320000 },
-      weekend: { h6: 240000, h12: 340000, diaHotelero: 380000 },
+      weekday: { h6: 180000, h12: 240000, diaHotelero: 270000 },
+      weekend: { h6: 200000, h12: 280000, diaHotelero: 320000 },
     },
     plan_cabana_movimiento: {
       name: "Plan Cabaña o Plan Cama Movimiento",
       includes: [
         { emoji: "🌹", label: "Pétalos de rosas" },
-        { emoji: "🕯️", label: "Velas aromáticas" },
         { emoji: "🎈", label: "Globos" },
-        { emoji: "🍾", label: "Una botella de vino espumoso" },
-        { emoji: "🍫", label: "Un par de chocolates" },
+        { emoji: "🍾", label: "Champaña" },
+        { emoji: "🍫", label: "Chocolates (2)" },
+        { emoji: "🍿", label: "Crispetas (80gr)" },
       ],
-      weekday: { h6: 220000, h12: 290000, diaHotelero: 340000 },
-      weekend: { h6: 250000, h12: 360000, diaHotelero: 420000 },
+      weekday: { h6: 200000, h12: 260000, diaHotelero: 300000 },
+      weekend: { h6: 220000, h12: 320000, diaHotelero: 370000 },
     },
     plan_humedo: {
       name: "Plan Húmedo",
       includes: [
-        { emoji: "🛁", label: "Jacuzzi" },
-        { emoji: "♨️", label: "Sauna" },
         { emoji: "🌹", label: "Pétalos de rosas" },
-        { emoji: "🕯️", label: "Velas aromáticas" },
         { emoji: "🎈", label: "Globos" },
-        { emoji: "🍾", label: "Una botella de vino espumoso" },
-        { emoji: "🍫", label: "Un par de chocolates" },
+        { emoji: "🍾", label: "Champaña" },
+        { emoji: "🍫", label: "Chocolates (2)" },
+        { emoji: "🍿", label: "Crispetas (80gr)" },
       ],
-      weekday: { h6: 320000, h12: 420000, diaHotelero: 500000 },
-      weekend: { h6: 360000, h12: 480000, diaHotelero: 540000 },
+      weekday: { h6: 300000, h12: 370000, diaHotelero: 440000 },
+      weekend: { h6: 320000, h12: 420000, diaHotelero: 470000 },
     },
     plan_romantico_cumple_erotico: {
       name: "Plan Romántico / Cumpleaños / Erótico",
       includes: [
         { emoji: "🌹", label: "Pétalos de rosas" },
-        { emoji: "🕯️", label: "Velas aromáticas" },
         { emoji: "🎈", label: "Globos" },
-        { emoji: "🍾", label: "Una botella de vino espumoso" },
-        { emoji: "🍫", label: "Un par de chocolates" },
+        { emoji: "🎀", label: "Cintas" },
+        { emoji: "🕯️", label: "Velas" },
+        { emoji: "🍾", label: "Champaña" },
+        { emoji: "🍫", label: "Chocolates (2)" },
+        { emoji: "🍿", label: "Crispetas" },
+        { emoji: "🛁", label: "Jacuzzi ilimitado" },
+        { emoji: "♨️", label: "Sauna ilimitado (Plan Romántico)" },
       ],
       /** Extras solo cuando el usuario elige la variante Erótico */
       includesErotico: [
-        { emoji: "🧴", label: "Body" },
+        { emoji: "🧴", label: "Body en malla" },
+        { emoji: "🎭", label: "Antifaz" },
         { emoji: "⛓️", label: "Esposas" },
         { emoji: "🪢", label: "Látigo" },
+        { emoji: "🛁", label: "Jacuzzi ilimitado" },
       ],
-      weekday: { h6: 360000, h12: 460000, diaHotelero: 540000 },
-      weekend: { h6: 420000, h12: 540000, diaHotelero: 590000 },
+      weekday: { h6: 320000, h12: 400000, diaHotelero: 470000 },
+      weekend: { h6: 370000, h12: 470000, diaHotelero: 520000 },
     },
   },
 };
 
+/** Promo estrella de pauta (prioridad al pedir jacuzzi / 4h). */
+const promoJacuzzi = Object.freeze({
+  name: "Promo Jacuzzi",
+  price: 150000,
+  hours: 4,
+  includes: "Uso ilimitado de Jacuzzi durante 4 horas + 2 Mimosas (cócteles de bienvenida)",
+  url: "https://promojacuzzi.amartesuite.com",
+});
+
+/** Persona adicional en suite (tarifas base son para 2). */
+const extraPersonFee = 60000;
+
+/** Decoración / celebraciones (adicional a la tarifa de suite). */
+const decorationFees = Object.freeze({
+  sencillasCabana: 100000,
+  vipTematicasJacuzziSauna: 120000,
+  includes:
+    "Arreglo con pétalos de rosa, globos con frases románticas, velas decorativas, lencería especial y ambiente preparado",
+});
+
+/** Objeción de precio: hora suelta Suite Sencilla (venta interna). */
+const simpleHourlyRate = 30000;
+
+const bankAccounts = Object.freeze({
+  bancolombia:
+    "Bancolombia — Inversiones Ogavi S.A. — NIT 900112447-4 — Cta. Corriente 30089879630",
+  davivienda:
+    "Davivienda / Daviplata — Inversiones Ogavi S.A. — NIT 900112447-4 — Cta. Ahorros / N.º 008900659015",
+  nequi: "Nequi (Envío a Banco) — misma cuenta Bancolombia 30089879630",
+});
+
 const identity = {
   name: "Martina",
-  hotel: "Hotel Amarte Suite",
+  hotel: "Amarte Suite",
   siteUrl: "https://amartesuite.com",
   tone:
-    "Cálida, encantadora, profesional, cercana, persuasiva, sensual y atractiva, sin vulgaridad. Respuestas cortas y convincentes.",
+    "Súper cálida, empática, amable, profesional, cómplice y orientada al cierre rápido. Mensajes cortos, conversacionales, con emojis cálidos (✨🥂💖🛁🔥🛌🍾🎉🔞). Sin vulgaridad ni tono robótico.",
 };
 
 const highlightedServices = [
@@ -157,11 +361,11 @@ const reservationFlow = {
     "Tipo de suite o plan",
     "Pack de tiempo: 4 h, 8 h, 12 h o día hotelero (2:00 p. m. a 12:00 m. del día siguiente)",
   ],
-  note: "El proceso de reserva es ágil y seguro.",
+  note: "El proceso de reserva es ágil y seguro. Prefiere el formulario inline del chat; no abrumes pidiendo muchos datos por texto.",
 };
 
 const location = {
-  address: "Calle 62 No. 14–19, Teusaquillo, Bogotá, Colombia",
+  address: "Calle 62 #14-19, Chapinero (Calle 62 con Caracas), Bogotá, Colombia",
   mapsUrl: "https://bit.ly/ubicacionAmarte",
 };
 
@@ -184,9 +388,9 @@ function buildWhatsAppUrl(message) {
 
 const contact = {
   whatsappUrl: buildWhatsAppUrl(),
-  reservationsUrl: "https://amartesuite.com/formulario-reservas-amarte-suite/",
+  reservationsUrl: "https://reservas.amartesuite.com",
   /** Landing principal de campañas / promociones (botón PROMOCIONES en el widget). */
-  promotionsUrl: "https://amartesuite.com/suite-jacuzzi-mejor-precio/",
+  promotionsUrl: "https://promojacuzzi.amartesuite.com",
 };
 
 /**
@@ -205,6 +409,12 @@ function formatPricingForPrompt() {
   lines.push("TARIFAS (COP Colombia). Domingo a jueves = tarifa entre semana. Viernes y sábado = tarifa fin de semana.");
   lines.push("Día hotelero: de 2:00 p. m. a 12:00 m. del día siguiente.");
   lines.push(
+    `PROMO JACUZZI (pauta, prioridad si piden jacuzzi/4h): ${formatCop(promoJacuzzi.price)} por ${promoJacuzzi.hours} h — ${promoJacuzzi.includes}. Landing: botón PROMOCIONES del pie.`
+  );
+  lines.push(
+    `Persona adicional: ${formatCop(extraPersonFee)}. Decoración: sencillas/cabaña +${formatCop(decorationFees.sencillasCabana)}; VIP/temáticas/jacuzzi/sauna +${formatCop(decorationFees.vipTematicasJacuzziSauna)}.`
+  );
+  lines.push(
     "IMPORTANTE: este bloque es referencia interna. NO copies al usuario el formato con | ni matrices densas; presenta precios según las reglas de «Presentación de precios» (desde / una línea / lista por viñetas)."
   );
   lines.push("");
@@ -212,6 +422,14 @@ function formatPricingForPrompt() {
   for (const key of Object.keys(pricing.suites)) {
     const s = pricing.suites[key];
     lines.push(`• ${s.name}`);
+    if (key === "suites_deluxe_tematicas") {
+      lines.push(
+        "  Aplica a: Suite Diamante, Gold, Rubí, Zafiro, Árabe, Gótica, Queen (misma tarifa)."
+      );
+    }
+    if (key === "suite_cabana_o_movimiento") {
+      lines.push("  Aplica a: Suite Cabaña y Suite Movimiento (misma tarifa).");
+    }
     lines.push(
       `  Domingo–Jueves: 4 h ${formatCop(s.weekday.h4)} | 8 h ${formatCop(s.weekday.h8)} | 12 h ${formatCop(s.weekday.h12)} | Día hotelero ${formatCop(s.weekday.diaHotelero)}`
     );
@@ -249,14 +467,18 @@ function formatPricingForPrompt() {
 }
 
 /**
- * Lista categorías y enlaces de suites para el prompt.
+ * Lista categorías y suites para el prompt (sin URLs de ficha web: el video va por suiteShowcase).
  */
 function formatSuiteCategoriesForPrompt() {
   const blocks = [];
   for (const cat of suiteCategories) {
-    const suiteLines = cat.suites.map((s) => `  - ${s.label}: ${s.url}`).join("\n");
+    const suiteLines = cat.suites
+      .map((s) => `  - ${s.label} (id: ${s.id})`)
+      .join("\n");
     blocks.push(`${cat.emoji} ${cat.title}`);
-    blocks.push(cat.description);
+    blocks.push(
+      `Características de esta categoría (úsalas al presentar cualquier suite de la lista): ${cat.description}`
+    );
     blocks.push(suiteLines);
     blocks.push("");
   }
@@ -266,6 +488,11 @@ function formatSuiteCategoriesForPrompt() {
 module.exports = {
   suiteCategories,
   pricing,
+  promoJacuzzi,
+  extraPersonFee,
+  decorationFees,
+  simpleHourlyRate,
+  bankAccounts,
   identity,
   highlightedServices,
   reservationFlow,
@@ -277,4 +504,9 @@ module.exports = {
   formatCop,
   formatPricingForPrompt,
   formatSuiteCategoriesForPrompt,
+  GENERATED_VIDEOS_BASE,
+  buildSuiteVideoUrl,
+  getSuiteVideoByProductUrl,
+  getSuiteVideoByLabel,
+  getSuiteVideosForWidget,
 };

@@ -1,7 +1,11 @@
 const { createClient } = require("@supabase/supabase-js");
+const WebSocket = require("ws");
 
 /** @type {import("@supabase/supabase-js").SupabaseClient | null} */
 let client = null;
+
+/** @type {string | null} */
+let lastClientError = null;
 
 /**
  * Normaliza env: trim + quita comillas envolventes (común en Railway/Docker).
@@ -32,6 +36,8 @@ function getSupabaseServiceKey() {
 
 /**
  * Cliente Supabase con service role (solo backend).
+ * Usa `ws` como transport de realtime (Node < 22 no trae WebSocket nativo).
+ * Nunca lanza: si falla el init, retorna null (el chat sigue con memoria).
  * @returns {import("@supabase/supabase-js").SupabaseClient | null}
  */
 function getSupabase() {
@@ -43,27 +49,46 @@ function getSupabase() {
   if (!url || !key) {
     return null;
   }
-  client = createClient(url, key, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
-  });
-  return client;
+  try {
+    client = createClient(url, key, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+      realtime: {
+        transport: WebSocket,
+      },
+    });
+    lastClientError = null;
+    return client;
+  } catch (err) {
+    lastClientError =
+      err && err.message
+        ? String(err.message)
+        : "Error al crear cliente Supabase";
+    console.warn("Supabase client init failed:", lastClientError);
+    return null;
+  }
 }
 
 function isSupabaseConfigured() {
   return Boolean(getSupabaseUrl() && getSupabaseServiceKey());
 }
 
+function getLastSupabaseClientError() {
+  return lastClientError;
+}
+
 /** Reinicia el cliente (p.ej. tras cambiar env en tests). */
 function resetSupabaseClient() {
   client = null;
+  lastClientError = null;
 }
 
 module.exports = {
   getSupabase,
   isSupabaseConfigured,
   resetSupabaseClient,
+  getLastSupabaseClientError,
   trimEnv,
 };

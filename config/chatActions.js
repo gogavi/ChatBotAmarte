@@ -11,6 +11,14 @@ const CHAT_ACTION_TYPES = Object.freeze([
   "whatsapp",
 ]);
 
+/**
+ * Todos los CTA viven en el pie del widget; el cuerpo del mensaje solo muestra video.
+ * @type {ReadonlySet<ChatActionType>}
+ */
+const BODY_EXCLUDED_ACTION_TYPES = Object.freeze(
+  new Set(/** @type {ChatActionType[]} */ ([...CHAT_ACTION_TYPES]))
+);
+
 /** @type {Readonly<Record<ChatActionType, ChatOption>>} */
 const CHAT_ACTIONS = Object.freeze({
   reserve: {
@@ -31,8 +39,9 @@ const CHAT_ACTIONS = Object.freeze({
   },
 });
 
+/** Ya no hay botones CTA en el cuerpo del mensaje. */
 /** @type {readonly ChatActionType[]} */
-const DEFAULT_ACTION_TYPES = CHAT_ACTION_TYPES;
+const DEFAULT_ACTION_TYPES = Object.freeze([]);
 
 const ACTION_TYPE_SET = new Set(CHAT_ACTION_TYPES);
 
@@ -62,7 +71,7 @@ const PENDING_RESERVATION_SCHEMA = {
         },
         hora_reserva: {
           type: "string",
-          description: "Hora de ingreso, p.ej. 2:00 PM o 14:00",
+          description: "Hora de ingreso en 24h HH:MM, p.ej. 14:00",
         },
         pack_tiempo: {
           type: "string",
@@ -145,7 +154,7 @@ const MARTINA_REPLY_JSON_SCHEMA = {
       actionTypes: {
         type: "array",
         description:
-          "Tipos de botones a mostrar. El servidor añade las URLs canónicas.",
+          "Legacy: el servidor ignora estos tipos. Los CTA viven en el pie del widget; bajo el mensaje solo aparece Ver video.",
         items: {
           type: "string",
           enum: [...CHAT_ACTION_TYPES],
@@ -157,14 +166,26 @@ const MARTINA_REPLY_JSON_SCHEMA = {
         description:
           "true = el widget muestra el formulario inline de prerreserva",
       },
+      showDateTimePicker: {
+        type: "boolean",
+        description:
+          "true = el widget muestra un selector de fecha y hora para que el usuario confirme la agenda",
+      },
       formPrefill: FORM_PREFILL_SCHEMA,
+      suiteShowcase: {
+        type: "string",
+        description:
+          "Id o nombre de suite a mostrar en video (p.ej. suite_vip_jacuzzi o Suite VIP Jacuzzi). Vacío si no aplica.",
+      },
     },
     required: [
       "message",
       "actionTypes",
       "pendingReservation",
       "showReservationForm",
+      "showDateTimePicker",
       "formPrefill",
+      "suiteShowcase",
     ],
     additionalProperties: false,
   },
@@ -200,30 +221,22 @@ function normalizeFormPrefill(raw) {
 }
 
 /**
+ * @param {ChatActionType[]} types
+ * @returns {ChatActionType[]}
+ */
+function filterBodyActionTypes(types) {
+  return types.filter((type) => !BODY_EXCLUDED_ACTION_TYPES.has(type));
+}
+
+/**
+ * Resuelve botones del cuerpo del chat.
+ * Siempre []: CTAs viven en el pie; bajo el mensaje solo va Ver video.
  * @param {unknown} actionTypes
  * @returns {ChatOption[]}
  */
 function resolveChatActions(actionTypes) {
-  const requested = Array.isArray(actionTypes) ? actionTypes : [];
-  /** @type {ChatActionType[]} */
-  const types = [];
-  const seen = new Set();
-
-  for (const raw of requested) {
-    if (typeof raw !== "string" || !ACTION_TYPE_SET.has(raw) || seen.has(raw)) {
-      continue;
-    }
-    /** @type {ChatActionType} */
-    const type = /** @type {ChatActionType} */ (raw);
-    seen.add(type);
-    types.push(type);
-  }
-
-  const finalTypes = types.length > 0 ? types : [...DEFAULT_ACTION_TYPES];
-  return finalTypes.map((type) => {
-    const action = CHAT_ACTIONS[type];
-    return { label: action.label, url: action.url };
-  });
+  void actionTypes;
+  return [];
 }
 
 /**
@@ -246,7 +259,15 @@ function stripOptionsBlock(text) {
 
 /**
  * @param {string} content
- * @returns {{ message: string; actionTypes: unknown } | null}
+ * @returns {{
+ *   message: string;
+ *   actionTypes: unknown;
+ *   pendingReservation: unknown;
+ *   showReservationForm: boolean;
+ *   showDateTimePicker: boolean;
+ *   formPrefill: unknown;
+ *   suiteShowcase: string;
+ * } | null}
  */
 function tryParseStructuredMartinaReply(content) {
   if (!content || typeof content !== "string") {
@@ -273,8 +294,11 @@ function tryParseStructuredMartinaReply(content) {
           ? null
           : parsed.pendingReservation,
       showReservationForm: Boolean(parsed.showReservationForm),
+      showDateTimePicker: Boolean(parsed.showDateTimePicker),
       formPrefill:
         parsed.formPrefill === undefined ? null : parsed.formPrefill,
+      suiteShowcase:
+        typeof parsed.suiteShowcase === "string" ? parsed.suiteShowcase : "",
     };
   } catch {
     return null;
@@ -330,33 +354,45 @@ function parseLegacyOptionsReply(rawText) {
  *   actionTypes: ChatActionType[];
  *   pendingReservation: unknown;
  *   showReservationForm: boolean;
+ *   showDateTimePicker: boolean;
  *   formPrefill: Record<string, string> | null;
+ *   suiteShowcase: string;
  * }}
  */
 function buildAssistantResponse(modelContent) {
   const structured = tryParseStructuredMartinaReply(modelContent);
   if (structured) {
     const options = resolveChatActions(structured.actionTypes);
-    const actionTypes =
+    const rawTypes =
       Array.isArray(structured.actionTypes) && structured.actionTypes.length
         ? /** @type {ChatActionType[]} */ (
             structured.actionTypes.filter((t) => ACTION_TYPE_SET.has(t))
           )
         : [...DEFAULT_ACTION_TYPES];
+    const actionTypes = filterBodyActionTypes(rawTypes);
     const showReservationForm = Boolean(structured.showReservationForm);
+    const showDateTimePicker =
+      Boolean(structured.showDateTimePicker) && !showReservationForm;
     const formPrefill = showReservationForm
       ? normalizeFormPrefill(structured.formPrefill)
       : null;
     return {
       reply: stripOptionsBlock(structured.message),
       options,
-      actionTypes: actionTypes.length ? actionTypes : [...DEFAULT_ACTION_TYPES],
+      actionTypes: actionTypes.length
+        ? actionTypes
+        : filterBodyActionTypes([...DEFAULT_ACTION_TYPES]),
       // Si se muestra el form, no crear prerreserva automática desde el JSON
       pendingReservation: showReservationForm
         ? null
         : structured.pendingReservation ?? null,
       showReservationForm,
+      showDateTimePicker,
       formPrefill: formPrefill || (showReservationForm ? normalizeFormPrefill({}) : null),
+      suiteShowcase:
+        typeof structured.suiteShowcase === "string"
+          ? structured.suiteShowcase.trim()
+          : "",
     };
   }
 
@@ -366,10 +402,12 @@ function buildAssistantResponse(modelContent) {
   return {
     reply: legacy.reply,
     options,
-    actionTypes: [...DEFAULT_ACTION_TYPES],
+    actionTypes: filterBodyActionTypes([...DEFAULT_ACTION_TYPES]),
     pendingReservation: null,
     showReservationForm: false,
+    showDateTimePicker: false,
     formPrefill: null,
+    suiteShowcase: "",
   };
 }
 
@@ -377,8 +415,10 @@ module.exports = {
   CHAT_ACTION_TYPES,
   CHAT_ACTIONS,
   DEFAULT_ACTION_TYPES,
+  BODY_EXCLUDED_ACTION_TYPES,
   MARTINA_REPLY_JSON_SCHEMA,
   resolveChatActions,
+  filterBodyActionTypes,
   stripOptionsBlock,
   tryParseStructuredMartinaReply,
   parseLegacyOptionsReply,

@@ -19,8 +19,12 @@ const widgetConfigRouter = require("../routes/widgetConfig");
 
 assert.ok(MARTINA_REPLY_JSON_SCHEMA.schema.properties.showReservationForm);
 assert.ok(MARTINA_REPLY_JSON_SCHEMA.schema.properties.formPrefill);
+assert.ok(MARTINA_REPLY_JSON_SCHEMA.schema.properties.suiteShowcase);
 assert.ok(
   MARTINA_REPLY_JSON_SCHEMA.schema.required.includes("showReservationForm")
+);
+assert.ok(
+  MARTINA_REPLY_JSON_SCHEMA.schema.required.includes("suiteShowcase")
 );
 
 const prefill = normalizeFormPrefill({
@@ -43,6 +47,7 @@ const built = buildAssistantResponse(
     pendingReservation: null,
     showReservationForm: true,
     formPrefill: prefill,
+    suiteShowcase: "",
   })
 );
 assert.strictEqual(built.showReservationForm, true);
@@ -92,6 +97,9 @@ server.listen(0, () => {
         assert.ok(cfg.reservationForm);
         assert.deepStrictEqual(cfg.reservationForm.tipos, [...VALID_TIPOS]);
         assert.deepStrictEqual(cfg.reservationForm.packs, [...VALID_PACKS]);
+        assert.ok(Array.isArray(cfg.suiteVideos));
+        assert.ok(cfg.suiteVideos.length >= 10);
+        assert.ok(cfg.suiteVideos[0].videoUrl);
         server.close();
         console.log("reservationForm.test.js: ok");
       });
