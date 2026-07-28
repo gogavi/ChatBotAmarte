@@ -335,10 +335,58 @@ function lookupCatalogPrice(input = {}) {
   };
 }
 
+/**
+ * Catálogo compacto para recalcular precio en el formulario del widget.
+ * @param {readonly string[]} tipos
+ * @param {readonly string[]} packs
+ * @returns {{
+ *   byTipo: Record<string, {
+ *     weekday: Record<string, number>;
+ *     weekend: Record<string, number>;
+ *     availablePacks: string[];
+ *   }>;
+ * }}
+ */
+function buildWidgetQuoteCatalog(tipos, packs) {
+  /** @type {Record<string, { weekday: Record<string, number>; weekend: Record<string, number>; availablePacks: string[] }>} */
+  const byTipo = {};
+  const tipoList = Array.isArray(tipos) ? tipos : [];
+  const packList = Array.isArray(packs) ? packs : [];
+
+  for (const tipo of tipoList) {
+    const found = findCatalogEntry(String(tipo || ""));
+    if (!found || !found.entry) continue;
+    /** @type {Record<string, number>} */
+    const weekday = {};
+    /** @type {Record<string, number>} */
+    const weekend = {};
+    for (const pack of packList) {
+      const durationKey = normalizeDuration(String(pack || ""));
+      if (!durationKey) continue;
+      const w = found.entry.weekday && found.entry.weekday[durationKey];
+      const e = found.entry.weekend && found.entry.weekend[durationKey];
+      if (typeof w === "number" && Number.isFinite(w)) {
+        weekday[pack] = w;
+      }
+      if (typeof e === "number" && Number.isFinite(e)) {
+        weekend[pack] = e;
+      }
+    }
+    const availablePacks = packList.filter(
+      (p) => weekday[p] != null || weekend[p] != null
+    );
+    if (!availablePacks.length) continue;
+    byTipo[tipo] = { weekday, weekend, availablePacks };
+  }
+
+  return { byTipo };
+}
+
 module.exports = {
   lookupCatalogPrice,
   findCatalogEntry,
   normalizeDuration,
   toSpokenPrice,
   numberToSpanishWords,
+  buildWidgetQuoteCatalog,
 };

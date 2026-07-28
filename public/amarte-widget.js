@@ -454,6 +454,12 @@
     ],
   };
 
+  /**
+   * Precios por tipo/pack/weekday|weekend (desde /api/widget-config).
+   * @type {{ byTipo: Record<string, { weekday: Record<string, number>; weekend: Record<string, number>; availablePacks: string[] }> } | null}
+   */
+  var quoteCatalog = null;
+
   /** @type {Array<{ id: string; title: string; productUrl: string; videoUrl: string }>} */
   var suiteVideosCatalog = [];
 
@@ -892,21 +898,16 @@
         return res.json();
       })
       .then(function (cfg) {
-        if (
-          cfg &&
-          cfg.reservationForm &&
-          Array.isArray(cfg.reservationForm.tipos) &&
-          cfg.reservationForm.tipos.length
-        ) {
-          reservationFormCatalog.tipos = cfg.reservationForm.tipos.slice();
-        }
-        if (
-          cfg &&
-          cfg.reservationForm &&
-          Array.isArray(cfg.reservationForm.packs) &&
-          cfg.reservationForm.packs.length
-        ) {
-          reservationFormCatalog.packs = cfg.reservationForm.packs.slice();
+        applyQuoteCatalogFromConfig(cfg);
+        if (quoteCatalog && messagesEl) {
+          var openForms = messagesEl.querySelectorAll(
+            ".amarte-rsv-form:not(.amarte-done)"
+          );
+          for (var qi = 0; qi < openForms.length; qi++) {
+            if (typeof openForms[qi].__amarteRefreshPrice === "function") {
+              openForms[qi].__amarteRefreshPrice();
+            }
+          }
         }
         if (cfg && Array.isArray(cfg.suiteVideos) && cfg.suiteVideos.length) {
           suiteVideosCatalog = cfg.suiteVideos.slice();
@@ -1631,6 +1632,107 @@
   }
 
   /**
+   * weekday|weekend según YYYY-MM-DD en Bogotá (vie/sáb = weekend).
+   * @param {string} isoDate
+   * @returns {"weekday"|"weekend"}
+   */
+  function dateTypeFromIsoClient(isoDate) {
+    var iso = String(isoDate || "").trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return "weekday";
+    var parts = iso.split("-");
+    var y = parseInt(parts[0], 10);
+    var mo = parseInt(parts[1], 10);
+    var d = parseInt(parts[2], 10);
+    // 12:00 Bogotá = 17:00 UTC
+    var utc = new Date(Date.UTC(y, mo - 1, d, 17, 0, 0));
+    var wd = utc.getUTCDay();
+    return wd === 5 || wd === 6 ? "weekend" : "weekday";
+  }
+
+  /**
+   * Precio de lista según tipo + pack + fecha (catálogo del widget).
+   * @param {string} tipo
+   * @param {string} pack
+   * @param {string} fechaIso
+   * @returns {number|null}
+   */
+  function lookupWidgetQuotePrice(tipo, pack, fechaIso) {
+    if (!quoteCatalog || !quoteCatalog.byTipo) return null;
+    var entry = quoteCatalog.byTipo[String(tipo || "").trim()];
+    if (!entry) return null;
+    var bandName = dateTypeFromIsoClient(fechaIso);
+    var band = entry[bandName] || entry.weekday || {};
+    var price = band[String(pack || "").trim()];
+    if (typeof price !== "number" || !isFinite(price) || price <= 0) {
+      return null;
+    }
+    return Math.round(price);
+  }
+
+  /**
+   * @param {number} n
+   * @returns {string}
+   */
+  function formatCopClient(n) {
+    return "$" + Math.round(n).toLocaleString("es-CO");
+  }
+
+  /**
+   * Aplica quoteCatalog (y tipos/packs) desde /api/widget-config.
+   * @param {object} cfg
+   */
+  function applyQuoteCatalogFromConfig(cfg) {
+    if (!cfg || typeof cfg !== "object") return;
+    if (
+      cfg.reservationForm &&
+      Array.isArray(cfg.reservationForm.tipos) &&
+      cfg.reservationForm.tipos.length
+    ) {
+      reservationFormCatalog.tipos = cfg.reservationForm.tipos.slice();
+    }
+    if (
+      cfg.reservationForm &&
+      Array.isArray(cfg.reservationForm.packs) &&
+      cfg.reservationForm.packs.length
+    ) {
+      reservationFormCatalog.packs = cfg.reservationForm.packs.slice();
+    }
+    if (
+      cfg.quoteCatalog &&
+      cfg.quoteCatalog.byTipo &&
+      typeof cfg.quoteCatalog.byTipo === "object"
+    ) {
+      quoteCatalog = cfg.quoteCatalog;
+    }
+  }
+
+  /**
+   * Garantiza catálogo de precios antes de armar/usar el formulario.
+   * @param {function(): void} done
+   */
+  function ensureQuoteCatalog(done) {
+    if (quoteCatalog && quoteCatalog.byTipo) {
+      done();
+      return;
+    }
+    if (!BACKEND_URL) {
+      done();
+      return;
+    }
+    fetch(BACKEND_URL + "/api/widget-config")
+      .then(function (res) {
+        return res.json();
+      })
+      .then(function (cfg) {
+        applyQuoteCatalogFromConfig(cfg);
+        done();
+      })
+      .catch(function () {
+        done();
+      });
+  }
+
+  /**
    * @param {HTMLElement} formEl
    * @param {string} name
    * @returns {HTMLInputElement|HTMLSelectElement|null}
@@ -1647,6 +1749,15 @@
    * @param {Record<string, string>|null|undefined} prefill
    */
   function appendReservationForm(prefill) {
+    ensureQuoteCatalog(function () {
+      appendReservationFormImpl(prefill);
+    });
+  }
+
+  /**
+   * @param {Record<string, string>|null|undefined} prefill
+   */
+  function appendReservationFormImpl(prefill) {
     if (!messagesEl) return;
     // Cierra formularios previos aún abiertos para no duplicar IDs ni confundir al usuario
     var prevForms = messagesEl.querySelectorAll(".amarte-rsv-form:not(.amarte-done)");
@@ -1729,6 +1840,7 @@
 
     /**
      * Duración visible de una vez (chips), sin abrir un select.
+     * @returns {HTMLElement}
      */
     function addPackChoices() {
       var packs = getReservationPackOptions();
@@ -1764,14 +1876,19 @@
       wrap.appendChild(lab);
       wrap.appendChild(group);
       form.appendChild(wrap);
+      return group;
     }
 
     addField("nombre", "Nombre completo", "text", true);
     addField("documento", "Documento de identidad", "text", true);
     addField("correo", "Correo (opcional)", "email", false);
     addField("whatsapp", "WhatsApp", "tel", true);
-    addSelect("tipo", "Suite o plan", reservationFormCatalog.tipos);
-    addPackChoices();
+    var tipoSelect = addSelect(
+      "tipo",
+      "Suite o plan",
+      reservationFormCatalog.tipos
+    );
+    var packGroup = addPackChoices();
 
     var rowDates = document.createElement("div");
     rowDates.className = "amarte-rsv-row";
@@ -1807,7 +1924,102 @@
     rowDates.appendChild(horaWrap);
     form.appendChild(rowDates);
 
-    addField("precio", "Precio cotizado (COP)", "text", true);
+    var precioInput = addField("precio", "Precio cotizado (COP)", "text", true);
+    precioInput.readOnly = true;
+
+    /**
+     * Muestra/oculta packs según el tipo (suites vs planes) y elige uno válido.
+     */
+    function syncPackVisibility() {
+      var tipo = String(tipoSelect.value || "").trim();
+      var entry =
+        quoteCatalog && quoteCatalog.byTipo
+          ? quoteCatalog.byTipo[tipo]
+          : null;
+      var allowed =
+        entry && Array.isArray(entry.availablePacks)
+          ? entry.availablePacks
+          : getReservationPackOptions();
+      var radios = packGroup.querySelectorAll('input[name="pack_tiempo"]');
+      var checked = packGroup.querySelector(
+        'input[name="pack_tiempo"]:checked'
+      );
+      var checkedValue = checked ? String(checked.value) : "";
+      var firstVisible = null;
+      for (var r = 0; r < radios.length; r++) {
+        var radio = radios[r];
+        var ok = allowed.indexOf(radio.value) !== -1;
+        var labEl = radio.closest
+          ? radio.closest(".amarte-rsv-pack-opt")
+          : radio.parentNode;
+        if (labEl) {
+          labEl.style.display = ok ? "" : "none";
+        }
+        radio.disabled = !ok;
+        if (ok && !firstVisible) firstVisible = radio;
+        if (!ok && radio.checked) radio.checked = false;
+      }
+      var stillChecked = packGroup.querySelector(
+        'input[name="pack_tiempo"]:checked:not([disabled])'
+      );
+      if (!stillChecked && firstVisible) {
+        firstVisible.checked = true;
+      }
+    }
+
+    function refreshQuotedPrice() {
+      var tipo = String(tipoSelect.value || "").trim();
+      var packEl = packGroup.querySelector(
+        'input[name="pack_tiempo"]:checked:not([disabled])'
+      );
+      var pack = packEl ? String(packEl.value || "").trim() : "";
+      var fecha = String(fechaInput.value || "").trim();
+      if (!tipo || !pack || !fecha) {
+        return;
+      }
+      var price = lookupWidgetQuotePrice(tipo, pack, fecha);
+      if (price == null) {
+        return;
+      }
+      precioInput.value = formatCopClient(price);
+    }
+
+    function onPackChosen(radio) {
+      if (!radio || radio.disabled) return;
+      radio.checked = true;
+      refreshQuotedPrice();
+    }
+
+    syncPackVisibility();
+    refreshQuotedPrice();
+    form.__amarteRefreshPrice = function () {
+      syncPackVisibility();
+      refreshQuotedPrice();
+    };
+
+    tipoSelect.addEventListener("change", function () {
+      syncPackVisibility();
+      refreshQuotedPrice();
+    });
+    fechaInput.addEventListener("change", refreshQuotedPrice);
+    fechaInput.addEventListener("input", refreshQuotedPrice);
+
+    var packLabels = packGroup.querySelectorAll(".amarte-rsv-pack-opt");
+    for (var pi = 0; pi < packLabels.length; pi++) {
+      (function (lab) {
+        lab.addEventListener("click", function (ev) {
+          ev.preventDefault();
+          var radio = lab.querySelector('input[name="pack_tiempo"]');
+          onPackChosen(radio);
+        });
+      })(packLabels[pi]);
+    }
+    packGroup.addEventListener("change", function (ev) {
+      var t = ev.target;
+      if (t && t.name === "pack_tiempo") {
+        refreshQuotedPrice();
+      }
+    });
 
     var errEl = document.createElement("p");
     errEl.className = "amarte-rsv-error";
@@ -1824,6 +2036,7 @@
       e.preventDefault();
       errEl.classList.remove("amarte-show");
       errEl.textContent = "";
+      refreshQuotedPrice();
 
       var nombre = String(formControl(form, "nombre").value || "").trim();
       var documento = String(formControl(form, "documento").value || "").trim();
@@ -1867,7 +2080,9 @@
         hora_reserva: String(
           formControl(form, "hora_reserva").value || ""
         ).trim(),
-        precio: String(formControl(form, "precio").value || "").trim(),
+        precio: String(formControl(form, "precio").value || "")
+          .replace(/\D/g, "")
+          .trim(),
         abono: "",
       };
 

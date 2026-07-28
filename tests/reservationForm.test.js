@@ -97,6 +97,16 @@ server.listen(0, () => {
         assert.ok(cfg.reservationForm);
         assert.deepStrictEqual(cfg.reservationForm.tipos, [...VALID_TIPOS]);
         assert.deepStrictEqual(cfg.reservationForm.packs, [...VALID_PACKS]);
+        assert.ok(cfg.quoteCatalog);
+        assert.ok(cfg.quoteCatalog.byTipo["Suite Amarte"]);
+        assert.strictEqual(
+          cfg.quoteCatalog.byTipo["Suite Amarte"].weekday["Pack 4 horas"],
+          78000
+        );
+        assert.strictEqual(
+          cfg.quoteCatalog.byTipo["Suite Amarte"].weekend["Pack 4 horas"],
+          100000
+        );
         assert.ok(Array.isArray(cfg.suiteVideos));
         assert.ok(cfg.suiteVideos.length >= 10);
         assert.ok(cfg.suiteVideos[0].videoUrl);
