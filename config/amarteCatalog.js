@@ -376,7 +376,7 @@ const payment = {
 
 const WHATSAPP_PHONE = "573007416683";
 const whatsappDefaultMessage =
-  "Hola, estuve navegando en la página web y descubrí habitaciones muy interesantes. ¿Me ayudas con más información?";
+  "Hola, estuve charlando con Martina IA en Amarte Suite y quiero más información. ¿Me pueden ayudar?";
 
 /**
  * @param {string} [message]

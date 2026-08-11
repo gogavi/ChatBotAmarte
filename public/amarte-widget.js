@@ -25,7 +25,7 @@
 
   /** URLs de acciones rápidas (alineadas con config/amarteCatalog.js). Sustituibles vía window.* */
   var DEFAULT_WHATSAPP_MESSAGE =
-    "Hola, estuve navegando en la página web y descubrí habitaciones muy interesantes. ¿Me ayudas con más información?";
+    "Hola, estuve charlando con Martina IA en Amarte Suite y quiero más información. ¿Me pueden ayudar?";
   var DEFAULT_QUICK_WHATSAPP =
     "https://wa.me/573007416683?text=" + encodeURIComponent(DEFAULT_WHATSAPP_MESSAGE);
   var DEFAULT_QUICK_RESERVE = "https://reservas.amartesuite.com";
