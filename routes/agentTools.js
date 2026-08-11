@@ -26,7 +26,7 @@ function requireToolSecret(req, res, next) {
 
 router.use(requireToolSecret);
 
-router.post("/catalog", (req, res) => {
+router.post("/catalog", async (req, res) => {
   const suite =
     typeof req.body?.suite === "string" ? req.body.suite.slice(0, 200) : "";
   const date =
@@ -36,8 +36,13 @@ router.post("/catalog", (req, res) => {
       ? req.body.duration.slice(0, 64)
       : "";
 
-  const result = lookupCatalogPrice({ suite, date, duration });
-  return res.json(result);
+  try {
+    const result = await lookupCatalogPrice({ suite, date, duration });
+    return res.json(result);
+  } catch (err) {
+    console.warn("[agentTools/catalog]", err && err.message ? err.message : err);
+    return res.status(500).json({ error: "No se pudo cotizar" });
+  }
 });
 
 router.post("/actions", (_req, res) => {

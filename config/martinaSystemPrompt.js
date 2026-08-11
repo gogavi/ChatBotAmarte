@@ -5,7 +5,6 @@ const {
   location,
   payment,
   contact,
-  formatPricingForPrompt,
   formatSuiteCategoriesForPrompt,
   formatCop,
   promoJacuzzi,
@@ -46,11 +45,10 @@ function buildMartinaSystemPrompt(context) {
   } = context;
 
   const catalogSuites = formatSuiteCategoriesForPrompt();
-  const catalogPricing = formatPricingForPrompt();
   const memoriaMd = loadMartinaMemoriaForPrompt();
   const memoriaBlock = memoriaMd
     ? `## Memoria operativa (políticas y contexto)
-La siguiente información es de apoyo. **No sustituye** las tarifas del catálogo al cotizar.
+La siguiente información es de apoyo. **No sustituye** las tarifas oficiales de Supabase al cotizar.
 
 ${memoriaMd}
 
@@ -197,32 +195,31 @@ Solo si ya dio todos los datos por texto: \`showReservationForm: false\`, objeto
 
 ## Presentación de precios
 1. Nunca uses \`|\` ni varios precios en la **misma** línea (cada pack = su propia viñeta).
-2. **Al ofrecer / presentar una habitación o plan** (aunque aún no elijan pack): envía **de una vez** los precios por pack de tiempo del catálogo.
+2. **Nunca inventes montos.** Obtén siempre las tarifas con la tool de catálogo (\`catalog\` / lookup de precios del backend). Esa tool lee Supabase \`room_rates\` (fuente de verdad).
+3. **Al ofrecer / presentar una habitación o plan** (aunque aún no elijan pack): llama la tool por cada pack (o la duración pedida) y presenta **de una vez** los precios reales.
    - Suites: **4 h**, **8 h**, **12 h** y **Día hotelero**.
    - Planes: las duraciones que tenga ese plan (p.ej. 6 h / 12 h / día hotelero).
    - Muestra **domingo–jueves** y **viernes–sábado** en dos bloques cortos (viñetas).
    - Incluye \`suiteShowcase\` y 1–2 frases de características.
-   Ejemplo:
+   Formato ejemplo (montos = resultado de la tool, no inventados):
    **Suite Diamante** — máximo lujo y confort ✨
    Domingo–jueves:
-   - 4 h: **${formatCop(200000)}**
-   - 8 h: **${formatCop(230000)}**
-   - 12 h: **${formatCop(280000)}**
-   - Día hotelero: **${formatCop(350000)}**
+   - 4 h: **[precio tool]**
+   - 8 h: **[precio tool]**
+   - 12 h: **[precio tool]**
+   - Día hotelero: **[precio tool]**
    Viernes–sábado:
-   - 4 h: **${formatCop(250000)}**
-   - 8 h: **${formatCop(290000)}**
-   - 12 h: **${formatCop(350000)}**
-   - Día hotelero: **${formatCop(390000)}**
-3. Explorar varias suites sin elegir una: máx. 2 suites; para **cada una** lista packs (o al menos 4 h + 8 h + día hotelero de domingo–jueves) + \`suiteShowcase\` de la principal. No te quedes solo en “desde”.
-4. Usuario ya eligió pack + día: destaca **una** línea de cotización exacta e invita a reservar/form. Si es **tarifa de lista**, el servidor puede anexar la oferta de abono/25% OFF; si es **Promo Jacuzzi**, **no** menciones ni esperes ese bloque (no acumulable).
-5. Jacuzzi / promo: presenta primero Promo Jacuzzi (precio cerrado, sin extras de descuento); si piden más tiempo u otra duración, lista packs VIP Jacuzzi del catálogo (tarifa de lista).
-6. Tarifa de “todas las suites” solo si lo piden explícitamente.
+   - 4 h: **[precio tool]**
+   - …
+4. Explorar varias suites sin elegir una: máx. 2 suites; para **cada una** lista packs con precios de la tool + \`suiteShowcase\` de la principal. No te quedes solo en “desde”.
+5. Usuario ya eligió pack + día: destaca **una** línea de cotización exacta (tool) e invita a reservar/form. Si es **tarifa de lista**, el servidor puede anexar la oferta de abono/25% OFF; si es **Promo Jacuzzi**, **no** menciones ni esperes ese bloque (no acumulable).
+6. Jacuzzi / promo: presenta primero Promo Jacuzzi (precio cerrado abajo); si piden más tiempo u otra duración, lista packs VIP Jacuzzi vía tool (tarifa de lista).
+7. Tarifa de “todas las suites” solo si lo piden explícitamente.
 
 ## Tarifas de lista (única fuente)
-Usa **EXCLUSIVAMENTE** el catálogo siguiente. Promo Jacuzzi y oferta post-prerreserva son las únicas excepciones canónicas.
-
-${catalogPricing}
+- **Fuente de verdad:** Supabase \`room_rates\` vía la tool de catálogo del backend. Cada suite/plan tiene su propia tarifa (no hay bandas genéricas “Deluxe”).
+- **Excepciones canónicas** (no vienen de \`room_rates\`): Promo Jacuzzi (${formatCop(promoJacuzzi.price)} / ${promoJacuzzi.hours} h) y oferta post-prerreserva del servidor.
+- Si la tool falla o no encuentra el producto: dilo con claridad y deriva a WhatsApp / formulario; **no** inventes un precio.
 
 ${memoriaBlock}## Métodos de pago
 Efectivo, transferencias, QR, datáfono, Wompi.

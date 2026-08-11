@@ -21,7 +21,7 @@ ChatBotAmarte es un sistema de **backend + widget embebible** que permite a los 
 
 Además:
 
-- Cotiza suites/planes desde el catálogo interno (única fuente de precios).
+- Cotiza suites/planes desde Supabase `room_rates` (única fuente de precios de lista).
 - Describe includes de planes con emojis (decoración, kit erótico, etc.).
 - Crea **prerreservas pendientes** en el SaaS (`public.reservations`, `canal=Chatbot`).
 - Persiste historial y sesiones en vivo en **Supabase**.
@@ -35,7 +35,7 @@ Punto de entrada: `server.js`. Documentación corta: `README.md`. Setup Agents: 
 | Objetivo | Cómo se cumple |
 |----------|----------------|
 | Atender 24/7 en el sitio | Widget “Pregúntale a Martina” |
-| Cotizar precios reales | `config/amarteCatalog.js` (+ `services/catalogLookup.js` en vivo) |
+| Cotizar precios reales | Supabase `room_rates` vía `services/roomRatesCatalog.js` + `catalogLookup.js` (fallback: `amarteCatalog.js`) |
 | No inventar promociones | Prompt + memoria operativa |
 | Conversión | Botones Reservar / PROMOCIONES / Wompi / WhatsApp |
 | Prerreservas en el SaaS | `reservationService.js` |
@@ -130,7 +130,8 @@ ChatBotAmarte/
 ├── .env.example
 │
 ├── config/
-│   ├── amarteCatalog.js      # precios + includes de planes
+│   ├── amarteCatalog.js      # metadata + includes + fallback precios + promo jacuzzi
+│   ├── …
 │   ├── martinaSystemPrompt.js
 │   ├── chatActions.js
 │   ├── loadMemoria.js / memoria.md
@@ -221,13 +222,13 @@ Detalle operativo: `docs/ELEVENLABS_AGENT_SETUP.md`, `ELEVENLABS_TOOLS_SETUP.md`
 
 ## 6. System prompt y catálogo
 
-- Cotización solo desde `amarteCatalog.js`.  
+- Cotización de lista desde Supabase `room_rates` (caché en `roomRatesCatalog.js`; fallback `amarteCatalog.js`).  
 - Planes: siempre mencionar includes con emojis.  
   - Base: 🌹 pétalos, 🕯️ velas, 🎈 globos, 🍾 vino espumoso, 🍫 chocolates.  
   - Plan Húmedo: + 🛁 jacuzzi + ♨️ sauna.  
   - Plan Erótico: + kit 🧴 body, ⛓️ esposas, 🪢 látigo.  
 - Salida chat: JSON `{ message, actionTypes, pendingReservation }` (`chatActions.js`).  
-- En vivo: precios vía tool `catalogLookup` (misma fuente); URLs de acciones solo desde backend.
+- En vivo: precios vía tool `catalogLookup` → `room_rates`; URLs de acciones solo desde backend.
 
 ---
 
@@ -348,7 +349,8 @@ Bump `?v=` tras cambios de UI. **Nunca** poner API keys en el embed.
 
 | Cambiar… | Dónde |
 |----------|--------|
-| Precios / includes planes | `config/amarteCatalog.js` |
+| Precios de lista | Supabase `room_rates` |
+| Metadata / includes / fallback | `config/amarteCatalog.js` |
 | Prompt chat | `config/martinaSystemPrompt.js` |
 | Botones / schema JSON | `config/chatActions.js` |
 | UI widget / live overlay | `public/amarte-widget.js` |
@@ -416,7 +418,7 @@ Bump `?v=` tras cambios de UI. **Nunca** poner API keys en el embed.
 
 ChatBotAmarte combina **chat escrito**, **nota de voz** y **Hablar en vivo**, con catálogo único, prerreservas en el SaaS y persistencia en Supabase. La complejidad de Agents está aislada en `routes/`, `services/`, `src/voice/` (VoiceAgentManager + providers) y `docs/ELEVENLABS_*`.
 
-1. Negocio → `amarteCatalog.js` / `memoria.md`.  
+1. Negocio → tarifas en backoffice (`room_rates`); metadata/`memoria.md` / promo en `amarteCatalog.js`.  
 2. UX → `amarte-widget.js` (+ rebuild live si aplica).  
 3. Verificar → `npm test` y `npm run verify:prod`.
 

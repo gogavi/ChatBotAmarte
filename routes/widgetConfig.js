@@ -9,17 +9,23 @@ const { buildWidgetQuoteCatalog } = require("../services/catalogLookup");
 
 const router = express.Router();
 
-router.get("/widget-config", (_req, res) => {
-  res.json({
-    liveVoiceEnabled: isLiveVoiceEnabled(),
-    voiceAgentProvider: getVoiceAgentProvider(),
-    reservationForm: {
-      tipos: [...VALID_TIPOS],
-      packs: [...VALID_PACKS],
-    },
-    quoteCatalog: buildWidgetQuoteCatalog(VALID_TIPOS, VALID_PACKS),
-    suiteVideos: getSuiteVideosForWidget(),
-  });
+router.get("/widget-config", async (_req, res) => {
+  try {
+    const quoteCatalog = await buildWidgetQuoteCatalog(VALID_TIPOS, VALID_PACKS);
+    res.json({
+      liveVoiceEnabled: isLiveVoiceEnabled(),
+      voiceAgentProvider: getVoiceAgentProvider(),
+      reservationForm: {
+        tipos: [...VALID_TIPOS],
+        packs: [...VALID_PACKS],
+      },
+      quoteCatalog,
+      suiteVideos: getSuiteVideosForWidget(),
+    });
+  } catch (err) {
+    console.warn("[widget-config]", err && err.message ? err.message : err);
+    res.status(500).json({ error: "No se pudo cargar la configuración del widget" });
+  }
 });
 
 module.exports = router;

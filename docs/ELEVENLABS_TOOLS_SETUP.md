@@ -63,7 +63,8 @@ Authorization: Bearer ELEVENLABS_TOOL_SECRET
 }
 ```
 
-Los precios salen **solo** de `config/amarteCatalog.js`.
+Los precios de lista salen **de Supabase `room_rates`** vía `services/roomRatesCatalog.js` → `catalogLookup.js`.
+`config/amarteCatalog.js` queda como metadata + fallback si la BD no responde. Promo Jacuzzi es excepción comercial fuera de `room_rates`.
 
 ## 2. Enlaces oficiales
 

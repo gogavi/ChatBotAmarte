@@ -1,10 +1,15 @@
 /**
- * Lookup de tarifas desde amarteCatalog (única fuente de precios para el agente en vivo).
+ * Lookup de tarifas: SSOT = Supabase `room_rates` (vía roomRatesCatalog).
+ * Fallback = `amarteCatalog.js` pricing si BD no disponible.
  */
 
 const { pricing, formatCop, suiteCategories, contact } = require("../config/amarteCatalog");
 const { dateTypeFromIsoDate } = require("./bogotaTime");
 const { formatMoneyAmount } = require("../ttsNormalize");
+const {
+  getRoomRatesCatalog,
+  findDbCatalogEntry,
+} = require("./roomRatesCatalog");
 
 /** @typedef {"h4"|"h8"|"h12"|"diaHotelero"|"h6"} DurationKey */
 
@@ -36,17 +41,13 @@ const DURATION_ALIASES = {
 };
 
 /**
- * Convierte un monto COP a frase hablada (p.ej. "ciento ochenta mil pesos").
- * Usa locale es-CO + "pesos" vía formatMoneyAmount; refuerza lectura natural.
  * @param {number} priceCop
  */
 function toSpokenPrice(priceCop) {
   if (!Number.isFinite(priceCop)) {
     return "";
   }
-  // formatMoneyAmount espera dígitos; produce "180.000 pesos"
   const base = formatMoneyAmount(String(Math.round(priceCop)));
-  // Preferir palabras para montos redondos comunes vía Intl.NumberFormat + palabras simples
   try {
     const words = numberToSpanishWords(Math.round(priceCop));
     if (words) {
@@ -59,7 +60,6 @@ function toSpokenPrice(priceCop) {
 }
 
 /**
- * Números a palabras (español, hasta millones) — suficiente para tarifas del catálogo.
  * @param {number} n
  */
 function numberToSpanishWords(n) {
@@ -143,8 +143,7 @@ function numberToSpanishWords(n) {
   if (n >= 1000) {
     const thou = Math.floor(n / 1000);
     const rest = n % 1000;
-    const thouWord =
-      thou === 1 ? "mil" : `${under1000(thou)} mil`;
+    const thouWord = thou === 1 ? "mil" : `${under1000(thou)} mil`;
     if (rest === 0) return thouWord;
     return `${thouWord} ${under1000(rest)}`;
   }
@@ -163,6 +162,7 @@ function normalizeDuration(raw) {
 }
 
 /**
+ * Fallback estático (amarteCatalog banding) — solo si BD no responde.
  * @param {string} suiteQuery
  * @returns {{ key: string; name: string; kind: "suite"|"plan"; entry: object }|null}
  */
@@ -176,7 +176,6 @@ function findCatalogEntry(suiteQuery) {
     if (name === q || name.includes(q) || q.includes(name)) {
       return { key, name: entry.name, kind: "suite", entry };
     }
-    // aliases cortos
     if (
       (q.includes("jacuzzi") && key === "suite_jacuzzi") ||
       (q.includes("amarte") && !q.includes("plan") && key === "suite_amarte") ||
@@ -208,7 +207,6 @@ function findCatalogEntry(suiteQuery) {
     }
   }
 
-  // Match por label de suiteCategories
   for (const cat of suiteCategories) {
     for (const s of cat.suites) {
       const label = String(s.label || "").toLowerCase();
@@ -253,14 +251,111 @@ function findCatalogEntry(suiteQuery) {
 }
 
 /**
+ * @param {Record<string, number>} weekday
+ * @param {Record<string, number>} weekend
+ * @param {"suite"|"plan"} kind
+ */
+function availableDurationsFromBands(weekday, weekend, kind) {
+  /** @type {string[]} */
+  const labels = [];
+  const order =
+    kind === "plan"
+      ? [
+          ["h6", "6 horas"],
+          ["h12", "12 horas"],
+          ["diaHotelero", "día hotelero"],
+        ]
+      : [
+          ["h4", "4 horas"],
+          ["h8", "8 horas"],
+          ["h12", "12 horas"],
+          ["diaHotelero", "día hotelero"],
+        ];
+  for (const [key, label] of order) {
+    if (weekday[key] != null || weekend[key] != null) {
+      labels.push(label);
+    }
+  }
+  if (labels.length) return labels;
+  return kind === "suite"
+    ? ["4 horas", "8 horas", "12 horas", "día hotelero"]
+    : ["6 horas", "12 horas", "día hotelero"];
+}
+
+/**
  * @param {{ suite?: string; date?: string; duration?: string }} input
  */
-function lookupCatalogPrice(input = {}) {
+async function lookupCatalogPrice(input = {}) {
   const suite = typeof input.suite === "string" ? input.suite.trim() : "";
   const date = typeof input.date === "string" ? input.date.trim() : "";
   const durationRaw =
     typeof input.duration === "string" ? input.duration.trim() : "";
 
+  const dateType = dateTypeFromIsoDate(date) || "weekday";
+  const durationKey = normalizeDuration(durationRaw);
+
+  const dbCatalog = await getRoomRatesCatalog();
+  const dbEntry = findDbCatalogEntry(suite, dbCatalog);
+
+  if (dbEntry) {
+    const availableDurations = availableDurationsFromBands(
+      dbEntry.weekday,
+      dbEntry.weekend,
+      dbEntry.kind
+    );
+
+    if (!durationKey) {
+      return {
+        found: true,
+        suite: dbEntry.name,
+        dateType,
+        duration: durationRaw || null,
+        priceCop: null,
+        spokenPrice: null,
+        formattedPrice: null,
+        availableDurations,
+        bookingUrl: contact.reservationsUrl,
+        source: "supabase",
+        message:
+          "Indica la duración (4, 8, 12 horas o día hotelero; planes: 6, 12 o día hotelero).",
+      };
+    }
+
+    const band = dbEntry[dateType] || {};
+    const priceCop = band[durationKey];
+    if (priceCop == null || !Number.isFinite(Number(priceCop))) {
+      return {
+        found: true,
+        suite: dbEntry.name,
+        dateType,
+        duration: durationRaw,
+        priceCop: null,
+        spokenPrice: null,
+        formattedPrice: null,
+        availableDurations,
+        bookingUrl: contact.reservationsUrl,
+        source: "supabase",
+        message: "Esa duración no aplica a esta suite o plan.",
+      };
+    }
+
+    const amount = Number(priceCop);
+    return {
+      found: true,
+      suite: dbEntry.name,
+      dateType,
+      duration: durationRaw,
+      priceCop: amount,
+      spokenPrice: toSpokenPrice(amount),
+      formattedPrice: formatCop(amount),
+      availableDurations,
+      bookingUrl: contact.reservationsUrl,
+      source: "supabase",
+      message: null,
+    };
+  }
+
+  // Fallback estático
   const found = findCatalogEntry(suite);
   if (!found) {
     return {
@@ -273,12 +368,10 @@ function lookupCatalogPrice(input = {}) {
       formattedPrice: null,
       availableDurations: [],
       bookingUrl: contact.reservationsUrl,
+      source: dbCatalog ? "supabase" : "fallback",
       message: "No se encontró esa suite o plan en el catálogo oficial.",
     };
   }
-
-  const dateType = dateTypeFromIsoDate(date) || "weekday";
-  const durationKey = normalizeDuration(durationRaw);
 
   /** @type {string[]} */
   let availableDurations = [];
@@ -299,6 +392,7 @@ function lookupCatalogPrice(input = {}) {
       formattedPrice: null,
       availableDurations,
       bookingUrl: contact.reservationsUrl,
+      source: "fallback",
       message:
         "Indica la duración (4, 8, 12 horas o día hotelero; planes: 6, 12 o día hotelero).",
     };
@@ -316,6 +410,7 @@ function lookupCatalogPrice(input = {}) {
       formattedPrice: null,
       availableDurations,
       bookingUrl: contact.reservationsUrl,
+      source: "fallback",
       message: "Esa duración no aplica a esta suite o plan.",
     };
   }
@@ -331,47 +426,61 @@ function lookupCatalogPrice(input = {}) {
     formattedPrice: formatCop(priceCop),
     availableDurations,
     bookingUrl: contact.reservationsUrl,
+    source: "fallback",
     message: null,
   };
 }
 
 /**
- * Catálogo compacto para recalcular precio en el formulario del widget.
  * @param {readonly string[]} tipos
  * @param {readonly string[]} packs
- * @returns {{
- *   byTipo: Record<string, {
- *     weekday: Record<string, number>;
- *     weekend: Record<string, number>;
- *     availablePacks: string[];
- *   }>;
- * }}
  */
-function buildWidgetQuoteCatalog(tipos, packs) {
+async function buildWidgetQuoteCatalog(tipos, packs) {
   /** @type {Record<string, { weekday: Record<string, number>; weekend: Record<string, number>; availablePacks: string[] }>} */
   const byTipo = {};
   const tipoList = Array.isArray(tipos) ? tipos : [];
   const packList = Array.isArray(packs) ? packs : [];
 
+  const dbCatalog = await getRoomRatesCatalog();
+
   for (const tipo of tipoList) {
-    const found = findCatalogEntry(String(tipo || ""));
-    if (!found || !found.entry) continue;
+    const tipoStr = String(tipo || "");
     /** @type {Record<string, number>} */
     const weekday = {};
     /** @type {Record<string, number>} */
     const weekend = {};
-    for (const pack of packList) {
-      const durationKey = normalizeDuration(String(pack || ""));
-      if (!durationKey) continue;
-      const w = found.entry.weekday && found.entry.weekday[durationKey];
-      const e = found.entry.weekend && found.entry.weekend[durationKey];
-      if (typeof w === "number" && Number.isFinite(w)) {
-        weekday[pack] = w;
+
+    const dbEntry = findDbCatalogEntry(tipoStr, dbCatalog);
+    if (dbEntry) {
+      for (const pack of packList) {
+        const durationKey = normalizeDuration(String(pack || ""));
+        if (!durationKey) continue;
+        const w = dbEntry.weekday[durationKey];
+        const e = dbEntry.weekend[durationKey];
+        if (typeof w === "number" && Number.isFinite(w)) {
+          weekday[pack] = w;
+        }
+        if (typeof e === "number" && Number.isFinite(e)) {
+          weekend[pack] = e;
+        }
       }
-      if (typeof e === "number" && Number.isFinite(e)) {
-        weekend[pack] = e;
+    } else {
+      const found = findCatalogEntry(tipoStr);
+      if (!found || !found.entry) continue;
+      for (const pack of packList) {
+        const durationKey = normalizeDuration(String(pack || ""));
+        if (!durationKey) continue;
+        const w = found.entry.weekday && found.entry.weekday[durationKey];
+        const e = found.entry.weekend && found.entry.weekend[durationKey];
+        if (typeof w === "number" && Number.isFinite(w)) {
+          weekday[pack] = w;
+        }
+        if (typeof e === "number" && Number.isFinite(e)) {
+          weekend[pack] = e;
+        }
       }
     }
+
     const availablePacks = packList.filter(
       (p) => weekday[p] != null || weekend[p] != null
     );
@@ -379,7 +488,10 @@ function buildWidgetQuoteCatalog(tipos, packs) {
     byTipo[tipo] = { weekday, weekend, availablePacks };
   }
 
-  return { byTipo };
+  return {
+    byTipo,
+    source: dbCatalog ? "supabase" : "fallback",
+  };
 }
 
 module.exports = {
