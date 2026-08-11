@@ -1127,7 +1127,7 @@
       ".amarte-widget-close{background:transparent;border:none;color:#9e9e9e;cursor:pointer;" +
       "padding:4px;line-height:1;font-size:1.5rem;}" +
       ".amarte-widget-close:hover{color:#D81B60;}" +
-      ".amarte-widget-messages{flex:1;overflow-y:auto;padding:16px;background:transparent;min-height:200px;}" +
+      ".amarte-widget-messages{flex:1;min-height:0;overflow-y:auto;padding:16px;background:transparent;}" +
       ".amarte-msg{margin-bottom:12px;display:flex;flex-direction:column;align-items:flex-start;}" +
       ".amarte-msg-user{align-items:flex-end;}" +
       ".amarte-bubble-inner{max-width:85%;padding:10px 14px;border-radius:14px;font-size:0.95rem;line-height:1.45;" +
@@ -1188,10 +1188,12 @@
       ".amarte-widget-footer-row{display:flex;gap:8px;padding:12px 16px 8px;background:transparent;align-items:center;}" +
       ".amarte-widget-mic-hint{margin:0;padding:0 16px 8px;font-size:0.75rem;line-height:1.35;" +
       "color:rgba(0,0,0,0.55);text-align:center;}" +
-      ".amarte-widget-quick-row{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;" +
+      ".amarte-widget-quick-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;" +
       "padding:0 16px 16px;background:transparent;margin-top:4px;}" +
-      ".amarte-widget-quick-row .amarte-opt-link{text-align:center;}" +
+      ".amarte-widget-quick-row .amarte-opt-link{text-align:center;width:100%;box-sizing:border-box;}" +
       "@media (min-width:769px){.amarte-quick-call{display:none !important;}}" +
+      "@media (max-width:768px){.amarte-widget-quick-row{grid-template-columns:1fr 1fr;}" +
+      ".amarte-widget-quick-row .amarte-quick-call{grid-column:1 / -1;}}" +
       ".amarte-widget-input{flex:1;border:1px solid rgba(0,0,0,0.12);border-radius:999px;" +
       "padding:12px 16px;font-size:0.95rem;outline:none;background:#fff !important;" +
       "box-shadow:none;color:#0D0D11 !important;caret-color:#0D0D11 !important;" +
@@ -1255,14 +1257,15 @@
       ".amarte-widget-launcher-icon svg{width:18px;height:18px;}" +
       ".amarte-widget-panel{right:16px;bottom:calc(80px + env(safe-area-inset-bottom,0px));}}" +
       "@media (min-width:769px){.amarte-widget-panel{width:min(420px,calc(100vw - 48px));" +
-      "max-height:min(720px,calc(100vh - 140px));}.amarte-widget-messages{min-height:320px;}}" +
+      "max-height:min(720px,calc(100vh - 140px));}.amarte-widget-messages{min-height:0;}}" +
       /* Live voice */
       ".amarte-live-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;width:auto;" +
       "margin:0 auto 8px;padding:10px 16px;border:none;border-radius:30px;cursor:pointer;" +
       "background:#1A1A3D;color:#fff;font-size:0.85rem;font-weight:600;}" +
       ".amarte-live-btn:hover{background:#2a2a55;}" +
       ".amarte-live-btn:disabled{opacity:0.5;cursor:not-allowed;}" +
-      ".amarte-live-btn.amarte-live-soon{opacity:0.9;cursor:not-allowed;background:#17172a;color:rgba(255,255,255,0.78);}" +
+      ".amarte-live-btn.amarte-live-soon{opacity:0.9;cursor:not-allowed;background:#17172a;color:rgba(255,255,255,0.78);" +
+      "padding:6px 12px;font-size:0.75rem;margin-bottom:4px;}" +
       ".amarte-live-btn.amarte-live-soon:hover{background:#17172a;}" +
       ".amarte-live-btn .amarte-live-dot{width:8px;height:8px;border-radius:50%;background:#e53935;flex-shrink:0;}" +
       ".amarte-live-btn.amarte-live-soon .amarte-live-dot{background:#9e9e9e;}" +
@@ -1370,7 +1373,7 @@
       audioEl.controls = true;
       audioEl.setAttribute(
         "aria-label",
-        "Respuesta de voz del concierge"
+        "Respuesta de voz de Martina IA"
       );
       audioEl.src =
         "data:" + extras.audioMimeType + ";base64," + extras.audioBase64;
@@ -2565,7 +2568,7 @@
         return res.json().then(function (data) {
           // Si el estado no es OK, lanza error con mensaje del servidor o genérico
           if (!res.ok) {
-            throw new Error(data.error || "Error al contactar al concierge");
+            throw new Error(data.error || "Error al contactar a Martina IA");
           }
           return data;
         });
@@ -2581,7 +2584,7 @@
         // Muestra mensaje de error amable al usuario
         appendMessage(
           "bot",
-          "Lo sentimos, hubo un problema al conectar con el concierge. Inténtelo de nuevo en unos instantes.",
+          "Lo sentimos, hubo un problema al conectar con Martina IA. Inténtelo de nuevo en unos instantes.",
           []
         );
         // Registra el error en consola para depuración
@@ -2629,7 +2632,7 @@
     var panel = document.createElement("div");
     panel.className = "amarte-widget-panel";
     panel.setAttribute("role", "dialog");
-    panel.setAttribute("aria-label", "Chat concierge Amarte Suite");
+    panel.setAttribute("aria-label", "Chat Martina IA — Amarte Suite");
 
     // Cabecera del panel
     var header = document.createElement("div");
@@ -2640,7 +2643,7 @@
     title.textContent = "Amarte Suite";
     var sub = document.createElement("div");
     sub.className = "amarte-widget-sub";
-    sub.textContent = "Concierge";
+    sub.textContent = "Martina IA";
     titleWrap.appendChild(title);
     titleWrap.appendChild(sub);
 
@@ -2659,7 +2662,7 @@
     // Línea de "Escribiendo..." (se inserta al final solo cuando hace falta)
     typingEl = document.createElement("div");
     typingEl.className = "amarte-typing";
-    typingEl.textContent = "El concierge está escribiendo…";
+    typingEl.textContent = "Martina IA está escribiendo…";
     typingEl.style.display = "none";
 
     // Pie: fila de escritura + accesos rápidos (WhatsApp, Llamar solo móvil, Reservar, PROMOCIONES)
@@ -2719,8 +2722,8 @@
     var callLink = buildQuickLink(telHref, "📞 Llamar", "amarte-quick-call");
     callLink.setAttribute("aria-label", "Llamar por teléfono");
     quickRow.appendChild(callLink);
-    quickRow.appendChild(buildQuickLink(urlRes, "📅 Reservar", ""));
     quickRow.appendChild(buildQuickLink(urlPromos, "🎁 PROMOCIONES", ""));
+    quickRow.appendChild(buildQuickLink(urlRes, "📅 Reservar", ""));
     quickRow.appendChild(buildQuickLink(urlWompi, "💳 Wompi", ""));
 
     var liveBtn = document.createElement("button");
