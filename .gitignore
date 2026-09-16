@@ -3,3 +3,9 @@ node_modules/
 *.log
 data/
 config/memoria.local.md
+
+# Secretos y Vercel
+.env*
+!.env.example
+.vercel
+*.bak
