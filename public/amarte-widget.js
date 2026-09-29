@@ -509,6 +509,81 @@
   }
 
   /**
+   * Enlace pulsado (el target puede ser un hijo del <a>).
+   * @param {Event} ev
+   * @returns {HTMLAnchorElement|null}
+   */
+  function anchorFromClick(ev) {
+    var t = ev && ev.target;
+    if (!t) return null;
+    if (t.nodeType === 3) {
+      t = t.parentElement || t.parentNode;
+    }
+    if (!t) return null;
+    if (typeof t.closest === "function") {
+      return t.closest("a");
+    }
+    if (t.tagName === "A") return t;
+    return null;
+  }
+
+  /**
+   * @param {Element} link
+   * @returns {string}
+   */
+  function linkHref(link) {
+    var href = "";
+    try {
+      href = (link.getAttribute && link.getAttribute("href")) || "";
+    } catch (eHref) {}
+    if (!href && link && link.href) {
+      href = String(link.href);
+    }
+    return href;
+  }
+
+  /**
+   * Clic en cualquier enlace wa.me del widget: dataLayer (GTM) y, si existe,
+   * el hook __amarteAnalyticsTrack. Una vez por evento de clic.
+   * @param {Event} ev
+   */
+  function onWidgetAnchorClick(ev) {
+    if (!ev || ev.__amarteAnchorTracked) return;
+    var link = anchorFromClick(ev);
+    if (!link) return;
+    var href = linkHref(link);
+    var isOpt =
+      link.classList && link.classList.contains("amarte-opt-link");
+    if (href.indexOf("wa.me") !== -1) {
+      ev.__amarteAnchorTracked = true;
+      try {
+        window.dataLayer = window.dataLayer || [];
+        window.dataLayer.push({
+          event: "whatsapp_redirect",
+          location: "martina_widget",
+        });
+      } catch (eWa) {}
+      trackLiveEvent("live_voice_whatsapp_clicked", {});
+      return;
+    }
+    if (!isOpt) return;
+    ev.__amarteAnchorTracked = true;
+    if (
+      href.indexOf("formulario-reservas") !== -1 ||
+      href.indexOf("reservas.amartesuite.com") !== -1
+    ) {
+      trackLiveEvent("live_voice_reservation_clicked", {});
+    }
+  }
+
+  /** Delegación en el root: cubre el pie y los enlaces que aparezcan después. */
+  function bindWidgetOptLinkTracking() {
+    if (!rootEl || rootEl.__amarteLiveActionTracked) return;
+    rootEl.__amarteLiveActionTracked = true;
+    rootEl.addEventListener("click", onWidgetAnchorClick, true);
+  }
+
+  /**
    * Carga el bundle de voz en vivo una sola vez (VoiceAgentManager).
    * @returns {Promise<void>}
    */
@@ -682,23 +757,7 @@
     appendMessage("bot", "Aquí tienes los enlaces oficiales:", options.map(function (o) {
       return { label: o.label, url: o.url };
     }));
-    // Track clicks via delegated listener once
-    if (!rootEl.__amarteLiveActionTracked) {
-      rootEl.__amarteLiveActionTracked = true;
-      rootEl.addEventListener("click", function (ev) {
-        var t = ev.target;
-        if (!t || !t.classList || !t.classList.contains("amarte-opt-link")) return;
-        var href = t.getAttribute("href") || "";
-        if (href.indexOf("wa.me") !== -1) {
-          trackLiveEvent("live_voice_whatsapp_clicked", {});
-        } else if (
-          href.indexOf("formulario-reservas") !== -1 ||
-          href.indexOf("reservas.amartesuite.com") !== -1
-        ) {
-          trackLiveEvent("live_voice_reservation_clicked", {});
-        }
-      });
-    }
+    bindWidgetOptLinkTracking();
   }
 
   function openLiveConsent() {
@@ -2857,6 +2916,7 @@
     rootEl.appendChild(launcher);
     rootEl.appendChild(panel);
     document.body.appendChild(rootEl);
+    bindWidgetOptLinkTracking();
 
     function togglePanel() {
       var isOpen = panel.classList.toggle("amarte-open");
