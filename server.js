@@ -156,7 +156,7 @@ app.get("/", (_req, res) => {
 <body style="font-family:system-ui,sans-serif;max-width:720px;margin:2rem auto;padding:0 1rem;line-height:1.5;">
   <h1>Amarte Chatbot</h1>
   <p>Backend activo. Endpoints: <code>/chat</code>, <code>/chat/history</code>, <code>/chat/audio</code>, <code>/api/widget-config</code>, <code>/health</code>.</p>
-  <p>Widget: <a href="/amarte-widget.js">/amarte-widget.js</a> · Live: <a href="/amarte-live-agent.bundle.js">/amarte-live-agent.bundle.js</a> · Demo: <a href="/embed-demo.html">/embed-demo.html</a></p>
+  <p>Widget: <a href="/amarte-widget.js">/amarte-widget.js</a> · Live: <a href="/amarte-live-agent.bundle.js">/amarte-live-agent.bundle.js</a> · Demo: <a href="/embed-demo.html">/embed-demo.html</a> · Medición: <a href="/medicion-widget.html">/medicion-widget.html</a></p>
   <h2>Embed en amartesuite.com</h2>
   <pre style="background:#f4f4f4;padding:1rem;overflow:auto;border-radius:8px;"><code>&lt;script&gt;
   window.AMARTE_CHATBOT_URL = "https://chatbotamarte-production.up.railway.app";

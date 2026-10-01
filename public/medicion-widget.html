@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Prueba de medición — widget Martina</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        margin: 0;
+        color: #1a1a1a;
+        background: #f6f4f5;
+      }
+      main {
+        max-width: 720px;
+        padding: 24px 20px 120px;
+      }
+      h1 {
+        font-size: 1.35rem;
+        margin: 0 0 8px;
+      }
+      p,
+      li {
+        line-height: 1.45;
+      }
+      code {
+        font-size: 0.88em;
+      }
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 12px 0;
+      }
+      button.harness {
+        border: 0;
+        border-radius: 999px;
+        padding: 8px 12px;
+        background: #1a1a3d;
+        color: #fff;
+        cursor: pointer;
+        font: inherit;
+        font-size: 0.85rem;
+      }
+      button.harness.secondary {
+        background: #fff;
+        color: #1a1a3d;
+        border: 1px solid #ccc;
+      }
+      label.opt {
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+        margin: 8px 0 16px;
+      }
+      #log {
+        background: #111;
+        color: #d8f5d0;
+        border-radius: 12px;
+        padding: 12px;
+        min-height: 160px;
+        white-space: pre-wrap;
+        word-break: break-word;
+        font-family: ui-monospace, monospace;
+        font-size: 12px;
+      }
+      .meta {
+        font-size: 0.9rem;
+        color: #333;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Prueba de medición del widget</h1>
+      <p class="meta" id="meta"></p>
+      <p>
+        Los botones de abajo disparan clics reales sobre el widget (lanzador abajo a la derecha;
+        WhatsApp y Llamar, dentro del panel). El registro muestra puente y <code>dataLayer</code>.
+        Esta página evita que esos enlaces naveguen. Si no la sirve el backend de Martina,
+        <code>/api/widget-config</code> y <code>/chat/history</code> responden 404: no cambia la medición.
+      </p>
+      <ul>
+        <li><code>/medicion-widget.html</code> — sin puente: respaldo <code>dataLayer</code></li>
+        <li><code>?puente=1</code> — hay puente: el widget no vuelve a empujar</li>
+        <li><code>?puente=legacy</code> — puente de www hoy: solo reenvía <code>live_voice_whatsapp_clicked</code></li>
+        <li><code>?desktopCall=1</code> — muestra Llamar también en escritorio</li>
+      </ul>
+      <label class="opt">
+        <input id="already" type="checkbox" />
+        <span>Simular que la homepage ya emitió <code>generate_lead</code> en este clic (marca <code>__amarteMeasuredEvent</code> en capture). El widget no debe repetir.</span>
+      </label>
+      <div class="row">
+        <button class="harness" type="button" id="btn-open">Abrir lanzador</button>
+        <button class="harness secondary" type="button" id="btn-open-again">Clic lanzador otra vez</button>
+        <button class="harness" type="button" id="btn-wa">Clic WhatsApp del pie</button>
+        <button class="harness" type="button" id="btn-call">Clic Llamar</button>
+        <button class="harness secondary" type="button" id="btn-promo">Clic Promociones</button>
+        <button class="harness secondary" type="button" id="btn-api">openChat() sin evento</button>
+        <button class="harness" type="button" id="btn-inline">Clic WhatsApp dentro del hilo</button>
+        <button class="harness secondary" type="button" id="btn-clear">Limpiar registro</button>
+      </div>
+      <h2>Registro</h2>
+      <div id="log">Sin eventos todavía.</div>
+    </main>
+    <script>
+      (function () {
+        var params = new URLSearchParams(location.search);
+        if (params.get("desktopCall") === "1") {
+          window.AMARTE_SHOW_DESKTOP_CALL = true;
+        }
+        window.__amarteMedicionLog = [];
+        window.dataLayer = [];
+        var rawPush = window.dataLayer.push.bind(window.dataLayer);
+        window.dataLayer.push = function (item) {
+          window.__amarteMedicionLog.push({
+            channel: "dataLayer",
+            payload: item,
+          });
+          render();
+          return rawPush(item);
+        };
+        var puente = params.get("puente") || "";
+        if (puente === "1") {
+          window.__amarteAnalyticsTrack = function (payload) {
+            window.__amarteMedicionLog.push({
+              channel: "puente",
+              payload: payload,
+            });
+            render();
+            return true;
+          };
+        } else if (puente === "legacy") {
+          window.__amarteAnalyticsTrack = function (payload) {
+            window.__amarteMedicionLog.push({
+              channel: "puente",
+              payload: payload,
+              nota: "puente legacy: solo reenvía live_voice_whatsapp_clicked",
+            });
+            render();
+            if (payload && payload.event === "live_voice_whatsapp_clicked") {
+              window.dataLayer.push({
+                event: "whatsapp_redirect",
+                location: "martina_widget",
+              });
+            }
+          };
+        }
+        window.__amarteMedicionPuente = puente || "(no instalado)";
+      })();
+    </script>
+    <script src="amarte-widget.js"></script>
+    <script>
+      function render() {
+        var log = window.__amarteMedicionLog || [];
+        var el = document.getElementById("log");
+        el.textContent = log.length
+          ? JSON.stringify(log, null, 2)
+          : "Sin eventos todavía.";
+      }
+
+      function meta() {
+        var root = document.querySelector(".amarte-widget-root");
+        var call = document.querySelector("a.amarte-quick-call");
+        var display = call ? getComputedStyle(call).display : "?";
+        var wide = window.matchMedia("(min-width:769px)").matches;
+        var desktopClass = !!(
+          root && root.classList.contains("amarte-show-desktop-call")
+        );
+        document.getElementById("meta").textContent =
+          "Puente: " +
+          window.__amarteMedicionPuente +
+          " · AMARTE_SHOW_DESKTOP_CALL=" +
+          String(window.AMARTE_SHOW_DESKTOP_CALL) +
+          " · clase escritorio=" +
+          desktopClass +
+          " · viewport≥769=" +
+          wide +
+          " · display del botón Llamar=" +
+          display;
+      }
+
+      document.addEventListener(
+        "click",
+        function (ev) {
+          var t = ev.target;
+          var link = t && t.closest ? t.closest("a") : null;
+          if (link && link.closest(".amarte-widget-root")) {
+            ev.preventDefault();
+          }
+          if (!document.getElementById("already").checked) return;
+          if (link) {
+            var href2 = link.getAttribute("href") || "";
+            if (/^tel:/i.test(href2) || /wa\.me|api\.whatsapp\.com|whatsapp\.com\/send/i.test(href2)) {
+              ev.__amarteMeasuredEvent = "generate_lead";
+            }
+          }
+        },
+        true
+      );
+
+      function fire(el) {
+        if (!el) {
+          window.__amarteMedicionLog.push({ channel: "harness", error: "no está el elemento" });
+          render();
+          return;
+        }
+        el.dispatchEvent(
+          new MouseEvent("click", { bubbles: true, cancelable: true })
+        );
+      }
+
+      document.getElementById("btn-open").onclick = function () {
+        var launcher = document.querySelector(".amarte-widget-launcher");
+        var panel = document.querySelector(".amarte-widget-panel");
+        if (panel && panel.classList.contains("amarte-open")) {
+          fire(launcher);
+        }
+        fire(launcher);
+      };
+      document.getElementById("btn-open-again").onclick = function () {
+        fire(document.querySelector(".amarte-widget-launcher"));
+      };
+      document.getElementById("btn-wa").onclick = function () {
+        var links = document.querySelectorAll("a.amarte-opt-link");
+        var i;
+        for (i = 0; i < links.length; i++) {
+          if ((links[i].getAttribute("href") || "").indexOf("wa.me") !== -1) {
+            fire(links[i]);
+            return;
+          }
+        }
+        fire(null);
+      };
+      document.getElementById("btn-call").onclick = function () {
+        fire(document.querySelector("a.amarte-quick-call"));
+      };
+      document.getElementById("btn-promo").onclick = function () {
+        var links = document.querySelectorAll("a.amarte-opt-link");
+        var i;
+        for (i = 0; i < links.length; i++) {
+          if ((links[i].getAttribute("href") || "").indexOf("promo") !== -1) {
+            fire(links[i]);
+            return;
+          }
+        }
+        fire(null);
+      };
+      document.getElementById("btn-api").onclick = function () {
+        var before = (window.__amarteMedicionLog || []).length;
+        window.AmarteChatbot.openChat();
+        if ((window.__amarteMedicionLog || []).length === before) {
+          window.__amarteMedicionLog.push({
+            channel: "harness",
+            nota: "openChat() no emitió martina_open",
+          });
+          render();
+        }
+      };
+      document.getElementById("btn-inline").onclick = function () {
+        var box = document.querySelector(".amarte-widget-messages");
+        var a = document.createElement("a");
+        a.className = "amarte-inline-link";
+        a.href = "https://wa.me/573007416683?text=prueba";
+        a.textContent = "WhatsApp en el hilo";
+        box.appendChild(a);
+        fire(a);
+      };
+      document.getElementById("btn-clear").onclick = function () {
+        window.__amarteMedicionLog.length = 0;
+        render();
+      };
+
+      function whenWidgetReady(fn) {
+        if (document.querySelector(".amarte-widget-root")) fn();
+        else document.addEventListener("DOMContentLoaded", fn);
+      }
+      whenWidgetReady(meta);
+      window.addEventListener("resize", meta);
+    </script>
+  </body>
+</html>
