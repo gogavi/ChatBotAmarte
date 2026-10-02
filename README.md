@@ -47,6 +47,19 @@ Desactivar solo el modo en vivo: `ELEVENLABS_LIVE_ENABLED=false`.
 
 No incluyas API keys en el embed.
 
+### Medición (widget)
+
+El widget no carga GTM. Avisa con `window.__amarteAnalyticsTrack(payload)` y, solo si ese puente no existe, hace `dataLayer.push`. Contrato, flag de llamada en escritorio y página de prueba: [docs/medicion/widget-martina.md](docs/medicion/widget-martina.md).
+
+Llamar sigue oculto en escritorio. Para mostrarlo:
+
+```html
+<script>
+  window.AMARTE_SHOW_DESKTOP_CALL = true;
+</script>
+<script src="https://chatbotamarte-production.up.railway.app/amarte-widget.js"></script>
+```
+
 ## API pública del widget (`window.AmarteChatbot`)
 
 Tras cargar `amarte-widget.js`, el sitio puede abrir Martina sin usar solo el launcher flotante:

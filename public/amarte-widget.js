@@ -509,6 +509,122 @@
   }
 
   /**
+   * Botón Llamar visible también en escritorio.
+   * Apagado por defecto: sin el flag, el CSS de min-width 769px lo oculta.
+   * Encender ANTES de cargar el script: window.AMARTE_SHOW_DESKTOP_CALL = true
+   * (también acepta "true" o 1).
+   */
+  function desktopCallEnabled() {
+    try {
+      var v = window.AMARTE_SHOW_DESKTOP_CALL;
+      return v === true || v === "true" || v === 1 || v === "1";
+    } catch (e0) {
+      return false;
+    }
+  }
+
+  /**
+   * Contrato del puente de medición (homepage ↔ widget).
+   *
+   * El widget no carga GTM. Los eventos de sitio (generate_lead, martina_open)
+   * salen en objeto plano, el mismo que iría a dataLayer:
+   *   1. Si el clic nativo ya trae __amarteMeasuredEvent === payload.event,
+   *      la homepage ya emitió ESE evento para este clic: no se repite.
+   *      (whatsapp_redirect legacy no cuenta: es otro evento y se mantiene.)
+   *   2. Si existe window.__amarteAnalyticsTrack, se le entrega el objeto y
+   *      el widget NO hace dataLayer.push. La homepage es dueña del dataLayer.
+   *      Debe reenviar generate_lead y martina_open; el puente publicado en
+   *      www (oct 2026) solo traduce live_voice_whatsapp_clicked →
+   *      whatsapp_redirect y descarta el resto.
+   *   3. Si el puente no existe, respaldo: window.dataLayer.push(payload).
+   *   4. openChat/openLive no emiten martina_open: los CTA del sitio ya lo
+   *      hacen al llamar openChat. Solo el lanzador flotante emite
+   *      location:"launcher" (hoy interaction_type:"text"; abre el chat escrito).
+   *   5. live_voice_* sigue yendo por trackLiveEvent ({event, props, ts}).
+   *
+   * @param {object} payload
+   * @param {Event} [nativeEvent]
+   */
+  function emitSiteMeasurement(payload, nativeEvent) {
+    if (!payload || !payload.event) return;
+    try {
+      if (
+        nativeEvent &&
+        nativeEvent.__amarteMeasuredEvent === payload.event
+      ) {
+        return;
+      }
+    } catch (e0) {}
+    try {
+      if (typeof window.__amarteAnalyticsTrack === "function") {
+        window.__amarteAnalyticsTrack(payload);
+        if (nativeEvent) nativeEvent.__amarteMeasuredEvent = payload.event;
+        return;
+      }
+    } catch (e1) {
+      return;
+    }
+    try {
+      window.dataLayer = window.dataLayer || [];
+      window.dataLayer.push(payload);
+      if (nativeEvent) nativeEvent.__amarteMeasuredEvent = payload.event;
+    } catch (e2) {}
+  }
+
+  function isWhatsAppHref(href) {
+    var h = String(href || "").toLowerCase();
+    return (
+      h.indexOf("wa.me") !== -1 ||
+      h.indexOf("api.whatsapp.com") !== -1 ||
+      h.indexOf("whatsapp.com/send") !== -1
+    );
+  }
+
+  function phoneDigitsFromTel(href) {
+    var digits = String(href || "")
+      .replace(/^tel:/i, "")
+      .replace(/\D/g, "");
+    return digits || "573013307909";
+  }
+
+  /**
+   * Clics de llamada y de cualquier WhatsApp dentro del widget.
+   * @param {HTMLElement} root
+   */
+  function bindLeadClicks(root) {
+    root.addEventListener("click", function (ev) {
+      var t = ev.target;
+      if (!t || !t.closest) return;
+      var link = t.closest("a");
+      if (!link || !root.contains(link)) return;
+      var href = link.getAttribute("href") || link.href || "";
+      if (/^tel:/i.test(href)) {
+        emitSiteMeasurement(
+          {
+            event: "generate_lead",
+            method: "phone",
+            location: "martina_widget",
+            phone_number: phoneDigitsFromTel(href),
+          },
+          ev
+        );
+        return;
+      }
+      if (isWhatsAppHref(href)) {
+        emitSiteMeasurement(
+          {
+            event: "generate_lead",
+            method: "whatsapp",
+            location: "martina_widget",
+            link_url: href,
+          },
+          ev
+        );
+      }
+    });
+  }
+
+  /**
    * Carga el bundle de voz en vivo una sola vez (VoiceAgentManager).
    * @returns {Promise<void>}
    */
@@ -1191,7 +1307,7 @@
       ".amarte-widget-quick-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;" +
       "padding:0 16px 16px;background:transparent;margin-top:4px;}" +
       ".amarte-widget-quick-row .amarte-opt-link{text-align:center;width:100%;box-sizing:border-box;}" +
-      "@media (min-width:769px){.amarte-quick-call{display:none !important;}}" +
+      "@media (min-width:769px){.amarte-widget-root:not(.amarte-show-desktop-call) .amarte-quick-call{display:none !important;}}" +
       "@media (max-width:768px){.amarte-widget-quick-row{grid-template-columns:1fr 1fr;}" +
       ".amarte-widget-quick-row .amarte-quick-call{grid-column:1 / -1;}}" +
       ".amarte-widget-input{flex:1;border:1px solid rgba(0,0,0,0.12);border-radius:999px;" +
@@ -2665,7 +2781,8 @@
     typingEl.textContent = "Martina IA está escribiendo…";
     typingEl.style.display = "none";
 
-    // Pie: fila de escritura + accesos rápidos (WhatsApp, Llamar solo móvil, Reservar, PROMOCIONES)
+    // Pie: fila de escritura + accesos rápidos (WhatsApp, Llamar, Reservar, PROMOCIONES).
+    // Llamar sigue oculto en escritorio salvo window.AMARTE_SHOW_DESKTOP_CALL.
     var footerWrap = document.createElement("div");
     footerWrap.className = "amarte-widget-footer-wrap";
 
@@ -2854,6 +2971,11 @@
       }
     });
 
+    if (desktopCallEnabled()) {
+      rootEl.classList.add("amarte-show-desktop-call");
+    }
+    bindLeadClicks(rootEl);
+
     rootEl.appendChild(launcher);
     rootEl.appendChild(panel);
     document.body.appendChild(rootEl);
@@ -2869,8 +2991,20 @@
       }
     }
 
-    launcher.addEventListener("click", function () {
+    launcher.addEventListener("click", function (ev) {
+      var willOpen = !panel.classList.contains("amarte-open");
       togglePanel();
+      if (!willOpen) return;
+      // El lanzador flotante abre el chat escrito. La voz en vivo es otro
+      // control, dentro del panel, y los CTA del sitio miden su propio location.
+      emitSiteMeasurement(
+        {
+          event: "martina_open",
+          location: "launcher",
+          interaction_type: "text",
+        },
+        ev
+      );
     });
     closeBtn.addEventListener("click", function () {
       panel.classList.remove("amarte-open");
