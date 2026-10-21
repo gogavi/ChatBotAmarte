@@ -11,7 +11,11 @@ const {
   landingsAskedInMessage,
 } = require("../config/landings");
 const { VALID_TIPOS } = require("../reservationService");
-const { getRoomRatesCatalog } = require("./roomRatesCatalog");
+const {
+  getRoomRatesCatalog,
+  getRoomExtrasCatalog,
+  extrasApplicableToNames,
+} = require("./roomRatesCatalog");
 const { stripPaymentPromoBlocks } = require("./suiteChatEnrichment");
 
 const DURATION_ROWS = Object.freeze([
@@ -48,6 +52,73 @@ function assertKnownKind(kind) {
  */
 function canonicalAmounts() {
   return new Set();
+}
+
+/**
+ * @returns {Promise<Map<string, { code: string; nombre: string; precio: number; appliesTo: string }> | null>}
+ */
+async function loadExtras() {
+  try {
+    const extras = await getRoomExtrasCatalog();
+    return extras instanceof Map ? extras : null;
+  } catch (err) {
+    console.warn(
+      "[landingPolicy] room_extras:",
+      err && err.message ? err.message : err
+    );
+    return null;
+  }
+}
+
+/**
+ * @param {Array<{ nombre: string; precio: number; code: string; appliesTo: string }> | null} rows
+ * @returns {string}
+ */
+function formatExtrasBlock(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return [
+      "## Extras (room_extras)",
+      "No hay extras con tarifa para esta consulta.",
+      "No inventes persona adicional, decoración ni hora suelta.",
+      "Formulario o WhatsApp.",
+    ].join("\n");
+  }
+  const lines = [
+    "## Extras (room_extras)",
+    "Cotiza solo estas filas. Si el extra no está, no inventes el monto.",
+  ];
+  for (const row of rows) {
+    const scope = row.appliesTo === "*" ? "cualquier suite" : row.appliesTo;
+    lines.push(
+      `- ${row.nombre}: ${formatCop(row.precio)} (${row.code}; aplica a ${scope}).`
+    );
+  }
+  return lines.join("\n");
+}
+
+/**
+ * @param {import("../config/landings").Landing} landing
+ * @returns {string[]}
+ */
+function landingRoomNames(landing) {
+  assertKnownKind(landing.kind);
+  if (landing.kind === "form") return [...VALID_TIPOS];
+  return landing.suites.map((suite) => suite.roomTypeName);
+}
+
+/**
+ * @param {Array<{ precio: number }> | null} rows
+ * @returns {Set<number>}
+ */
+function amountsFromExtras(rows) {
+  const allow = new Set();
+  if (!Array.isArray(rows)) return allow;
+  for (const row of rows) {
+    if (row && Number.isFinite(row.precio) && row.precio > 0) {
+      allow.add(row.precio);
+    }
+  }
+  return allow;
 }
 
 const MONEY_RE =
@@ -185,13 +256,24 @@ async function beginLandingTurn(raw) {
     );
     rates = null;
   }
-  const allowedAmounts = collectLandingAmounts(landing, rates instanceof Map ? rates : null);
-  const pricesAvailable = allowedAmounts.size > 0;
+  const extras = await loadExtras();
+  const rateMap = rates instanceof Map ? rates : null;
+  const rateAmounts = collectLandingAmounts(landing, rateMap);
+  const applicable = extrasApplicableToNames(landingRoomNames(landing), extras);
+  const allowedAmounts = new Set([
+    ...rateAmounts,
+    ...amountsFromExtras(applicable),
+  ]);
+  const pricesAvailable = rateAmounts.size > 0;
   return Object.freeze({
     landing,
     pricesAvailable,
+    rateAmounts,
     allowedAmounts,
-    addendum: buildLandingAddendum(landing, pricesAvailable ? rates : null),
+    addendum: [
+      buildLandingAddendum(landing, rateAmounts.size ? rateMap : null),
+      formatExtrasBlock(applicable),
+    ].join("\n\n"),
   });
 }
 
@@ -424,12 +506,21 @@ async function beginPriceTurn(raw) {
     rates = null;
   }
   const map = rates instanceof Map ? rates : null;
-  const allowedAmounts = collectAllAmounts(map);
+  const extras = await loadExtras();
+  const applicable = extras instanceof Map ? [...extras.values()] : null;
+  const rateAmounts = collectAllAmounts(map);
+  const allowedAmounts = new Set([
+    ...rateAmounts,
+    ...amountsFromExtras(applicable),
+  ]);
   return Object.freeze({
     landing: null,
-    pricesAvailable: allowedAmounts.size > 0,
+    pricesAvailable: rateAmounts.size > 0,
+    rateAmounts,
     allowedAmounts,
-    addendum: buildSitePriceAddendum(map),
+    addendum: [buildSitePriceAddendum(map), formatExtrasBlock(applicable)].join(
+      "\n\n"
+    ),
   });
 }
 
@@ -438,8 +529,8 @@ async function beginPriceTurn(raw) {
  * @returns {Set<number> | null}
  */
 function replyAmountAllowlist(turn) {
-  if (!turn.pricesAvailable) return new Set();
   if (turn.allowedAmounts instanceof Set) return turn.allowedAmounts;
+  if (!turn.pricesAvailable) return new Set();
   return null;
 }
 

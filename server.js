@@ -290,6 +290,21 @@ function sanitizeHistoryContent(content) {
  * }>}
  */
 /**
+ * Montos de room_rates. Un extra no autoriza el precio de la prerreserva
+ * ni el abono del 50% / 25%.
+ * @param {{ rateAmounts?: Set<number>; pricesAvailable?: boolean; allowedAmounts?: Set<number> } | null} turn
+ * @returns {Set<number>}
+ */
+function rateAllowlist(turn) {
+  if (!turn) return new Set();
+  if (turn.rateAmounts instanceof Set) return turn.rateAmounts;
+  if (turn.pricesAvailable && turn.allowedAmounts instanceof Set) {
+    return turn.allowedAmounts;
+  }
+  return new Set();
+}
+
+/**
  * @param {unknown} raw
  * @param {Set<number> | undefined} allow
  * @returns {boolean}
@@ -376,7 +391,7 @@ async function runChat(input) {
     formPrefill &&
     landingTurn &&
     !landingTurn.landing &&
-    !precioPermitido(formPrefill.precio, landingTurn.allowedAmounts)
+    !precioPermitido(formPrefill.precio, rateAllowlist(landingTurn))
   ) {
     formPrefill = { ...formPrefill, precio: "" };
   }
@@ -385,7 +400,7 @@ async function runChat(input) {
   const enriched = enrichChatReply(
     reply,
     built.suiteShowcase,
-    landingTurn && landingTurn.pricesAvailable ? landingTurn.allowedAmounts : new Set()
+    rateAllowlist(landingTurn)
   );
   reply = enriched.reply;
   suiteVideo = enriched.suiteVideo;

@@ -19,6 +19,15 @@ let inflight = null;
 /** Cuando true, getRoomRatesCatalog no llama a Supabase (tests). */
 let cacheDisabled = false;
 
+/** @type {Map<string, { code: string; nombre: string; precio: number; appliesTo: string; activo: true }> | null} */
+let extrasByCode = null;
+/** @type {number} */
+let extrasLoadedAt = 0;
+/** @type {Promise<Map<string, any> | null> | null} */
+let extrasInflight = null;
+/** Cuando true, getRoomExtrasCatalog no llama a Supabase (tests). */
+let extrasDisabled = false;
+
 /**
  * @param {number} hours
  * @returns {DurationKey | null}
@@ -141,6 +150,112 @@ async function fetchRoomRatesFromSupabase() {
 }
 
 /**
+ * Filas activas con precio > 0. Una fila inactiva o en cero no es cotizable.
+ * @param {unknown} rows
+ * @returns {Map<string, { code: string; nombre: string; precio: number; appliesTo: string; activo: true }>}
+ */
+function rowsToExtrasMap(rows) {
+  /** @type {Map<string, { code: string; nombre: string; precio: number; appliesTo: string; activo: true }>} */
+  const map = new Map();
+  const list = Array.isArray(rows) ? rows : [];
+  for (const row of list) {
+    if (!row || row.activo === false) continue;
+    const code = String(row.code || "").trim();
+    if (!code) continue;
+    const price = Math.round(Number(row.precio));
+    if (!Number.isFinite(price) || price <= 0) continue;
+    const nombre = String(row.nombre || code).trim() || code;
+    map.set(code, {
+      code,
+      nombre,
+      precio: price,
+      appliesTo: String(row.applies_to || "").trim(),
+      activo: true,
+    });
+  }
+  return map;
+}
+
+/**
+ * `null` si el catálogo no está. `[]` si está y ninguna fila aplica.
+ * `applies_to` '*' vale para cualquier nombre. El resto es una lista
+ * separada por comas de room types.
+ * @param {readonly string[]} names
+ * @param {ReadonlyMap<string, { appliesTo?: string }> | null} extras
+ * @returns {Array<{ code: string; nombre: string; precio: number; appliesTo: string }> | null}
+ */
+function extrasApplicableToNames(names, extras) {
+  if (!(extras instanceof Map)) return null;
+  const wanted = Array.isArray(names) ? names : [];
+  /** @type {Array<{ code: string; nombre: string; precio: number; appliesTo: string }>} */
+  const list = [];
+  for (const row of extras.values()) {
+    const scope = String(row.appliesTo || "").trim();
+    if (scope === "*") {
+      list.push(row);
+      continue;
+    }
+    const targets = scope
+      .split(",")
+      .map((part) => part.trim())
+      .filter(Boolean);
+    if (targets.some((name) => wanted.includes(name))) list.push(row);
+  }
+  return list;
+}
+
+/**
+ * @returns {Promise<Map<string, { code: string; nombre: string; precio: number; appliesTo: string; activo: true }> | null>}
+ */
+async function fetchRoomExtrasFromSupabase() {
+  if (!isSupabaseConfigured()) return null;
+  const sb = getSupabase();
+  if (!sb) return null;
+  const { data, error } = await sb
+    .from("room_extras")
+    .select("code,nombre,precio,applies_to,activo");
+  if (error) {
+    console.warn("[roomRatesCatalog] room_extras:", error.message || error);
+    return null;
+  }
+  const map = rowsToExtrasMap(data);
+  return map.size > 0 ? map : null;
+}
+
+/**
+ * Misma TTL que room_rates. Un fallo deja el resultado en null:
+ * Martina no conserva un monto de extras viejo ni inventa uno.
+ * @returns {Promise<Map<string, any> | null>}
+ */
+function refreshExtras() {
+  if (extrasDisabled) return Promise.resolve(extrasByCode);
+  const now = Date.now();
+  if (extrasByCode && now - extrasLoadedAt < CACHE_TTL_MS) {
+    return Promise.resolve(extrasByCode);
+  }
+  if (extrasInflight) return extrasInflight;
+  extrasInflight = (async () => {
+    try {
+      const fresh = await fetchRoomExtrasFromSupabase();
+      if (fresh) {
+        extrasByCode = fresh;
+        extrasLoadedAt = Date.now();
+      }
+      return fresh;
+    } catch (err) {
+      console.warn(
+        "[roomRatesCatalog] room_extras:",
+        err && err.message ? err.message : err
+      );
+      return null;
+    }
+  })();
+  return extrasInflight.finally(() => {
+    extrasInflight = null;
+  });
+}
+
+/**
  * Invalida la caché (tests / refresh manual).
  */
 function resetRoomRatesCache() {
@@ -148,6 +263,10 @@ function resetRoomRatesCache() {
   cacheLoadedAt = 0;
   inflight = null;
   cacheDisabled = false;
+  extrasByCode = null;
+  extrasLoadedAt = 0;
+  extrasInflight = null;
+  extrasDisabled = false;
 }
 
 /**
@@ -178,7 +297,10 @@ async function getRoomRatesCatalog(opts = {}) {
   }
 
   inflight = (async () => {
-    const fresh = await fetchRoomRatesFromSupabase();
+    const [fresh] = await Promise.all([
+      fetchRoomRatesFromSupabase(),
+      refreshExtras(),
+    ]);
     if (fresh) {
       cacheByName = fresh;
       cacheLoadedAt = Date.now();
@@ -271,11 +393,36 @@ function setRoomRatesCacheForTests(map) {
   cacheLoadedAt = Date.now();
 }
 
+/**
+ * @param {{ force?: boolean }} [opts]
+ */
+async function getRoomExtrasCatalog(opts = {}) {
+  if (opts.force) {
+    extrasLoadedAt = 0;
+  }
+  return refreshExtras();
+}
+
+/**
+ * `null` deja los extras indisponibles (Martina no da monto).
+ * @param {Map<string, any> | null} map
+ */
+function setRoomExtrasCacheForTests(map) {
+  extrasInflight = null;
+  extrasByCode = map;
+  extrasLoadedAt = map ? Date.now() : 0;
+  extrasDisabled = true;
+}
+
 module.exports = {
   getRoomRatesCatalog,
+  getRoomExtrasCatalog,
   findDbCatalogEntry,
   resetRoomRatesCache,
   setRoomRatesCacheForTests,
+  setRoomExtrasCacheForTests,
+  rowsToExtrasMap,
+  extrasApplicableToNames,
   hoursToDurationKey,
   CACHE_TTL_MS,
 };

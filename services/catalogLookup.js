@@ -4,11 +4,14 @@
  */
 
 const { pricing, formatCop, suiteCategories, contact } = require("../config/amarteCatalog");
+const { resolveTipo } = require("../reservationService");
 const { dateTypeFromIsoDate } = require("./bogotaTime");
 const { formatMoneyAmount } = require("../ttsNormalize");
 const {
   getRoomRatesCatalog,
+  getRoomExtrasCatalog,
   findDbCatalogEntry,
+  extrasApplicableToNames,
 } = require("./roomRatesCatalog");
 
 /** @typedef {"h4"|"h8"|"h12"|"diaHotelero"|"h6"} DurationKey */
@@ -293,6 +296,13 @@ async function lookupCatalogPrice(input = {}) {
 
   const dbCatalog = await getRoomRatesCatalog();
   const dbEntry = findDbCatalogEntry(suite, dbCatalog);
+  const resolvedName = dbEntry ? dbEntry.name : resolveTipo(suite);
+  const resolvedKind = dbEntry
+    ? dbEntry.kind
+    : String(resolvedName || "").startsWith("Plan ")
+      ? "plan"
+      : "suite";
+  const extras = await extrasForSuite(resolvedName, resolvedKind);
 
   if (dbEntry) {
     const availableDurations = availableDurationsFromBands(
@@ -308,6 +318,7 @@ async function lookupCatalogPrice(input = {}) {
           suite: dbEntry.name,
           dateType,
           duration: durationRaw || null,
+          extras,
         });
       }
       return {
@@ -322,6 +333,7 @@ async function lookupCatalogPrice(input = {}) {
         bookingUrl: contact.reservationsUrl,
         whatsappUrl: contact.whatsappUrl,
         source: "supabase",
+        extras,
         message:
           "Indica la duración (4, 8, 12 horas o día hotelero; planes: 6, 12 o día hotelero).",
       };
@@ -337,6 +349,7 @@ async function lookupCatalogPrice(input = {}) {
         dateType,
         duration: durationRaw,
         availableDurations,
+        extras,
       });
     }
 
@@ -352,14 +365,16 @@ async function lookupCatalogPrice(input = {}) {
       bookingUrl: contact.reservationsUrl,
       whatsappUrl: contact.whatsappUrl,
       source: "supabase",
+      extras,
       message: null,
     };
   }
 
   return unavailableQuote({
-    suite: suite || null,
+    suite: resolvedName || suite || null,
     dateType: dateTypeFromIsoDate(date),
     duration: durationRaw || null,
+    extras,
   });
 }
 
@@ -382,9 +397,34 @@ function unavailableQuote(partial = {}) {
     bookingUrl: contact.reservationsUrl,
     whatsappUrl: contact.whatsappUrl,
     source: "unavailable",
+    extras: null,
     message: UNAVAILABLE_MESSAGE,
     ...partial,
   };
+}
+
+/**
+ * Extras que aplican a esta suite. `null` si room_extras no respondió.
+ * @param {string} roomName
+ * @returns {Promise<Array<{ code: string; nombre: string; precio: number; appliesTo: string }> | null>}
+ */
+async function extrasForSuite(roomName, kind) {
+  if (!roomName) return null;
+  try {
+    const extras = await getRoomExtrasCatalog();
+    const rows = extrasApplicableToNames(
+      [roomName],
+      extras instanceof Map ? extras : null
+    );
+    if (!Array.isArray(rows) || kind !== "plan") return rows;
+    return rows.filter((row) => row.appliesTo !== "*");
+  } catch (err) {
+    console.warn(
+      "[catalogLookup] room_extras:",
+      err && err.message ? err.message : err
+    );
+    return null;
+  }
 }
 
 /**

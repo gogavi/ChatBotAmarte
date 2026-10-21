@@ -3,6 +3,7 @@
   - Cotización en el chat: tarifas de lista desde Supabase `room_rates` (tool catalogLookup).
   - `amarteCatalog.js` guarda nombres, videos, URLs e includes. No guarda tarifas.
   - Campañas y landings: contexto para saber qué existe. No cites un monto que no esté en `room_rates`. Si no hay fila, formulario o WhatsApp.
+  - Persona adicional, decoración y hora suelta: solo `room_extras`. Si no hay fila, no hay monto.
 -->
 
 ## Políticas generales

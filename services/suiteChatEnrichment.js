@@ -122,11 +122,15 @@ function ensurePromoBlockOnExactQuote(reply, allowAmounts) {
 
   text = stripPaymentPromoBlocks(text);
 
-  const amounts = [...text.matchAll(/\$\s*([\d.]+)/g)].map((m) =>
-    parseInt(String(m[1]).replace(/\./g, ""), 10)
+  const packLine = text.match(
+    /(?:(?:4|6|8|12)\s*h|d[ií]a hotelero)[^\n]*\$\s*([\d.]+)/i
   );
-  const total = amounts.find((n) => Number.isFinite(n) && n >= 50000);
-  if (!total) return text;
+  const quotedLine = text.match(/\*\*[^*]+\*\*[^\n]*·[^\n]*\$\s*([\d.]+)/i);
+  const rawAmount = (packLine && packLine[1]) || (quotedLine && quotedLine[1]);
+  const total = rawAmount
+    ? parseInt(String(rawAmount).replace(/\./g, ""), 10)
+    : NaN;
+  if (!Number.isFinite(total) || total < 50000) return text;
   if (allowAmounts instanceof Set && !allowAmounts.has(total)) return text;
 
   const promo = formatQuoteWithPaymentOptions(total);
