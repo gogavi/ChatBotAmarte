@@ -86,14 +86,15 @@ assert.ok(choiceText.includes("Suite Gótica"));
 assert.ok(choiceText.includes("Suite Rubí"));
 assert.ok(choiceText.includes("Suite Diamante"));
 assert.ok(choiceText.includes("Suite Árabe"));
+assert.ok(choiceText.includes("Suite Gold"));
+assert.ok(choiceText.includes("esas seis"));
 assert.ok(choiceText.includes("Suite Gamer"));
-assert.ok(!choiceText.includes("Suite Gold"));
 assert.ok(!choiceText.includes("120"));
 assert.deepStrictEqual(
   [...PLAN_CHOICE_GROUP.suites],
-  ["Suite Queen", "Suite Gótica", "Suite Rubí", "Suite Diamante", "Suite Árabe"]
+  ["Suite Queen", "Suite Gótica", "Suite Rubí", "Suite Diamante", "Suite Árabe", "Suite Gold"]
 );
-assert.ok(!PLAN_CHOICE_GROUP.suites.includes("Suite Gold"));
+assert.strictEqual(PLAN_CHOICE_GROUP.pendingConfirmation, false);
 assert.ok(!PLAN_CHOICE_GROUP.suites.includes("Suite Gamer"));
 assert.ok(ruleForPlan("Plan Romántico").suites.includes("Suite Gold"));
 
@@ -176,6 +177,34 @@ const eroticoGamer = landingsAskedInMessage(
   gamer
 ).map((landing) => landing.id);
 assert.deepStrictEqual(eroticoGamer, ["tematicas"]);
+
+const eroticoGold = landingsAskedInMessage(
+  "Plan Erótico en Suite Gold",
+  gamer
+).map((landing) => landing.id);
+assert.deepStrictEqual(eroticoGold, ["suite-sauna-jacuzzi"]);
+
+assert.deepStrictEqual(
+  landingsAskedInMessage(
+    "Plan Erótico en Suite Gold",
+    resolveLanding("suite-sauna-jacuzzi")
+  ).map((landing) => landing.id),
+  []
+);
+
+const goldReply = finishLandingReply(
+  {
+    landing: resolveLanding("suite-sauna-jacuzzi"),
+    pricesAvailable: true,
+    allowedAmounts: new Set(),
+    addendum: "x",
+  },
+  "Puedes escogerla.",
+  "Plan Erótico en Suite Gold"
+);
+assert.ok(goldReply.includes("Puedes escogerla."));
+assert.ok(!goldReply.includes("https://microservicio-suite-tematicas.vercel.app"));
+assert.ok(!goldReply.includes("https://microservicio-suite-sauna-jacuzzi.vercel.app"));
 
 const romChosenReply = finishLandingReply(
   {
@@ -281,9 +310,10 @@ assert.ok(!linked.includes("https://microservicio-suite-sauna-jacuzzi.vercel.app
   );
   assert.deepStrictEqual(eroticoQuote.suiteAdvice.exclude, []);
   assert.strictEqual(eroticoQuote.suiteAdvice.choice.samePrice, true);
+  assert.strictEqual(eroticoQuote.suiteAdvice.choice.pendingConfirmation, false);
   assert.deepStrictEqual(
     eroticoQuote.suiteAdvice.choice.suites,
-    ["Suite Queen", "Suite Gótica", "Suite Rubí", "Suite Diamante", "Suite Árabe"]
+    ["Suite Queen", "Suite Gótica", "Suite Rubí", "Suite Diamante", "Suite Árabe", "Suite Gold"]
   );
   assert.ok(!JSON.stringify(eroticoQuote.suiteAdvice.choice).includes("120"));
 
@@ -294,7 +324,7 @@ assert.ok(!linked.includes("https://microservicio-suite-sauna-jacuzzi.vercel.app
   });
   assert.ok(romQuote.suiteAdvice.suites.some((suite) => suite.name === "Suite Gold"));
   assert.ok(romQuote.suiteAdvice.exclude.includes("Suite Gótica"));
-  assert.ok(!romQuote.suiteAdvice.choice.suites.includes("Suite Gold"));
+  assert.ok(romQuote.suiteAdvice.choice.suites.includes("Suite Gold"));
   assert.ok(romQuote.suiteAdvice.choice.suites.includes("Suite Gótica"));
 
   const camaQuote = await lookupCatalogPrice({

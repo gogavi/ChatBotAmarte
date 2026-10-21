@@ -13,20 +13,17 @@
  */
 
 /**
- * Pendiente de que Guillermo lo confirme. Commit aparte para revertirlo solo.
+ * Guillermo confirmó el grupo el 21-oct-2026 y metió Suite Gold.
  *
- * Leído el 21-oct-2026 en room_rates de dftbelnombbtjryqphaa, solo SELECT.
- * Queen, Gótica, Rubí, Diamante y Árabe tienen la misma grilla de suite.
+ * Leído ese día en room_rates de dftbelnombbtjryqphaa, solo SELECT.
+ * Queen, Gótica, Rubí, Diamante, Árabe y Gold tienen la misma grilla de suite.
  * Cada plan tiene una sola tarifa, sin columna por suite, y las tres tarifas
  * positivas coinciden. Por eso samePrice es true y el prompt no escribe montos.
  * room_extras no existe en esa base: no afirmar decoración de 120000.
- *
- * Contradicción abierta: Plan Romántico recomienda Suite Gold y la excluye
- * de este grupo. Suite Gold tiene la misma grilla de suite que las cinco.
  * Suite Gamer no entra.
  *
  * @typedef {{
- *   pendingConfirmation: true;
+ *   pendingConfirmation: false;
  *   samePrice: true;
  *   plans: readonly string[];
  *   suites: readonly string[];
@@ -35,7 +32,7 @@
 
 /** @type {PlanChoiceGroup} */
 const PLAN_CHOICE_GROUP = Object.freeze({
-  pendingConfirmation: true,
+  pendingConfirmation: false,
   samePrice: true,
   plans: Object.freeze(["Plan Cumpleaños", "Plan Romántico", "Plan Erótico"]),
   suites: Object.freeze([
@@ -44,6 +41,7 @@ const PLAN_CHOICE_GROUP = Object.freeze({
     "Suite Rubí",
     "Suite Diamante",
     "Suite Árabe",
+    "Suite Gold",
   ]),
 });
 
@@ -151,7 +149,7 @@ function formatPlanChoiceForPrompt() {
     `${plans} se pueden tomar en ${names}.`,
     "Si el cliente elige una de esas suites, dile que puede escogerla, aunque no esté en la lista recomendada.",
     "No sustituyas esa suite por otra y no añadas otra landing solo por esa elección.",
-    "El precio es el del plan en room_rates y es el mismo en cualquiera de esas cinco.",
+    "El precio es el del plan en room_rates y es el mismo en cualquiera de esas seis.",
     "Suite Gamer no entra en ese grupo.",
     "No inventes un monto de decoración.",
   ].join("\n");
@@ -159,12 +157,12 @@ function formatPlanChoiceForPrompt() {
 
 /**
  * @param {unknown} plan
- * @returns {{ pendingConfirmation: true; samePrice: true; suites: string[] } | null}
+ * @returns {{ pendingConfirmation: false; samePrice: true; suites: string[] } | null}
  */
 function choiceForPlan(plan) {
   if (typeof plan !== "string" || !PLAN_CHOICE_GROUP.plans.includes(plan)) return null;
   return {
-    pendingConfirmation: true,
+    pendingConfirmation: false,
     samePrice: PLAN_CHOICE_GROUP.samePrice,
     suites: [...PLAN_CHOICE_GROUP.suites],
   };
