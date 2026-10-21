@@ -15,6 +15,7 @@ const {
   getRoomRatesCatalog,
   getRoomExtrasCatalog,
   extrasApplicableToNames,
+  isDecorationExtra,
 } = require("./roomRatesCatalog");
 const { stripPaymentPromoBlocks } = require("./suiteChatEnrichment");
 
@@ -80,12 +81,14 @@ function formatExtrasBlock(rows) {
       "## Extras (room_extras)",
       "No hay extras con tarifa para esta consulta.",
       "No inventes persona adicional, decoración ni hora suelta.",
+      "Los planes ya incluyen la decoración. No sumes ese extra ni inventes su monto.",
       "Formulario o WhatsApp.",
     ].join("\n");
   }
   const lines = [
     "## Extras (room_extras)",
     "Cotiza solo estas filas. Si el extra no está, no inventes el monto.",
+    "Los planes ya incluyen la decoración. No sumes ese extra ni inventes su monto.",
   ];
   for (const row of rows) {
     const scope = row.appliesTo === "*" ? "cualquier suite" : row.appliesTo;
@@ -107,9 +110,32 @@ function landingRoomNames(landing) {
 }
 
 /**
- * @param {Array<{ precio: number }> | null} rows
+ * @param {Array<{ code?: string; precio: number }> | null} rows
  * @returns {Set<number>}
  */
+function decorationAmountsFrom(rows) {
+  const amounts = new Set();
+  if (!Array.isArray(rows)) return amounts;
+  for (const row of rows) {
+    if (isDecorationExtra(row) && Number.isFinite(row.precio) && row.precio > 0) {
+      amounts.add(row.precio);
+    }
+  }
+  return amounts;
+}
+
+/**
+ * @param {string} [userMessage]
+ * @returns {boolean}
+ */
+function asksPlan(userMessage) {
+  const norm = String(userMessage || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  return /(?:^|[^a-z0-9])plan(?:es)?(?:[^a-z0-9]|$)/.test(norm);
+}
+
 function amountsFromExtras(rows) {
   const allow = new Set();
   if (!Array.isArray(rows)) return allow;
@@ -269,6 +295,7 @@ async function beginLandingTurn(raw) {
     landing,
     pricesAvailable,
     rateAmounts,
+    decorationAmounts: decorationAmountsFrom(applicable),
     allowedAmounts,
     addendum: [
       buildLandingAddendum(landing, rateAmounts.size ? rateMap : null),
@@ -517,6 +544,7 @@ async function beginPriceTurn(raw) {
     landing: null,
     pricesAvailable: rateAmounts.size > 0,
     rateAmounts,
+    decorationAmounts: decorationAmountsFrom(applicable),
     allowedAmounts,
     addendum: [buildSitePriceAddendum(map), formatExtrasBlock(applicable)].join(
       "\n\n"
@@ -528,16 +556,25 @@ async function beginPriceTurn(raw) {
  * @param {{ landing: import("../config/landings").Landing; pricesAvailable: boolean; allowedAmounts?: Set<number> } | null} turn
  * @returns {Set<number> | null}
  */
-function replyAmountAllowlist(turn) {
-  if (turn.allowedAmounts instanceof Set) return turn.allowedAmounts;
-  if (!turn.pricesAvailable) return new Set();
-  return null;
+function replyAmountAllowlist(turn, userMessage) {
+  /** @type {Set<number> | null} */
+  let allow = null;
+  if (turn.allowedAmounts instanceof Set) allow = new Set(turn.allowedAmounts);
+  else if (!turn.pricesAvailable) allow = new Set();
+  if (!(allow instanceof Set)) return null;
+  if (asksPlan(userMessage) && turn.decorationAmounts instanceof Set) {
+    const rates = turn.rateAmounts instanceof Set ? turn.rateAmounts : new Set();
+    for (const amount of turn.decorationAmounts) {
+      if (!rates.has(amount)) allow.delete(amount);
+    }
+  }
+  return allow;
 }
 
 function finishLandingReply(turn, reply, userMessage) {
   if (!turn) return reply;
   let text = String(reply || "");
-  const allow = replyAmountAllowlist(turn);
+  const allow = replyAmountAllowlist(turn, userMessage);
   if (allow) {
     text = stripPaymentPromoBlocks(stripUntrustedCopAmounts(text, allow));
     if (!turn.pricesAvailable) text = appendUnavailablePriceLine(text, turn.landing);

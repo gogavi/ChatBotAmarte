@@ -184,6 +184,10 @@ function rowsToExtrasMap(rows) {
  * @param {ReadonlyMap<string, { appliesTo?: string }> | null} extras
  * @returns {Array<{ code: string; nombre: string; precio: number; appliesTo: string }> | null}
  */
+function isDecorationExtra(row) {
+  return String(row && row.code ? row.code : "").startsWith("decoracion_");
+}
+
 function extrasApplicableToNames(names, extras) {
   if (!(extras instanceof Map)) return null;
   const wanted = Array.isArray(names) ? names : [];
@@ -423,6 +427,7 @@ module.exports = {
   setRoomExtrasCacheForTests,
   rowsToExtrasMap,
   extrasApplicableToNames,
+  isDecorationExtra,
   hoursToDurationKey,
   CACHE_TTL_MS,
 };

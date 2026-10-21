@@ -13,12 +13,12 @@
 -- 120000 aplica a Deluxe (Suite Diamante, Suite Gold, Suite Rubí,
 -- Suite Zafiro), temáticas (Suite Árabe, Suite Gótica, Suite Queen) y
 -- Suite Jacuzzi, que es el room type (el nombre comercial del catálogo
--- no se guarda aquí). La V2 también nombraba sauna; no hay room type "sauna"
--- (la landing suite-sauna-jacuzzi es Gold, Rubí y Zafiro), así que sauna
--- no entra en applies_to.
+-- no se guarda aquí). "sauna" y "suite sauna" son la landing Sauna Jacuzzi
+-- (suite-sauna-jacuzzi): Suite Gold, Suite Rubí y Suite Zafiro. Esas tres
+-- ya están en esta fila de 120000. No hay un room type "Suite Sauna".
 -- hora_adicional (30000) aplica a Suite Sencilla, el room type de la
--- venta interna de la V2. Suite Gamer y los planes no entran en ninguna
--- decoración hasta que Guillermo lo diga.
+-- venta interna de la V2. Suite Gamer no tiene decoración: no hay fila.
+-- Los planes ya incluyen la decoración. No hay fila con precio para eso.
 -- Suite Sencilla también entra en la decoración de 100000 (grupo sencillas).
 -- persona_adicional (60000) aplica a cualquier suite (applies_to '*').
 -- Las tarifas de lista siguen siendo para 2 personas.

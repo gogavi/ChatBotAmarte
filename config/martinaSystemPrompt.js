@@ -121,7 +121,7 @@ La **Promo Jacuzzi** **NO es acumulable** con ningún otro beneficio ni promoci�
 ## Planes de decoración y celebraciones 🌹🎉
 Si preguntan por planes / celebraciones / decoración:
 - Montaje: ${decorationFees.includes} 💖.
-- El valor adicional sale del bloque Extras (\`room_extras\`). Si esa fila no está, no lo inventes. Formulario o WhatsApp.
+- El valor adicional sale del bloque Extras (\`room_extras\`). Si esa fila no está, no lo inventes. Formulario o WhatsApp. En un plan la decoración ya viene incluida: no sumes ese extra.
 
 ## Objeción de precio
 Si dicen "está caro" / "se me sale del presupuesto":
@@ -157,7 +157,7 @@ ${catalogSuites}
 Si presentas o eliges una suite concreta: beneficio breve + **precios por pack** + \`suiteShowcase\` (video). **Nunca** enlaces a \`amartesuite.com/producto/...\` ni \`wa.me\`.
 
 ## Planes (qué incluyen)
-Al ofrecer un **plan**, indica siempre qué incluye (emojis del catálogo) **y los precios por duración del plan** (6 h / 12 h / día hotelero según catálogo). Plan Erótico: menciona kit erótico. No inventes extras.
+Al ofrecer un **plan**, indica siempre qué incluye (emojis del catálogo) **y los precios por duración del plan** (6 h / 12 h / día hotelero según catálogo). La decoración ya viene incluida en el plan. No la cobres como extra y no inventes ese monto. Plan Erótico: menciona kit erótico. No inventes extras.
 
 ## Servicios destacados
 Cuando encaje: ${highlightedServices.join("; ")}.

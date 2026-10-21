@@ -121,7 +121,7 @@ const LANDINGS = Object.freeze([
     aliasUrls: Object.freeze(["https://deluxe.amartesuite.com"]),
     kind: "product",
     offer: null,
-    distinctPhrases: Object.freeze([]),
+    distinctPhrases: Object.freeze(["sauna", "suite sauna", "sauna jacuzzi"]),
     suites: Object.freeze([
       Object.freeze({
         label: "Suite Gold",
@@ -181,6 +181,24 @@ function resolveLanding(raw) {
   const id = raw.trim().toLowerCase();
   if (!id) return null;
   return LANDINGS.find((landing) => landing.id === id) || null;
+}
+
+/**
+ * Alias exacto de una landing. "sauna" y "suite sauna" son Sauna Jacuzzi.
+ * No resuelve una frase larga: el texto libre lo cubre landingsAskedInMessage.
+ * @param {unknown} raw
+ * @returns {Landing | null}
+ */
+function resolveLandingByAlias(raw) {
+  if (typeof raw !== "string") return null;
+  const key = normalizeLandingText(raw);
+  if (!key) return null;
+  for (const landing of LANDINGS) {
+    for (const phrase of landing.distinctPhrases) {
+      if (normalizeLandingText(phrase) === key) return landing;
+    }
+  }
+  return null;
 }
 
 /**
@@ -287,6 +305,7 @@ function landingsAskedInMessage(userMessage, active) {
 module.exports = {
   LANDINGS,
   resolveLanding,
+  resolveLandingByAlias,
   landingBrowserOrigins,
   normalizeLandingText,
   landingsAskedInMessage,

@@ -11,7 +11,12 @@ const {
   getRoomExtrasCatalog,
   CACHE_TTL_MS,
 } = require("../services/roomRatesCatalog");
-const { beginLandingTurn, finishLandingReply } = require("../services/landingPolicy");
+const { beginLandingTurn, beginPriceTurn, finishLandingReply } = require("../services/landingPolicy");
+const {
+  resolveLanding,
+  resolveLandingByAlias,
+  landingsAskedInMessage,
+} = require("../config/landings");
 const { lookupCatalogPrice } = require("../services/catalogLookup");
 const { ensurePromoBlockOnExactQuote } = require("../services/suiteChatEnrichment");
 
@@ -94,6 +99,11 @@ assert.ok(
   sencillaExtras.some((row) => row.code === "decoracion_sencillas_cabana")
 );
 assert.ok(!sencillaExtras.some((row) => row.code === "hora_adicional"));
+const gamerExtras = extrasApplicableToNames(["Suite Gamer"], seeded);
+assert.deepStrictEqual(
+  gamerExtras.map((row) => row.code),
+  ["persona_adicional"]
+);
 
 (async () => {
 resetRoomRatesCache();
@@ -193,10 +203,94 @@ const planQuote = await lookupCatalogPrice({
   duration: "6 horas",
 });
 assert.strictEqual(planQuote.priceCop, 200000);
+assert.strictEqual(planQuote.decorationIncluded, true);
 assert.ok(Array.isArray(planQuote.extras));
 assert.ok(!planQuote.extras.some((row) => row.code === "persona_adicional"));
+assert.ok(!planQuote.extras.some((row) => row.code.startsWith("decoracion_")));
+assert.ok(!String(planQuote.message || "").match(/\$?\s*1[02]0\.?000/));
+
+assert.strictEqual(resolveLandingByAlias("sauna").id, "suite-sauna-jacuzzi");
+assert.strictEqual(resolveLandingByAlias("Suite Sauna").id, "suite-sauna-jacuzzi");
+assert.strictEqual(resolveLandingByAlias("sauna jacuzzi").id, "suite-sauna-jacuzzi");
+assert.strictEqual(resolveLandingByAlias("suite gold"), null);
+const saunaHits = landingsAskedInMessage(
+  "quiero la suite sauna",
+  resolveLanding("suite-jacuzzi")
+);
+assert.ok(saunaHits.some((landing) => landing.id === "suite-sauna-jacuzzi"));
+
+setRoomRatesCacheForTests(
+  new Map([
+    [
+      "Suite Gold",
+      {
+        name: "Suite Gold",
+        kind: "suite",
+        weekday: { h4: 180000 },
+        weekend: {},
+      },
+    ],
+    [
+      "Suite Rubí",
+      {
+        name: "Suite Rubí",
+        kind: "suite",
+        weekday: { h4: 190000 },
+        weekend: {},
+      },
+    ],
+    [
+      "Suite Zafiro",
+      {
+        name: "Suite Zafiro",
+        kind: "suite",
+        weekday: {},
+        weekend: {},
+      },
+    ],
+  ])
+);
+const saunaQuote = await lookupCatalogPrice({
+  suite: "suite sauna",
+  date: "2026-10-21",
+  duration: "4 horas",
+});
+assert.strictEqual(saunaQuote.priceCop, null);
+assert.strictEqual(saunaQuote.decorationIncluded, false);
+assert.ok(Array.isArray(saunaQuote.suites));
+assert.strictEqual(
+  saunaQuote.suites.find((row) => row.name === "Suite Gold").priceCop,
+  180000
+);
+assert.strictEqual(
+  saunaQuote.suites.find((row) => row.name === "Suite Zafiro").priceCop,
+  null
+);
+assert.ok(
+  saunaQuote.extras.some(
+    (row) => row.code === "decoracion_vip_tematicas_jacuzzi_sauna"
+  )
+);
+assert.ok(
+  !saunaQuote.extras.some((row) => row.code === "decoracion_sencillas_cabana")
+);
+
+const site = await beginPriceTurn("");
+const planDecoration = finishLandingReply(
+  site,
+  "El Plan Romántico lleva decoración de $120.000.",
+  "cuánto vale el plan romántico"
+);
+assert.ok(!planDecoration.includes("120"));
+const suiteDecoration = finishLandingReply(
+  site,
+  "La decoración VIP vale $120.000.",
+  "decoración de la suite jacuzzi"
+);
+assert.ok(suiteDecoration.includes("120.000"));
 
 setRoomRatesCacheForTests(rates);
+setRoomExtrasCacheForTests(seeded);
 const horaMiss = await lookupCatalogPrice({
   suite: "Suite Sencilla",
   date: "2026-10-21",

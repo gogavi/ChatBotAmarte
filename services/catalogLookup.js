@@ -12,7 +12,9 @@ const {
   getRoomExtrasCatalog,
   findDbCatalogEntry,
   extrasApplicableToNames,
+  isDecorationExtra,
 } = require("./roomRatesCatalog");
+const { resolveLandingByAlias } = require("../config/landings");
 
 /** @typedef {"h4"|"h8"|"h12"|"diaHotelero"|"h6"} DurationKey */
 
@@ -319,6 +321,7 @@ async function lookupCatalogPrice(input = {}) {
           dateType,
           duration: durationRaw || null,
           extras,
+          decorationIncluded: resolvedKind === "plan",
         });
       }
       return {
@@ -334,6 +337,7 @@ async function lookupCatalogPrice(input = {}) {
         whatsappUrl: contact.whatsappUrl,
         source: "supabase",
         extras,
+        decorationIncluded: resolvedKind === "plan",
         message:
           "Indica la duración (4, 8, 12 horas o día hotelero; planes: 6, 12 o día hotelero).",
       };
@@ -350,6 +354,7 @@ async function lookupCatalogPrice(input = {}) {
         duration: durationRaw,
         availableDurations,
         extras,
+        decorationIncluded: resolvedKind === "plan",
       });
     }
 
@@ -366,7 +371,51 @@ async function lookupCatalogPrice(input = {}) {
       whatsappUrl: contact.whatsappUrl,
       source: "supabase",
       extras,
+      decorationIncluded: resolvedKind === "plan",
       message: null,
+    };
+  }
+
+  const aliasLanding = resolveLandingByAlias(suite);
+  if (aliasLanding && aliasLanding.suites.length) {
+    const names = aliasLanding.suites.map((item) => item.roomTypeName);
+    let groupExtras = null;
+    try {
+      const catalog = await getRoomExtrasCatalog();
+      groupExtras = extrasApplicableToNames(
+        names,
+        catalog instanceof Map ? catalog : null
+      );
+    } catch (err) {
+      console.warn(
+        "[catalogLookup] room_extras:",
+        err && err.message ? err.message : err
+      );
+      groupExtras = null;
+    }
+    const quotedSuites = names.map((name) => {
+      const entry = dbCatalog instanceof Map ? dbCatalog.get(name) : null;
+      const band = entry && durationKey ? entry[dateType] || {} : null;
+      const amount = band ? Number(band[durationKey]) : NaN;
+      return { name, priceCop: amount > 0 ? amount : null };
+    });
+    return {
+      found: true,
+      suite: "Sauna Jacuzzi",
+      dateType,
+      duration: durationRaw || null,
+      priceCop: null,
+      spokenPrice: null,
+      formattedPrice: null,
+      availableDurations: [],
+      bookingUrl: contact.reservationsUrl,
+      whatsappUrl: contact.whatsappUrl,
+      source: quotedSuites.some((row) => row.priceCop > 0) ? "supabase" : "unavailable",
+      extras: groupExtras,
+      suites: quotedSuites,
+      decorationIncluded: false,
+      message:
+        "Sauna Jacuzzi son Suite Gold, Suite Rubí y Suite Zafiro. Cotiza cada suite con su fila de room_rates. No des un monto único para sauna.",
     };
   }
 
@@ -375,6 +424,7 @@ async function lookupCatalogPrice(input = {}) {
     dateType: dateTypeFromIsoDate(date),
     duration: durationRaw || null,
     extras,
+    decorationIncluded: resolvedKind === "plan",
   });
 }
 
@@ -398,6 +448,7 @@ function unavailableQuote(partial = {}) {
     whatsappUrl: contact.whatsappUrl,
     source: "unavailable",
     extras: null,
+    decorationIncluded: false,
     message: UNAVAILABLE_MESSAGE,
     ...partial,
   };
@@ -417,7 +468,7 @@ async function extrasForSuite(roomName, kind) {
       extras instanceof Map ? extras : null
     );
     if (!Array.isArray(rows) || kind !== "plan") return rows;
-    return rows.filter((row) => row.appliesTo !== "*");
+    return rows.filter((row) => row.appliesTo !== "*" && !isDecorationExtra(row));
   } catch (err) {
     console.warn(
       "[catalogLookup] room_extras:",
