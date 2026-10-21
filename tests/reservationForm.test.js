@@ -15,6 +15,10 @@ const {
   VALID_TIPOS,
   VALID_PACKS,
 } = require("../reservationService");
+const {
+  setRoomRatesCacheForTests,
+  resetRoomRatesCache,
+} = require("../services/roomRatesCatalog");
 const widgetConfigRouter = require("../routes/widgetConfig");
 
 assert.ok(MARTINA_REPLY_JSON_SCHEMA.schema.properties.showReservationForm);
@@ -98,20 +102,53 @@ server.listen(0, () => {
         assert.deepStrictEqual(cfg.reservationForm.tipos, [...VALID_TIPOS]);
         assert.deepStrictEqual(cfg.reservationForm.packs, [...VALID_PACKS]);
         assert.ok(cfg.quoteCatalog);
-        assert.ok(cfg.quoteCatalog.byTipo["Suite Amarte"]);
-        assert.strictEqual(
-          cfg.quoteCatalog.byTipo["Suite Amarte"].weekday["Pack 4 horas"],
-          78000
-        );
-        assert.strictEqual(
-          cfg.quoteCatalog.byTipo["Suite Amarte"].weekend["Pack 4 horas"],
-          100000
-        );
+        assert.strictEqual(cfg.quoteCatalog.source, "unavailable");
+        assert.ok(!cfg.quoteCatalog.byTipo["Suite Amarte"]);
+        assert.ok(!raw.includes("78000"));
         assert.ok(Array.isArray(cfg.suiteVideos));
         assert.ok(cfg.suiteVideos.length >= 10);
         assert.ok(cfg.suiteVideos[0].videoUrl);
-        server.close();
-        console.log("reservationForm.test.js: ok");
+        setRoomRatesCacheForTests(
+          new Map([
+            [
+              "Suite Amarte",
+              {
+                name: "Suite Amarte",
+                kind: "suite",
+                weekday: { h4: 90000 },
+                weekend: { h4: 120000 },
+              },
+            ],
+          ])
+        );
+        http
+          .get(`http://127.0.0.1:${port}/api/widget-config`, (res2) => {
+            let raw2 = "";
+            res2.on("data", (c) => {
+              raw2 += c;
+            });
+            res2.on("end", () => {
+              const quoted = JSON.parse(raw2);
+              assert.strictEqual(quoted.quoteCatalog.source, "supabase");
+              assert.strictEqual(
+                quoted.quoteCatalog.byTipo["Suite Amarte"].weekday["Pack 4 horas"],
+                90000
+              );
+              assert.strictEqual(
+                quoted.quoteCatalog.byTipo["Suite Amarte"].weekend["Pack 4 horas"],
+                120000
+              );
+              resetRoomRatesCache();
+              server.close();
+              console.log("reservationForm.test.js: ok");
+            });
+          })
+          .on("error", (err) => {
+            resetRoomRatesCache();
+            server.close();
+            console.error(err);
+            process.exit(1);
+          });
       });
     })
     .on("error", (err) => {

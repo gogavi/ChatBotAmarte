@@ -1,15 +1,21 @@
 /**
- * Lookup de tarifas: SSOT = Supabase `room_rates` (vía roomRatesCatalog).
- * Fallback = `amarteCatalog.js` pricing si BD no disponible.
+ * Lookup de tarifas: solo Supabase `room_rates`.
+ * Si no hay fila con precio mayor que 0, no hay monto.
  */
 
 const { pricing, formatCop, suiteCategories, contact } = require("../config/amarteCatalog");
+const { resolveTipo } = require("../reservationService");
 const { dateTypeFromIsoDate } = require("./bogotaTime");
 const { formatMoneyAmount } = require("../ttsNormalize");
 const {
   getRoomRatesCatalog,
+  getRoomExtrasCatalog,
   findDbCatalogEntry,
+  extrasApplicableToNames,
+  isDecorationExtra,
 } = require("./roomRatesCatalog");
+const { resolveLandingByAlias, landingsForRoomTypes } = require("../config/landings");
+const { ruleForPlan, choiceForPlan } = require("../config/planSuites");
 
 /** @typedef {"h4"|"h8"|"h12"|"diaHotelero"|"h6"} DurationKey */
 
@@ -162,7 +168,7 @@ function normalizeDuration(raw) {
 }
 
 /**
- * Fallback estático (amarteCatalog banding) — solo si BD no responde.
+ * Resuelve el nombre de la suite. No devuelve montos.
  * @param {string} suiteQuery
  * @returns {{ key: string; name: string; kind: "suite"|"plan"; entry: object }|null}
  */
@@ -271,15 +277,12 @@ function availableDurationsFromBands(weekday, weekend, kind) {
           ["h12", "12 horas"],
           ["diaHotelero", "día hotelero"],
         ];
+  const week = weekday || {};
+  const end = weekend || {};
   for (const [key, label] of order) {
-    if (weekday[key] != null || weekend[key] != null) {
-      labels.push(label);
-    }
+    if (Number(week[key]) > 0 || Number(end[key]) > 0) labels.push(label);
   }
-  if (labels.length) return labels;
-  return kind === "suite"
-    ? ["4 horas", "8 horas", "12 horas", "día hotelero"]
-    : ["6 horas", "12 horas", "día hotelero"];
+  return labels;
 }
 
 /**
@@ -296,6 +299,17 @@ async function lookupCatalogPrice(input = {}) {
 
   const dbCatalog = await getRoomRatesCatalog();
   const dbEntry = findDbCatalogEntry(suite, dbCatalog);
+  const resolvedName = dbEntry ? dbEntry.name : resolveTipo(suite);
+  const resolvedKind = dbEntry
+    ? dbEntry.kind
+    : String(resolvedName || "").startsWith("Plan ")
+      ? "plan"
+      : "suite";
+  const extras = await extrasForSuite(resolvedName, resolvedKind);
+  const planRule = resolvedKind === "plan" ? ruleForPlan(resolvedName) : null;
+  const suiteAdvice = planRule
+    ? adviceForRule(planRule, dbCatalog, dateType, durationKey)
+    : null;
 
   if (dbEntry) {
     const availableDurations = availableDurationsFromBands(
@@ -305,6 +319,17 @@ async function lookupCatalogPrice(input = {}) {
     );
 
     if (!durationKey) {
+      if (!availableDurations.length) {
+        return unavailableQuote({
+          found: true,
+          suite: dbEntry.name,
+          dateType,
+          duration: durationRaw || null,
+          extras,
+          decorationIncluded: resolvedKind === "plan",
+          suiteAdvice,
+        });
+      }
       return {
         found: true,
         suite: dbEntry.name,
@@ -315,7 +340,11 @@ async function lookupCatalogPrice(input = {}) {
         formattedPrice: null,
         availableDurations,
         bookingUrl: contact.reservationsUrl,
+        whatsappUrl: contact.whatsappUrl,
         source: "supabase",
+        extras,
+        decorationIncluded: resolvedKind === "plan",
+          suiteAdvice,
         message:
           "Indica la duración (4, 8, 12 horas o día hotelero; planes: 6, 12 o día hotelero).",
       };
@@ -323,23 +352,20 @@ async function lookupCatalogPrice(input = {}) {
 
     const band = dbEntry[dateType] || {};
     const priceCop = band[durationKey];
-    if (priceCop == null || !Number.isFinite(Number(priceCop))) {
-      return {
+    const amount = Number(priceCop);
+    if (!(amount > 0)) {
+      return unavailableQuote({
         found: true,
         suite: dbEntry.name,
         dateType,
         duration: durationRaw,
-        priceCop: null,
-        spokenPrice: null,
-        formattedPrice: null,
         availableDurations,
-        bookingUrl: contact.reservationsUrl,
-        source: "supabase",
-        message: "Esa duración no aplica a esta suite o plan.",
-      };
+        extras,
+        decorationIncluded: resolvedKind === "plan",
+          suiteAdvice,
+      });
     }
 
-    const amount = Number(priceCop);
     return {
       found: true,
       suite: dbEntry.name,
@@ -350,85 +376,144 @@ async function lookupCatalogPrice(input = {}) {
       formattedPrice: formatCop(amount),
       availableDurations,
       bookingUrl: contact.reservationsUrl,
+      whatsappUrl: contact.whatsappUrl,
       source: "supabase",
+      extras,
+      decorationIncluded: resolvedKind === "plan",
+          suiteAdvice,
       message: null,
     };
   }
 
-  // Fallback estático
-  const found = findCatalogEntry(suite);
-  if (!found) {
+  const aliasLanding = resolveLandingByAlias(suite);
+  if (aliasLanding && aliasLanding.suites.length) {
+    const names = aliasLanding.suites.map((item) => item.roomTypeName);
+    let groupExtras = null;
+    try {
+      const catalog = await getRoomExtrasCatalog();
+      groupExtras = extrasApplicableToNames(
+        names,
+        catalog instanceof Map ? catalog : null
+      );
+    } catch (err) {
+      console.warn(
+        "[catalogLookup] room_extras:",
+        err && err.message ? err.message : err
+      );
+      groupExtras = null;
+    }
+    const quotedSuites = names.map((name) => {
+      const entry = dbCatalog instanceof Map ? dbCatalog.get(name) : null;
+      const band = entry && durationKey ? entry[dateType] || {} : null;
+      const amount = band ? Number(band[durationKey]) : NaN;
+      return { name, priceCop: amount > 0 ? amount : null };
+    });
     return {
-      found: false,
-      suite: suite || null,
-      dateType: dateTypeFromIsoDate(date),
+      found: true,
+      suite: "Sauna Jacuzzi",
+      dateType,
       duration: durationRaw || null,
       priceCop: null,
       spokenPrice: null,
       formattedPrice: null,
       availableDurations: [],
       bookingUrl: contact.reservationsUrl,
-      source: dbCatalog ? "supabase" : "fallback",
-      message: "No se encontró esa suite o plan en el catálogo oficial.",
-    };
-  }
-
-  /** @type {string[]} */
-  let availableDurations = [];
-  if (found.kind === "suite") {
-    availableDurations = ["4 horas", "8 horas", "12 horas", "día hotelero"];
-  } else {
-    availableDurations = ["6 horas", "12 horas", "día hotelero"];
-  }
-
-  if (!durationKey) {
-    return {
-      found: true,
-      suite: found.name,
-      dateType,
-      duration: durationRaw || null,
-      priceCop: null,
-      spokenPrice: null,
-      formattedPrice: null,
-      availableDurations,
-      bookingUrl: contact.reservationsUrl,
-      source: "fallback",
+      whatsappUrl: contact.whatsappUrl,
+      source: quotedSuites.some((row) => row.priceCop > 0) ? "supabase" : "unavailable",
+      extras: groupExtras,
+      suites: quotedSuites,
+      decorationIncluded: false,
       message:
-        "Indica la duración (4, 8, 12 horas o día hotelero; planes: 6, 12 o día hotelero).",
+        "Sauna Jacuzzi son Suite Gold, Suite Rubí y Suite Zafiro. Cotiza cada suite con su fila de room_rates. No des un monto único para sauna.",
     };
   }
 
-  const band = found.entry[dateType];
-  if (!band || band[durationKey] == null) {
-    return {
-      found: true,
-      suite: found.name,
-      dateType,
-      duration: durationRaw,
-      priceCop: null,
-      spokenPrice: null,
-      formattedPrice: null,
-      availableDurations,
-      bookingUrl: contact.reservationsUrl,
-      source: "fallback",
-      message: "Esa duración no aplica a esta suite o plan.",
-    };
-  }
+  return unavailableQuote({
+    suite: resolvedName || suite || null,
+    dateType: dateTypeFromIsoDate(date),
+    duration: durationRaw || null,
+    extras,
+    decorationIncluded: resolvedKind === "plan",
+          suiteAdvice,
+  });
+}
 
-  const priceCop = Number(band[durationKey]);
+const UNAVAILABLE_MESSAGE =
+  "No tengo esa tarifa ahora. Puedes dejarla en el formulario o escribir por WhatsApp y un asesor te confirma el monto.";
+
+/**
+ * @param {Record<string, unknown>} [partial]
+ */
+function unavailableQuote(partial = {}) {
   return {
-    found: true,
-    suite: found.name,
-    dateType,
-    duration: durationRaw,
-    priceCop,
-    spokenPrice: toSpokenPrice(priceCop),
-    formattedPrice: formatCop(priceCop),
-    availableDurations,
+    found: false,
+    suite: null,
+    dateType: null,
+    duration: null,
+    priceCop: null,
+    spokenPrice: null,
+    formattedPrice: null,
+    availableDurations: [],
     bookingUrl: contact.reservationsUrl,
-    source: "fallback",
-    message: null,
+    whatsappUrl: contact.whatsappUrl,
+    source: "unavailable",
+    extras: null,
+    decorationIncluded: false,
+    suiteAdvice: null,
+    message: UNAVAILABLE_MESSAGE,
+    ...partial,
   };
+}
+
+/**
+ * Suites del plan y, si room_rates tiene la celda, su precio. Sin fila, priceCop es null.
+ * @param {{ mode: string; exclude: readonly string[]; suites: readonly string[] }} rule
+ * @param {Map<string, any> | null} dbCatalog
+ * @param {string} dateType
+ * @param {string | null} durationKey
+ */
+function adviceForRule(rule, dbCatalog, dateType, durationKey) {
+  return {
+    mode: rule.mode,
+    exclude: [...rule.exclude],
+    choice: choiceForPlan(rule.plan),
+    suites: rule.suites.map((name) => {
+      const landing = landingsForRoomTypes([name])[0] || null;
+      const entry = dbCatalog instanceof Map ? dbCatalog.get(name) : null;
+      const band = entry && durationKey ? entry[dateType] || {} : null;
+      const amount = band ? Number(band[durationKey]) : NaN;
+      return {
+        name,
+        landingId: landing ? landing.id : null,
+        landingUrl: landing ? landing.url : null,
+        priceCop: Number.isFinite(amount) && amount > 0 ? amount : null,
+      };
+    }),
+  };
+}
+
+/**
+ * Extras que aplican a esta suite. `null` si room_extras no respondió.
+ * @param {string} roomName
+ * @returns {Promise<Array<{ code: string; nombre: string; precio: number; appliesTo: string }> | null>}
+ */
+async function extrasForSuite(roomName, kind) {
+  if (!roomName) return null;
+  try {
+    const extras = await getRoomExtrasCatalog();
+    const rows = extrasApplicableToNames(
+      [roomName],
+      extras instanceof Map ? extras : null
+    );
+    if (!Array.isArray(rows) || kind !== "plan") return rows;
+    return rows.filter((row) => row.appliesTo !== "*" && !isDecorationExtra(row));
+  } catch (err) {
+    console.warn(
+      "[catalogLookup] room_extras:",
+      err && err.message ? err.message : err
+    );
+    return null;
+  }
 }
 
 /**
@@ -457,25 +542,10 @@ async function buildWidgetQuoteCatalog(tipos, packs) {
         if (!durationKey) continue;
         const w = dbEntry.weekday[durationKey];
         const e = dbEntry.weekend[durationKey];
-        if (typeof w === "number" && Number.isFinite(w)) {
+        if (typeof w === "number" && w > 0) {
           weekday[pack] = w;
         }
-        if (typeof e === "number" && Number.isFinite(e)) {
-          weekend[pack] = e;
-        }
-      }
-    } else {
-      const found = findCatalogEntry(tipoStr);
-      if (!found || !found.entry) continue;
-      for (const pack of packList) {
-        const durationKey = normalizeDuration(String(pack || ""));
-        if (!durationKey) continue;
-        const w = found.entry.weekday && found.entry.weekday[durationKey];
-        const e = found.entry.weekend && found.entry.weekend[durationKey];
-        if (typeof w === "number" && Number.isFinite(w)) {
-          weekday[pack] = w;
-        }
-        if (typeof e === "number" && Number.isFinite(e)) {
+        if (typeof e === "number" && e > 0) {
           weekend[pack] = e;
         }
       }
@@ -490,7 +560,7 @@ async function buildWidgetQuoteCatalog(tipos, packs) {
 
   return {
     byTipo,
-    source: dbCatalog ? "supabase" : "fallback",
+    source: dbCatalog ? "supabase" : "unavailable",
   };
 }
 

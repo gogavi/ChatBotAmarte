@@ -20,8 +20,18 @@
       Página de prueba local/producción. El botón flotante debe aparecer abajo.
       Prueba escribir <strong>enlace de pago</strong>.
     </p>
+    <p>
+      <code>?landing=suite-jacuzzi</code> fija <code>window.AMARTE_LANDING</code>
+      antes de cargar el widget. El id es el de <code>config/landings.js</code>
+      (el mismo valor que <code>funnel_events.proyecto</code>). Sin ese parámetro
+      el chat queda como en amartesuite.com.
+    </p>
     <script>
       window.AMARTE_CHATBOT_URL = window.location.origin;
+      var landingParam = new URLSearchParams(window.location.search).get("landing");
+      if (landingParam && landingParam.trim()) {
+        window.AMARTE_LANDING = landingParam.trim();
+      }
     </script>
     <script src="/amarte-widget.js"></script>
   </body>

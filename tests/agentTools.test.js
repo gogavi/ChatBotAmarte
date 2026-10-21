@@ -81,9 +81,9 @@ async function run() {
     { Authorization: "Bearer test-tool-secret" }
   );
   assert.strictEqual(catalog.status, 200);
-  assert.strictEqual(catalog.body.found, true);
-  assert.strictEqual(catalog.body.priceCop, 200000);
-  assert.strictEqual(catalog.body.source, "fallback");
+  assert.strictEqual(catalog.body.priceCop, null);
+  assert.strictEqual(catalog.body.source, "unavailable");
+  assert.match(catalog.body.message, /formulario|whatsapp/i);
 
   // Con mock BD: Diamante 4h weekday = 240000
   setRoomRatesCacheForTests(

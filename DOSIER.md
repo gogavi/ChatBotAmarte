@@ -35,7 +35,7 @@ Punto de entrada: `server.js`. Documentación corta: `README.md`. Setup Agents: 
 | Objetivo | Cómo se cumple |
 |----------|----------------|
 | Atender 24/7 en el sitio | Widget “Pregúntale a Martina” |
-| Cotizar precios reales | Supabase `room_rates` vía `services/roomRatesCatalog.js` + `catalogLookup.js` (fallback: `amarteCatalog.js`) |
+| Cotizar precios reales | Supabase `room_rates` vía `services/roomRatesCatalog.js` + `catalogLookup.js`. Sin fila, no hay monto. |
 | No inventar promociones | Prompt + memoria operativa |
 | Conversión | Botones Reservar / PROMOCIONES / Wompi / WhatsApp |
 | Prerreservas en el SaaS | `reservationService.js` |
@@ -130,7 +130,7 @@ ChatBotAmarte/
 ├── .env.example
 │
 ├── config/
-│   ├── amarteCatalog.js      # metadata + includes + fallback precios + promo jacuzzi
+│   ├── amarteCatalog.js      # nombres, videos, URLs e includes. Sin tarifas.
 │   ├── …
 │   ├── martinaSystemPrompt.js
 │   ├── chatActions.js
@@ -222,7 +222,7 @@ Detalle operativo: `docs/ELEVENLABS_AGENT_SETUP.md`, `ELEVENLABS_TOOLS_SETUP.md`
 
 ## 6. System prompt y catálogo
 
-- Cotización de lista desde Supabase `room_rates` (caché en `roomRatesCatalog.js`; fallback `amarteCatalog.js`).  
+- Cotización de lista desde Supabase `room_rates` (caché en `roomRatesCatalog.js`). Si no hay fila, Martina no da un monto.  
 - Planes: siempre mencionar includes con emojis.  
   - Base: 🌹 pétalos, 🕯️ velas, 🎈 globos, 🍾 vino espumoso, 🍫 chocolates.  
   - Plan Húmedo: + 🛁 jacuzzi + ♨️ sauna.  
@@ -350,7 +350,7 @@ Bump `?v=` tras cambios de UI. **Nunca** poner API keys en el embed.
 | Cambiar… | Dónde |
 |----------|--------|
 | Precios de lista | Supabase `room_rates` |
-| Metadata / includes / fallback | `config/amarteCatalog.js` |
+| Nombres, videos, URLs e includes | `config/amarteCatalog.js` |
 | Prompt chat | `config/martinaSystemPrompt.js` |
 | Botones / schema JSON | `config/chatActions.js` |
 | UI widget / live overlay | `public/amarte-widget.js` |

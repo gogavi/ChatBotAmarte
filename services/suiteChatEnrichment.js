@@ -98,7 +98,7 @@ function stripPaymentPromoBlocks(text) {
  * @param {string} reply
  * @returns {string}
  */
-function ensurePromoBlockOnExactQuote(reply) {
+function ensurePromoBlockOnExactQuote(reply, allowAmounts) {
   let text = String(reply || "");
   if (!text.trim()) return text;
 
@@ -122,11 +122,16 @@ function ensurePromoBlockOnExactQuote(reply) {
 
   text = stripPaymentPromoBlocks(text);
 
-  const amounts = [...text.matchAll(/\$\s*([\d.]+)/g)].map((m) =>
-    parseInt(String(m[1]).replace(/\./g, ""), 10)
+  const packLine = text.match(
+    /(?:(?:4|6|8|12)\s*h|d[ií]a hotelero)[^\n]*\$\s*([\d.]+)/i
   );
-  const total = amounts.find((n) => Number.isFinite(n) && n >= 50000);
-  if (!total) return text;
+  const quotedLine = text.match(/\*\*[^*]+\*\*[^\n]*·[^\n]*\$\s*([\d.]+)/i);
+  const rawAmount = (packLine && packLine[1]) || (quotedLine && quotedLine[1]);
+  const total = rawAmount
+    ? parseInt(String(rawAmount).replace(/\./g, ""), 10)
+    : NaN;
+  if (!Number.isFinite(total) || total < 50000) return text;
+  if (allowAmounts instanceof Set && !allowAmounts.has(total)) return text;
 
   const promo = formatQuoteWithPaymentOptions(total);
   if (!promo) return text;
@@ -138,11 +143,11 @@ function ensurePromoBlockOnExactQuote(reply) {
  * @param {unknown} suiteShowcase
  * @returns {{ reply: string; suiteVideo: { id: string; title: string; videoUrl: string } | null }}
  */
-function enrichChatReply(reply, suiteShowcase) {
+function enrichChatReply(reply, suiteShowcase, allowAmounts) {
   const sanitized = sanitizeProductLinksInReply(reply);
   let suiteVideo =
     resolveSuiteVideoFromShowcase(suiteShowcase) || sanitized.suiteVideo;
-  const withPromo = ensurePromoBlockOnExactQuote(sanitized.text);
+  const withPromo = ensurePromoBlockOnExactQuote(sanitized.text, allowAmounts);
   return { reply: withPromo, suiteVideo };
 }
 

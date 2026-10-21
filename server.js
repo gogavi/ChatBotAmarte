@@ -6,6 +6,7 @@ const cors = require("cors");
 const multer = require("multer");
 const { OpenAI, toFile } = require("openai");
 const { buildMartinaSystemPrompt } = require("./config/martinaSystemPrompt");
+const { allowCorsOrigin } = require("./config/corsPolicy");
 const { matchSuiteFromPageUrl } = require("./config/suitePageHints");
 const {
   MARTINA_REPLY_JSON_SCHEMA,
@@ -23,6 +24,15 @@ const {
 } = require("./reservationService");
 const { enrichChatReply } = require("./services/suiteChatEnrichment");
 const {
+  beginPriceTurn,
+  clampLandingReservation,
+  finishLandingReply,
+} = require("./services/landingPolicy");
+const {
+  chatIpHourlyLimiter,
+  chatConversationLimiter,
+} = require("./services/chatRateLimit");
+const {
   isLiveVoiceEnabled,
   isElevenLabsAgentConfigured,
 } = require("./liveVoiceConfig");
@@ -39,6 +49,8 @@ app.set("trust proxy", 1);
 const ELEVENLABS_VOICE_ID_DEFAULT = "VmejBeYhbrcTPwDniox7";
 /** Máx. caracteres enviados a ElevenLabs por respuesta (evita payloads enormes). */
 const TTS_MAX_CHARS = 2500;
+/** Tope de la respuesta JSON de Martina. El snapshot del prompt no cubre este argumento. */
+const MARTINA_MAX_COMPLETION_TOKENS = 4096;
 
 /** UUID v4 — identificador de conversación enviado por el widget. */
 const CONVERSATION_ID_RE =
@@ -50,54 +62,15 @@ const upload = multer({
   limits: { fileSize: 25 * 1024 * 1024 },
 });
 
-const corsOrigins = [
-  "https://amartesuite.com",
-  "https://www.amartesuite.com",
-  // Front Vite (rediseño) y demos locales — también en producción Railway
-  "http://localhost:3000",
-  "http://127.0.0.1:3000",
-  "http://localhost:3001",
-  "http://127.0.0.1:3001",
-  "http://localhost:5173",
-  "http://127.0.0.1:5173",
-  "http://localhost:5500",
-  "http://127.0.0.1:5500",
-];
 const extraCorsOrigins = String(process.env.CORS_ORIGINS || "")
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
-extraCorsOrigins.forEach((origin) => {
-  if (!corsOrigins.includes(origin)) corsOrigins.push(origin);
-});
-
-/**
- * Permite orígenes locales (cualquier puerto) y previews de Vercel,
- * además de la lista fija / CORS_ORIGINS.
- * Sin esto, localhost:3001 o *.vercel.app fallan en el widget con
- * "problema al conectar con el concierge".
- */
-function isAllowedCorsOrigin(origin) {
-  if (!origin) return true;
-  if (corsOrigins.includes(origin)) return true;
-  try {
-    const { hostname } = new URL(origin);
-    if (hostname === "localhost" || hostname === "127.0.0.1") return true;
-    if (hostname.endsWith(".vercel.app")) return true;
-  } catch {
-    return false;
-  }
-  return false;
-}
 
 app.use(
   cors({
     origin(origin, callback) {
-      if (isAllowedCorsOrigin(origin)) {
-        callback(null, true);
-        return;
-      }
-      callback(null, false);
+      callback(null, allowCorsOrigin(origin, extraCorsOrigins));
     },
     methods: ["GET", "POST"],
     credentials: true,
@@ -316,6 +289,32 @@ function sanitizeHistoryContent(content) {
  *   suiteVideo: { id: string; title: string; videoUrl: string } | null;
  * }>}
  */
+/**
+ * Montos de room_rates. Un extra no autoriza el precio de la prerreserva
+ * ni el abono del 50% / 25%.
+ * @param {{ rateAmounts?: Set<number>; pricesAvailable?: boolean; allowedAmounts?: Set<number> } | null} turn
+ * @returns {Set<number>}
+ */
+function rateAllowlist(turn) {
+  if (!turn) return new Set();
+  if (turn.rateAmounts instanceof Set) return turn.rateAmounts;
+  if (turn.pricesAvailable && turn.allowedAmounts instanceof Set) {
+    return turn.allowedAmounts;
+  }
+  return new Set();
+}
+
+/**
+ * @param {unknown} raw
+ * @param {Set<number> | undefined} allow
+ * @returns {boolean}
+ */
+function precioPermitido(raw, allow) {
+  if (!(allow instanceof Set)) return false;
+  const amount = parseInt(String(raw ?? "").replace(/\D/g, ""), 10);
+  return Number.isFinite(amount) && allow.has(amount);
+}
+
 async function runChat(input) {
   const message = input.message.trim();
   const safeRoom =
@@ -330,6 +329,7 @@ async function runChat(input) {
     typeof input.conversationId === "string" ? input.conversationId : null;
 
   const suiteMatch = matchSuiteFromPageUrl(safePage);
+  const landingTurn = await beginPriceTurn(input.landing);
 
   const systemPrompt = buildMartinaSystemPrompt({
     roomName: safeRoom,
@@ -340,6 +340,7 @@ async function runChat(input) {
     referenceIso: input.referenceIso || "",
     detectedSuiteLabel: suiteMatch ? suiteMatch.detectedSuiteLabel : null,
     detectedSuiteUrl: suiteMatch ? suiteMatch.detectedSuiteUrl : null,
+    landingAddendum: landingTurn ? landingTurn.addendum : null,
   });
 
   const prior = Array.isArray(input.priorMessages) ? input.priorMessages : [];
@@ -357,6 +358,7 @@ async function runChat(input) {
 
   const completion = await openai.chat.completions.create({
     model: "gpt-5.4-mini",
+    max_completion_tokens: MARTINA_MAX_COMPLETION_TOKENS,
     messages: [
       { role: "system", content: systemPrompt },
       ...historyForApi,
@@ -370,13 +372,38 @@ async function runChat(input) {
 
   const modelContent = completion.choices[0]?.message?.content ?? "";
   const built = buildAssistantResponse(modelContent);
+  const gated = clampLandingReservation(landingTurn, {
+    showReservationForm: Boolean(built.showReservationForm),
+    showDateTimePicker: Boolean(built.showDateTimePicker),
+    formPrefill: built.formPrefill || null,
+    pendingReservation: built.pendingReservation ?? null,
+  });
   let reply = normalizeAssistantPaymentLinks(built.reply);
   let options = built.options;
   let reservationId = null;
-  let showReservationForm = Boolean(built.showReservationForm);
-  let showDateTimePicker = Boolean(built.showDateTimePicker);
-  let formPrefill = built.formPrefill || null;
+  let showReservationForm = gated.showReservationForm;
+  let showDateTimePicker = gated.showDateTimePicker;
+  let formPrefill = gated.formPrefill;
+  const pendingReservation = gated.pendingReservation;
   let suiteVideo = null;
+
+  if (
+    formPrefill &&
+    landingTurn &&
+    !landingTurn.landing &&
+    !precioPermitido(formPrefill.precio, rateAllowlist(landingTurn))
+  ) {
+    formPrefill = { ...formPrefill, precio: "" };
+  }
+
+  reply = finishLandingReply(landingTurn, reply, message);
+  const enriched = enrichChatReply(
+    reply,
+    built.suiteShowcase,
+    rateAllowlist(landingTurn)
+  );
+  reply = enriched.reply;
+  suiteVideo = enriched.suiteVideo;
 
   const histForLink = getChatHistoryStore();
   const existingReservationId =
@@ -392,11 +419,11 @@ async function runChat(input) {
 
   if (
     !showReservationForm &&
-    built.pendingReservation &&
+    pendingReservation &&
     !existingReservationId &&
     process.env.SUPABASE_SERVICE_ROLE_KEY
   ) {
-    const created = await createPendingReservation(built.pendingReservation, {
+    const created = await createPendingReservation(pendingReservation, {
       conversationId,
     });
     if (created.ok) {
@@ -414,7 +441,7 @@ async function runChat(input) {
       options = resolveChatActions(["wompi", "promotions"]);
       showDateTimePicker = false;
     }
-  } else if (built.pendingReservation && existingReservationId) {
+  } else if (pendingReservation && existingReservationId) {
     console.log(
       `Prerreserva omitida: ya existe ${existingReservationId} para ${conversationId}`
     );
@@ -424,11 +451,6 @@ async function runChat(input) {
     options = resolveChatActions(["promotions"]);
     showDateTimePicker = false;
   }
-
-  // Video + sanitizar fichas web + anexar promo canónica si cotizó exacto
-  const enriched = enrichChatReply(reply, built.suiteShowcase);
-  reply = enriched.reply;
-  suiteVideo = enriched.suiteVideo;
 
   // Historial: solo el texto visible (sin JSON ni URLs de botones).
   const rawText = reply;
@@ -560,7 +582,7 @@ app.get("/chat/history", async (req, res) => {
 });
 
 // POST /chat — solo texto, sin audio de respuesta
-app.post("/chat", async (req, res) => {
+app.post("/chat", chatIpHourlyLimiter, chatConversationLimiter, async (req, res) => {
   try {
     const body = req.body || {};
     const { message, roomName, pageUrl, conversationId: rawConvId } = body;
@@ -599,6 +621,7 @@ app.post("/chat", async (req, res) => {
       pageUrl,
       conversationId,
       priorMessages,
+      landing: body.landing,
       ...temporal,
     });
 
@@ -735,7 +758,9 @@ app.post("/reservations/pending", async (req, res) => {
 // POST /chat/audio — audio del usuario: Whisper → chat → ElevenLabs
 app.post(
   "/chat/audio",
+  chatIpHourlyLimiter,
   upload.single("audio"),
+  chatConversationLimiter,
   async (req, res) => {
     try {
       if (!process.env.OPENAI_API_KEY) {
@@ -796,6 +821,7 @@ app.post(
         pageUrl,
         conversationId,
         priorMessages,
+        landing: (req.body || {}).landing,
         ...temporal,
       });
 
@@ -862,6 +888,10 @@ app.post(
   }
 );
 
-app.listen(PORT, () => {
-  console.log(`Servidor Amarte escuchando en http://localhost:${PORT}`);
-});
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`Servidor Amarte escuchando en http://localhost:${PORT}`);
+  });
+}
+
+module.exports = { app };

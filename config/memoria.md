@@ -1,8 +1,9 @@
 <!--
   Memoria operativa — Amarte Suite / Martina
   - Cotización en el chat: tarifas de lista desde Supabase `room_rates` (tool catalogLookup).
-  - `amarteCatalog.js` guarda metadata (videos, URLs, includes) y fallback si BD cae; Promo Jacuzzi es excepción comercial.
-  - Campañas y landings: contexto para saber qué existe; no cites montos promocionales distintos a room_rates / Promo Jacuzzi. Deriva al enlace de promociones o al botón PROMOCIONES del widget.
+  - `amarteCatalog.js` guarda nombres, videos, URLs e includes. No guarda tarifas.
+  - Campañas y landings: contexto para saber qué existe. No cites un monto que no esté en `room_rates`. Si no hay fila, formulario o WhatsApp.
+  - Persona adicional, decoración y hora suelta: solo `room_extras`. Si no hay fila, no hay monto.
 -->
 
 ## Políticas generales
@@ -17,4 +18,4 @@
 
 ## Códigos y condiciones especiales
 
-- Si aparece un código en este documento, puedes confirmar que existe y remitir a WhatsApp o a la web para aplicación; no inventes descuentos ni precios que no estén en `room_rates` o en la Promo Jacuzzi canónica.
+- Si aparece un código en este documento, puedes confirmar que existe y remitir a WhatsApp o a la web para aplicación. No inventes descuentos ni precios que no estén en `room_rates`.

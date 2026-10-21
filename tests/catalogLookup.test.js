@@ -30,21 +30,69 @@ async function run() {
     date: "2026-07-09",
     duration: "8 horas",
   });
-  assert.strictEqual(hitFallback.found, true);
-  assert.strictEqual(hitFallback.dateType, "weekday");
-  assert.strictEqual(hitFallback.priceCop, 200000);
-  assert.strictEqual(hitFallback.source, "fallback");
-  assert.ok(
-    typeof hitFallback.spokenPrice === "string" &&
-      hitFallback.spokenPrice.length > 0
-  );
-  assert.ok(Array.isArray(hitFallback.availableDurations));
+  assert.strictEqual(hitFallback.priceCop, null);
+  assert.strictEqual(hitFallback.formattedPrice, null);
+  assert.strictEqual(hitFallback.spokenPrice, null);
+  assert.strictEqual(hitFallback.source, "unavailable");
+  assert.match(hitFallback.message, /formulario|whatsapp/i);
   assert.ok(hitFallback.bookingUrl.includes("amartesuite.com"));
 
-  // findCatalogEntry sigue disponible para fallback
   const staticJacuzzi = findCatalogEntry("VIP Jacuzzi");
   assert.ok(staticJacuzzi);
-  assert.strictEqual(staticJacuzzi.entry.weekday.h8, 200000);
+  assert.strictEqual(staticJacuzzi.name, "Suite VIP Jacuzzi");
+  assert.ok(staticJacuzzi.entry.weekday == null);
+
+  setRoomRatesCacheForTests(
+    new Map([
+      [
+        "Suite Jacuzzi",
+        {
+          name: "Suite Jacuzzi",
+          kind: "suite",
+          weekday: { h4: 0, h8: 240000 },
+          weekend: { h4: 0, h8: 290000 },
+        },
+      ],
+    ])
+  );
+  const jacuzziSimulado = await lookupCatalogPrice({
+    suite: "VIP Jacuzzi",
+    date: "2026-07-09",
+    duration: "8 horas",
+  });
+  assert.strictEqual(jacuzziSimulado.priceCop, 240000);
+  assert.strictEqual(jacuzziSimulado.source, "supabase");
+  const jacuzziCero = await lookupCatalogPrice({
+    suite: "VIP Jacuzzi",
+    date: "2026-07-11",
+    duration: "4 horas",
+  });
+  assert.strictEqual(jacuzziCero.priceCop, null);
+  assert.strictEqual(jacuzziCero.source, "unavailable");
+  assert.match(jacuzziCero.message, /formulario|whatsapp/i);
+
+  setRoomRatesCacheForTests(
+    new Map([
+      [
+        "Suite Jacuzzi",
+        {
+          name: "Suite Jacuzzi",
+          kind: "suite",
+          weekday: { h4: 0 },
+          weekend: { h4: 0 },
+        },
+      ],
+    ])
+  );
+  const zeroMenu = await lookupCatalogPrice({
+    suite: "VIP Jacuzzi",
+    date: "2026-07-09",
+    duration: "",
+  });
+  assert.strictEqual(zeroMenu.priceCop, null);
+  assert.strictEqual(zeroMenu.source, "unavailable");
+  assert.ok(!zeroMenu.availableDurations.includes("4 horas"));
+  assert.match(zeroMenu.message, /formulario|whatsapp/i);
 
   // --- SSOT mock Supabase ---
   const mock = new Map([
