@@ -15,7 +15,7 @@ const {
   isDecorationExtra,
 } = require("./roomRatesCatalog");
 const { resolveLandingByAlias, landingsForRoomTypes } = require("../config/landings");
-const { ruleForPlan } = require("../config/planSuites");
+const { ruleForPlan, choiceForPlan } = require("../config/planSuites");
 
 /** @typedef {"h4"|"h8"|"h12"|"diaHotelero"|"h6"} DurationKey */
 
@@ -476,6 +476,7 @@ function adviceForRule(rule, dbCatalog, dateType, durationKey) {
   return {
     mode: rule.mode,
     exclude: [...rule.exclude],
+    choice: choiceForPlan(rule.plan),
     suites: rule.suites.map((name) => {
       const landing = landingsForRoomTypes([name])[0] || null;
       const entry = dbCatalog instanceof Map ? dbCatalog.get(name) : null;

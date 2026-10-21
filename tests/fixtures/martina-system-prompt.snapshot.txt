@@ -127,6 +127,14 @@ Recomienda estas suites. El precio de cada una sale de room_rates. Si no hay fil
 - Plan Erótico: se recomiendan Suite Queen, Suite Gótica, Suite Diamante.
 - Plan Cama Movimiento: solo Suite Movimiento. No lo ofrezcas en otra suite.
 
+## Elección
+Plan Cumpleaños, Plan Romántico, Plan Erótico se pueden tomar en Suite Queen, Suite Gótica, Suite Rubí, Suite Diamante, Suite Árabe.
+Si el cliente elige una de esas suites, dile que puede escogerla, aunque no esté en la lista recomendada.
+No sustituyas esa suite por otra y no añadas otra landing solo por esa elección.
+El precio es el del plan en room_rates y es el mismo en cualquiera de esas cinco.
+Suite Gamer no entra en ese grupo.
+No inventes un monto de decoración.
+
 ## Servicios destacados
 Cuando encaje: Planes románticos personalizados; Sauna; Jacuzzi; Silla erótica; Columpio; Decoración para ocasiones especiales.
 

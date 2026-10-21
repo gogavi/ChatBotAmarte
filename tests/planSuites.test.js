@@ -5,6 +5,7 @@ const assert = require("assert");
 const {
   ruleForPlan,
   formatPlanSuiteRulesForPrompt,
+  PLAN_CHOICE_GROUP,
 } = require("../config/planSuites");
 const { landingsAskedInMessage, resolveLanding } = require("../config/landings");
 const { finishLandingReply } = require("../services/landingPolicy");
@@ -76,6 +77,25 @@ assert.ok(rulesText.includes("Suite Queen, Suite Gótica, Suite Diamante"));
 assert.ok(rulesText.includes("Plan Cama Movimiento"));
 assert.ok(rulesText.includes("solo Suite Movimiento"));
 assert.ok(!/\$\s*\d/.test(rulesText));
+assert.ok(!rulesText.includes("120"));
+
+const choiceText = rulesText.split("## Elección").slice(1).join("## Elección");
+assert.ok(choiceText.includes("puede escoger"));
+assert.ok(choiceText.includes("Suite Queen"));
+assert.ok(choiceText.includes("Suite Gótica"));
+assert.ok(choiceText.includes("Suite Rubí"));
+assert.ok(choiceText.includes("Suite Diamante"));
+assert.ok(choiceText.includes("Suite Árabe"));
+assert.ok(choiceText.includes("Suite Gamer"));
+assert.ok(!choiceText.includes("Suite Gold"));
+assert.ok(!choiceText.includes("120"));
+assert.deepStrictEqual(
+  [...PLAN_CHOICE_GROUP.suites],
+  ["Suite Queen", "Suite Gótica", "Suite Rubí", "Suite Diamante", "Suite Árabe"]
+);
+assert.ok(!PLAN_CHOICE_GROUP.suites.includes("Suite Gold"));
+assert.ok(!PLAN_CHOICE_GROUP.suites.includes("Suite Gamer"));
+assert.ok(ruleForPlan("Plan Romántico").suites.includes("Suite Gold"));
 
 const prompt = buildMartinaSystemPrompt({
   roomName: "Amarte Suite",
@@ -132,6 +152,46 @@ assert.deepStrictEqual(
   []
 );
 
+const romQueen = landingsAskedInMessage(
+  "Plan Romántico en la Suite Queen",
+  gamer
+).map((landing) => landing.id);
+assert.ok(romQueen.includes("tematicas"));
+assert.ok(!romQueen.includes("suite-sauna-jacuzzi"));
+
+const romGotica = landingsAskedInMessage(
+  "quiero el Plan Romántico en la Suite Gótica",
+  gamer
+).map((landing) => landing.id);
+assert.deepStrictEqual(romGotica, ["tematicas"]);
+
+const cumpleRubi = landingsAskedInMessage(
+  "Plan Cumpleaños en Suite Rubí",
+  gamer
+).map((landing) => landing.id);
+assert.deepStrictEqual(cumpleRubi, ["suite-sauna-jacuzzi"]);
+
+const eroticoGamer = landingsAskedInMessage(
+  "Plan Erótico en Suite Gamer",
+  gamer
+).map((landing) => landing.id);
+assert.deepStrictEqual(eroticoGamer, ["tematicas"]);
+
+const romChosenReply = finishLandingReply(
+  {
+    landing: gamer,
+    pricesAvailable: true,
+    allowedAmounts: new Set(),
+    addendum: "x",
+  },
+  "Puedes escogerla.",
+  "Plan Romántico en la Suite Queen"
+);
+assert.ok(romChosenReply.includes("https://microservicio-suite-tematicas.vercel.app"));
+assert.ok(
+  !romChosenReply.includes("https://microservicio-suite-sauna-jacuzzi.vercel.app")
+);
+
 const linked = finishLandingReply(
   {
     landing: gamer,
@@ -157,6 +217,7 @@ assert.ok(!linked.includes("https://microservicio-suite-sauna-jacuzzi.vercel.app
   });
   assert.strictEqual(humedoQuote.priceCop, null);
   assert.strictEqual(humedoQuote.decorationIncluded, true);
+  assert.strictEqual(humedoQuote.suiteAdvice.choice, null);
   assert.strictEqual(humedoQuote.suiteAdvice.mode, "only");
   assert.strictEqual(humedoQuote.suiteAdvice.suites[0].name, "Suite Jacuzzi");
   assert.strictEqual(humedoQuote.suiteAdvice.suites[0].priceCop, null);
@@ -219,6 +280,22 @@ assert.ok(!linked.includes("https://microservicio-suite-sauna-jacuzzi.vercel.app
     )
   );
   assert.deepStrictEqual(eroticoQuote.suiteAdvice.exclude, []);
+  assert.strictEqual(eroticoQuote.suiteAdvice.choice.samePrice, true);
+  assert.deepStrictEqual(
+    eroticoQuote.suiteAdvice.choice.suites,
+    ["Suite Queen", "Suite Gótica", "Suite Rubí", "Suite Diamante", "Suite Árabe"]
+  );
+  assert.ok(!JSON.stringify(eroticoQuote.suiteAdvice.choice).includes("120"));
+
+  const romQuote = await lookupCatalogPrice({
+    suite: "Plan Romántico",
+    date: "2026-10-21",
+    duration: "6 horas",
+  });
+  assert.ok(romQuote.suiteAdvice.suites.some((suite) => suite.name === "Suite Gold"));
+  assert.ok(romQuote.suiteAdvice.exclude.includes("Suite Gótica"));
+  assert.ok(!romQuote.suiteAdvice.choice.suites.includes("Suite Gold"));
+  assert.ok(romQuote.suiteAdvice.choice.suites.includes("Suite Gótica"));
 
   const camaQuote = await lookupCatalogPrice({
     suite: "Plan Cama Movimiento",

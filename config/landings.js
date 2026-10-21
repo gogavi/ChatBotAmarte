@@ -1,4 +1,4 @@
-const { PLAN_SUITE_RULES } = require("./planSuites");
+const { PLAN_SUITE_RULES, PLAN_CHOICE_GROUP } = require("./planSuites");
 
 /**
  * Catálogo único de las landings de Amarte.
@@ -297,6 +297,17 @@ function suppressedLandingPhrases(norm) {
 }
 
 /**
+ * Suites del grupo de elección que el mensaje nombra junto con uno de sus planes.
+ * @param {string} norm
+ * @returns {string[]}
+ */
+function choiceSuitesNamed(norm) {
+  const planNamed = PLAN_CHOICE_GROUP.plans.some((plan) => hasPhrase(norm, plan));
+  if (!planNamed) return [];
+  return PLAN_CHOICE_GROUP.suites.filter((name) => hasPhrase(norm, name));
+}
+
+/**
  * Landings distintas de la activa que el mensaje pide, más la landing de las
  * suites del plan cuando el mensaje nombra un plan de PLAN_SUITE_RULES.
  * @param {string} userMessage
@@ -334,10 +345,19 @@ function landingsAskedInMessage(userMessage, active) {
     seen.add(hit.landing.id);
     hits.push(hit.landing);
   }
+  const chosen = choiceSuitesNamed(norm);
   for (const rule of PLAN_SUITE_RULES) {
     if (!hasPhrase(norm, rule.plan)) continue;
+    const limitToChoice =
+      chosen.length > 0 && PLAN_CHOICE_GROUP.plans.includes(rule.plan);
     for (const landing of landingsForRoomTypes(rule.suites)) {
       if (landing.id === active.id || seen.has(landing.id)) continue;
+      if (
+        limitToChoice &&
+        !landing.suites.some((suite) => chosen.includes(suite.roomTypeName))
+      ) {
+        continue;
+      }
       seen.add(landing.id);
       hits.push(landing);
     }
