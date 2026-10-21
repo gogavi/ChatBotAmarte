@@ -54,6 +54,27 @@ const PLAN_SUITE_RULES = Object.freeze([
     exclude: Object.freeze([]),
     suppressPhrases: Object.freeze([]),
   }),
+  Object.freeze({
+    plan: "Plan Amarte",
+    mode: "only",
+    suites: Object.freeze(["Suite Amarte"]),
+    exclude: Object.freeze([]),
+    suppressPhrases: Object.freeze([]),
+  }),
+  Object.freeze({
+    plan: "Plan Erótico",
+    mode: "recommend",
+    suites: Object.freeze(["Suite Queen", "Suite Gótica", "Suite Diamante"]),
+    exclude: Object.freeze([]),
+    suppressPhrases: Object.freeze([]),
+  }),
+  Object.freeze({
+    plan: "Plan Cama Movimiento",
+    mode: "only",
+    suites: Object.freeze(["Suite Movimiento"]),
+    exclude: Object.freeze([]),
+    suppressPhrases: Object.freeze([]),
+  }),
 ]);
 
 /**

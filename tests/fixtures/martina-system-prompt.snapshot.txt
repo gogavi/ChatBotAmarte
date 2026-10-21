@@ -123,6 +123,9 @@ Recomienda estas suites. El precio de cada una sale de room_rates. Si no hay fil
 - Plan Romántico: se recomiendan Suite Rubí, Suite Gold, Suite Diamante. No recomiendes Suite Gótica.
 - Plan Cabaña: solo Suite Cabaña. No lo ofrezcas en otra suite.
 - Plan Movimiento: solo Suite Movimiento. No lo ofrezcas en otra suite.
+- Plan Amarte: solo Suite Amarte. No lo ofrezcas en otra suite.
+- Plan Erótico: se recomiendan Suite Queen, Suite Gótica, Suite Diamante.
+- Plan Cama Movimiento: solo Suite Movimiento. No lo ofrezcas en otra suite.
 
 ## Servicios destacados
 Cuando encaje: Planes románticos personalizados; Sauna; Jacuzzi; Silla erótica; Columpio; Decoración para ocasiones especiales.

@@ -44,8 +44,22 @@ const movimiento = ruleForPlan("Plan Movimiento");
 assert.strictEqual(movimiento.mode, "only");
 assert.deepStrictEqual([...movimiento.suites], ["Suite Movimiento"]);
 
-assert.strictEqual(ruleForPlan("Plan Erótico"), null);
-assert.strictEqual(ruleForPlan("Plan Amarte"), null);
+const amarte = ruleForPlan("Plan Amarte");
+assert.strictEqual(amarte.mode, "only");
+assert.deepStrictEqual([...amarte.suites], ["Suite Amarte"]);
+
+const erotico = ruleForPlan("Plan Erótico");
+assert.strictEqual(erotico.mode, "recommend");
+assert.deepStrictEqual(
+  [...erotico.suites],
+  ["Suite Queen", "Suite Gótica", "Suite Diamante"]
+);
+assert.ok(!erotico.suites.includes("Suite Árabe"));
+assert.deepStrictEqual([...erotico.exclude], []);
+
+const cama = ruleForPlan("Plan Cama Movimiento");
+assert.strictEqual(cama.mode, "only");
+assert.deepStrictEqual([...cama.suites], ["Suite Movimiento"]);
 
 const rulesText = formatPlanSuiteRulesForPrompt();
 assert.ok(rulesText.includes("Plan Húmedo"));
@@ -55,6 +69,12 @@ assert.ok(rulesText.includes("Suite Cabaña"));
 assert.ok(rulesText.includes("Plan Movimiento"));
 assert.ok(rulesText.includes("Suite Movimiento"));
 assert.ok(rulesText.includes("No recomiendes Suite Gótica"));
+assert.ok(rulesText.includes("Plan Amarte"));
+assert.ok(rulesText.includes("solo Suite Amarte"));
+assert.ok(rulesText.includes("Plan Erótico"));
+assert.ok(rulesText.includes("Suite Queen, Suite Gótica, Suite Diamante"));
+assert.ok(rulesText.includes("Plan Cama Movimiento"));
+assert.ok(rulesText.includes("solo Suite Movimiento"));
 assert.ok(!/\$\s*\d/.test(rulesText));
 
 const prompt = buildMartinaSystemPrompt({
@@ -97,6 +117,18 @@ assert.deepStrictEqual(
 );
 assert.deepStrictEqual(
   landingsAskedInMessage("Plan Movimiento", gamer).map((landing) => landing.id),
+  []
+);
+assert.deepStrictEqual(
+  landingsAskedInMessage("quiero el Plan Amarte", gamer).map((landing) => landing.id),
+  ["promo-suite-amarte"]
+);
+assert.deepStrictEqual(
+  landingsAskedInMessage("Plan Erótico", gamer).map((landing) => landing.id),
+  ["tematicas"]
+);
+assert.deepStrictEqual(
+  landingsAskedInMessage("Plan Cama Movimiento", gamer).map((landing) => landing.id),
   []
 );
 
@@ -154,6 +186,50 @@ assert.ok(!linked.includes("https://microservicio-suite-sauna-jacuzzi.vercel.app
   assert.strictEqual(movQuote.suiteAdvice.suites[0].landingUrl, null);
   assert.strictEqual(movQuote.suiteAdvice.suites[0].priceCop, null);
 
+  const amarteQuote = await lookupCatalogPrice({
+    suite: "Plan Amarte",
+    date: "2026-10-21",
+    duration: "6 horas",
+  });
+  assert.strictEqual(amarteQuote.priceCop, null);
+  assert.strictEqual(amarteQuote.decorationIncluded, true);
+  assert.strictEqual(amarteQuote.suiteAdvice.mode, "only");
+  assert.strictEqual(amarteQuote.suiteAdvice.suites[0].name, "Suite Amarte");
+  assert.strictEqual(amarteQuote.suiteAdvice.suites[0].priceCop, null);
+  assert.strictEqual(
+    amarteQuote.suiteAdvice.suites[0].landingUrl,
+    "https://microservicio-promo-suite-amarte.vercel.app"
+  );
+
+  const eroticoQuote = await lookupCatalogPrice({
+    suite: "Plan Erótico",
+    date: "2026-10-21",
+    duration: "6 horas",
+  });
+  assert.strictEqual(eroticoQuote.suiteAdvice.mode, "recommend");
+  assert.deepStrictEqual(
+    eroticoQuote.suiteAdvice.suites.map((suite) => suite.name),
+    ["Suite Queen", "Suite Gótica", "Suite Diamante"]
+  );
+  assert.ok(
+    eroticoQuote.suiteAdvice.suites.every(
+      (suite) =>
+        suite.landingUrl === "https://microservicio-suite-tematicas.vercel.app" &&
+        suite.priceCop === null
+    )
+  );
+  assert.deepStrictEqual(eroticoQuote.suiteAdvice.exclude, []);
+
+  const camaQuote = await lookupCatalogPrice({
+    suite: "Plan Cama Movimiento",
+    date: "2026-10-21",
+    duration: "6 horas",
+  });
+  assert.strictEqual(camaQuote.suiteAdvice.mode, "only");
+  assert.strictEqual(camaQuote.suiteAdvice.suites[0].name, "Suite Movimiento");
+  assert.strictEqual(camaQuote.suiteAdvice.suites[0].landingUrl, null);
+  assert.strictEqual(camaQuote.suiteAdvice.suites[0].priceCop, null);
+
   setRoomRatesCacheForTests(
     new Map([
       [
@@ -184,6 +260,65 @@ assert.ok(!linked.includes("https://microservicio-suite-sauna-jacuzzi.vercel.app
   assert.strictEqual(priced.priceCop, 210000);
   assert.strictEqual(priced.suiteAdvice.suites[0].priceCop, 240000);
   assert.strictEqual(priced.decorationIncluded, true);
+
+  setRoomRatesCacheForTests(
+    new Map([
+      [
+        "Suite Amarte",
+        {
+          name: "Suite Amarte",
+          kind: "suite",
+          weekday: { h6: 180000 },
+          weekend: {},
+        },
+      ],
+      [
+        "Suite Queen",
+        {
+          name: "Suite Queen",
+          kind: "suite",
+          weekday: { h6: 260000 },
+          weekend: {},
+        },
+      ],
+      [
+        "Plan Amarte",
+        {
+          name: "Plan Amarte",
+          kind: "plan",
+          weekday: { h6: 210000 },
+          weekend: {},
+        },
+      ],
+      [
+        "Plan Erótico",
+        {
+          name: "Plan Erótico",
+          kind: "plan",
+          weekday: { h6: 190000 },
+          weekend: {},
+        },
+      ],
+    ])
+  );
+  const pricedAmarte = await lookupCatalogPrice({
+    suite: "Plan Amarte",
+    date: "2026-10-21",
+    duration: "6 horas",
+  });
+  assert.strictEqual(pricedAmarte.priceCop, 210000);
+  assert.strictEqual(pricedAmarte.suiteAdvice.suites[0].priceCop, 180000);
+
+  const pricedErotico = await lookupCatalogPrice({
+    suite: "Plan Erótico",
+    date: "2026-10-21",
+    duration: "6 horas",
+  });
+  assert.strictEqual(pricedErotico.priceCop, 190000);
+  assert.deepStrictEqual(
+    pricedErotico.suiteAdvice.suites.map((suite) => suite.priceCop),
+    [260000, null, null]
+  );
 
   resetRoomRatesCache();
   console.log("planSuites.test.js: ok");
