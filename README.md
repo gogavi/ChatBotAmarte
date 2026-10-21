@@ -76,7 +76,11 @@ window.AmarteChatbot.close();
 
 Ejemplo React / Vite: define `window.AMARTE_CHATBOT_URL`, carga el script una vez, y en el CTA «HABLA CON MARTINA» invoca `openLive()` de forma síncrona en el `onClick`.
 
-CORS: orígenes locales (`localhost:3000`, `5173`, …) están permitidos. Añade más con `CORS_ORIGINS=https://tu-preview.vercel.app`.
+CORS: `amartesuite.com`, `www`, localhost, las 7 landings del catálogo `config/landings.js` y `https://deluxe.amartesuite.com`. Un `*.vercel.app` que no esté en ese catálogo no pasa. Orígenes de preview: `CORS_ORIGINS`.
+
+En una landing, antes del widget: `window.AMARTE_LANDING` con el id de `config/landings.js` (el mismo que `funnel_events.proyecto`). Sin ese valor el prompt de amartesuite.com no cambia. `/chat` y `/chat/audio` admiten 30 mensajes por `conversationId` en el proceso y 60 por hora por IP. `/reservations/pending` no gasta ese cupo. Al pasarse, responden 429.
+
+Demo con landing: [http://localhost:3000/embed-demo.html?landing=suite-jacuzzi](http://localhost:3000/embed-demo.html?landing=suite-jacuzzi)
 
 ## Documentación
 

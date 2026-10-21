@@ -23,6 +23,34 @@
     BACKEND_URL = window.location.origin;
   }
 
+  /**
+   * Id de landing (funnel_events.proyecto) que la página dejó en window.
+   * Vacío en amartesuite.com, donde el global no existe.
+   * @returns {string}
+   */
+  function readAmarteLanding() {
+    if (typeof window.AMARTE_LANDING !== "string") return "";
+    return window.AMARTE_LANDING.trim();
+  }
+
+  /**
+   * El 429 trae un texto del servidor. Un fallo de red conserva la frase genérica.
+   * @param {Error} err
+   * @param {string} fallback
+   * @returns {string}
+   */
+  function messageFromChatFailure(err, fallback) {
+    var msg = err && typeof err.message === "string" ? err.message.trim() : "";
+    if (!msg || msg === "Failed to fetch" || msg === "Load failed") return fallback;
+    if (
+      msg === "Error al contactar a Martina IA" ||
+      msg === "Error al procesar el audio"
+    ) {
+      return fallback;
+    }
+    return msg;
+  }
+
   /** URLs de acciones rápidas (alineadas con config/amarteCatalog.js). Sustituibles vía window.* */
   var DEFAULT_WHATSAPP_MESSAGE =
     "Hola, estuve charlando con Martina IA en Amarte Suite y quiero más información. ¿Me pueden ayudar?";
@@ -2475,6 +2503,8 @@
     fd.append("referenceTime", refAudio.referenceTime);
     fd.append("referenceWeekday", refAudio.referenceWeekday);
     fd.append("referenceIso", refAudio.referenceIso);
+    var landingAudio = readAmarteLanding();
+    if (landingAudio) fd.append("landing", landingAudio);
 
     fetch(BACKEND_URL + "/chat/audio", {
       method: "POST",
@@ -2506,7 +2536,10 @@
         setTyping(false);
         appendMessage(
           "bot",
-          "No pudimos procesar tu nota de voz. Inténtalo de nuevo o escribe tu mensaje.",
+          messageFromChatFailure(
+            err,
+            "No pudimos procesar tu nota de voz. Inténtalo de nuevo o escribe tu mensaje."
+          ),
           []
         );
         console.error("Amarte widget voz:", err);
@@ -2659,6 +2692,18 @@
     // URL completa de la página actual
     var pageUrl = window.location.href || "";
     var refChat = getBogotaReference();
+    var landingId = readAmarteLanding();
+    var chatBody = {
+      message: text,
+      roomName: roomName,
+      pageUrl: pageUrl,
+      conversationId: getConversationId(),
+      referenceDate: refChat.referenceDate,
+      referenceTime: refChat.referenceTime,
+      referenceWeekday: refChat.referenceWeekday,
+      referenceIso: refChat.referenceIso,
+    };
+    if (landingId) chatBody.landing = landingId;
 
     // Construye la URL del endpoint de chat en el backend
     var url = BACKEND_URL + "/chat";
@@ -2668,16 +2713,7 @@
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        message: text,
-        roomName: roomName,
-        pageUrl: pageUrl,
-        conversationId: getConversationId(),
-        referenceDate: refChat.referenceDate,
-        referenceTime: refChat.referenceTime,
-        referenceWeekday: refChat.referenceWeekday,
-        referenceIso: refChat.referenceIso,
-      }),
+      body: JSON.stringify(chatBody),
     })
       .then(function (res) {
         // Convierte la respuesta HTTP a JSON
@@ -2697,10 +2733,13 @@
       .catch(function (err) {
         // Oculta typing en caso de error
         setTyping(false);
-        // Muestra mensaje de error amable al usuario
+        // 429 y otros errores del servidor se muestran tal cual; la red, no.
         appendMessage(
           "bot",
-          "Lo sentimos, hubo un problema al conectar con Martina IA. Inténtelo de nuevo en unos instantes.",
+          messageFromChatFailure(
+            err,
+            "Lo sentimos, hubo un problema al conectar con Martina IA. Inténtelo de nuevo en unos instantes."
+          ),
           []
         );
         // Registra el error en consola para depuración

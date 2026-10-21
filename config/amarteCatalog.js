@@ -219,7 +219,13 @@ function getSuiteVideosForWidget() {
   }));
 }
 
-/** Precios en COP (número entero). weekday = domingo a jueves; weekend = viernes y sábado. Matriz oficial V2. */
+/**
+ * Precios en COP (número entero). weekday = domingo a jueves; weekend = viernes y sábado.
+ * Matriz oficial V2, escrita a mano.
+ * El chat con `landing` no la consulta: services/landingPolicy.js arma el bloque
+ * desde room_rates (Supabase) y, si esa lectura falla, prohíbe inventar el monto.
+ * catalogLookup.js sigue usándola como fallback cuando Supabase no responde.
+ */
 const pricing = {
   suites: {
     suite_amarte: {
@@ -402,7 +408,11 @@ function formatCop(n) {
 }
 
 /**
- * Serializa la tabla de precios como texto legible para el modelo.
+ * Matriz V2 escrita a mano. El chat de una landing NO la usa: ese camino
+ * lee `room_rates` en services/landingPolicy.js y, si la lectura falla,
+ * dice que no hay tarifa. Aquí sigue el fallback de services/catalogLookup.js
+ * (tool de voz y catálogo del widget) cuando Supabase no responde.
+ * No borrar mientras esos tests esperen los montos de esta matriz.
  */
 function formatPricingForPrompt() {
   const lines = [];

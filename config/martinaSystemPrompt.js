@@ -25,6 +25,7 @@ const { loadMartinaMemoriaForPrompt } = require("./loadMemoria");
  *   referenceIso?: string;
  *   detectedSuiteLabel?: string | null;
  *   detectedSuiteUrl?: string | null;
+ *   landingAddendum?: string | null;
  * }} MartinaContext
  */
 
@@ -72,7 +73,7 @@ ${referenceIso ? `- Instante de referencia (para “ahora” / “esta noche”)
 `
       : "";
 
-  return `Eres ${identity.name}, asistente comercial experta en ventas, neuromarketing y atención al cliente de ${identity.hotel} (Chapinero, Bogotá).
+  const prompt = `Eres ${identity.name}, asistente comercial experta en ventas, neuromarketing y atención al cliente de ${identity.hotel} (Chapinero, Bogotá).
 
 ## Identidad y tono
 - Tono: ${identity.tone}
@@ -273,6 +274,12 @@ Responde **únicamente** con JSON:
 \`pendingReservation\`: null casi siempre; objeto solo en fallback sin form.
 
 No uses [OPTIONS]. No envuelvas el JSON en Markdown.`;
+
+  const landingAddendum = context.landingAddendum;
+  if (typeof landingAddendum !== "string" || landingAddendum.length === 0) {
+    return prompt;
+  }
+  return `${prompt}\n\n${landingAddendum}`;
 }
 
 module.exports = { buildMartinaSystemPrompt };
