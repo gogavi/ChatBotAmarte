@@ -4,12 +4,7 @@
  * Sin `landing`, las tres funciones de servidor no cambian el turno.
  */
 
-const {
-  formatCop,
-  promoJacuzzi,
-  extraPersonFee,
-  simpleHourlyRate,
-} = require("../config/amarteCatalog");
+const { formatCop } = require("../config/amarteCatalog");
 const {
   LANDINGS,
   resolveLanding,
@@ -52,15 +47,11 @@ function assertKnownKind(kind) {
  * @returns {Set<number>}
  */
 function canonicalAmounts() {
-  return new Set([
-    promoJacuzzi.price,
-    extraPersonFee,
-    simpleHourlyRate,
-  ]);
+  return new Set();
 }
 
 const MONEY_RE =
-  /(?:\bCOP\s?\$?\s?|\$\s?)?\d{1,3}(?:\.\d{3})+(?:,\d+)?(?:\s*(?:COP|pesos))?|\b\d{2,3}\s*mil\b/gi;
+  /(?:\bCOP\s?\$?\s?|\$\s?)?\d{1,3}(?:[.\u00a0]\d{3})+(?:,\d+)?(?:\s*(?:COP|pesos))?|(?:\bCOP\s?\$?\s?|\$\s?)?\d{1,3}(?:,\d{3})+(?:\s*(?:COP|pesos))?|(?:\$\s?|\bCOP\s?\$?\s?)\d{5,7}\b(?:\s*(?:COP|pesos))?|\b\d{5,7}\b(?:\s*(?:pesos|COP))?|\b\d{2,3}\s*mil\b/gi;
 
 /**
  * @param {string} text
@@ -83,12 +74,8 @@ function stripUntrustedCopAmounts(text, allow) {
  */
 function unavailablePriceSentence(landing) {
   assertKnownOffer(landing.offer);
-  const promo =
-    landing.offer === "promo-jacuzzi"
-      ? `Puedes repetir la Promo Jacuzzi a ${formatCop(promoJacuzzi.price)} por ${promoJacuzzi.hours} h. NO ACUMULABLE con otros descuentos. `
-      : "";
   return (
-    `${promo}Las tarifas de lista no están disponibles en este momento. ` +
+    "Las tarifas de lista no están disponibles en este momento. " +
     "No inventes montos de suites ni de packs. " +
     "Invita al formulario de esta página o al botón de WhatsApp del pie del chat."
   );
@@ -151,11 +138,6 @@ function formatLandingPriceBlock(landing, rates) {
     }
     lines.push(formatRateEntry(entry));
   }
-  if (landing.offer === "promo-jacuzzi") {
-    lines.unshift(
-      `Oferta de esta página: Promo Jacuzzi ${formatCop(promoJacuzzi.price)} por ${promoJacuzzi.hours} h. NO ACUMULABLE.`
-    );
-  }
   return lines.join("\n");
 }
 
@@ -205,9 +187,6 @@ async function beginLandingTurn(raw) {
   }
   const allowedAmounts = collectLandingAmounts(landing, rates instanceof Map ? rates : null);
   const pricesAvailable = allowedAmounts.size > 0;
-  if (pricesAvailable && landing.offer === "promo-jacuzzi") {
-    allowedAmounts.add(promoJacuzzi.price);
-  }
   return Object.freeze({
     landing,
     pricesAvailable,
@@ -254,7 +233,7 @@ function collectLandingAmounts(landing, rates) {
  * }} flags
  */
 function clampLandingReservation(turn, flags) {
-  if (!turn) return flags;
+  if (!turn || !turn.landing) return flags;
   return {
     showReservationForm: false,
     showDateTimePicker: false,
@@ -377,13 +356,81 @@ function appendLandingRedirects(reply, active, userMessage) {
  * @returns {string}
  */
 function appendUnavailablePriceLine(text, landing) {
-  assertKnownOffer(landing.offer);
-  const promo =
-    landing.offer === "promo-jacuzzi"
-      ? `Promo Jacuzzi ${formatCop(promoJacuzzi.price)} por ${promoJacuzzi.hours} h. NO ACUMULABLE. `
-      : "";
-  const line = `${promo}Las tarifas de lista no están disponibles. Usa el formulario de esta página o WhatsApp.`;
+  if (landing) assertKnownOffer(landing.offer);
+  const line =
+    "Las tarifas de lista no están disponibles. Usa el formulario o WhatsApp.";
   return `${String(text || "").trim()}\n\n${line}`.trim();
+}
+
+/**
+ * Montos positivos de todo el catálogo room_rates.
+ * @param {ReadonlyMap<string, any> | null} rates
+ * @returns {Set<number>}
+ */
+function collectAllAmounts(rates) {
+  const allow = new Set();
+  if (!(rates instanceof Map)) return allow;
+  for (const entry of rates.values()) {
+    for (const band of ["weekday", "weekend"]) {
+      const table = entry && entry[band] ? entry[band] : {};
+      for (const price of Object.values(table)) {
+        if (Number.isFinite(price) && price > 0) allow.add(price);
+      }
+    }
+  }
+  return allow;
+}
+
+/**
+ * Bloque de tarifas para amartesuite.com, sin landing.
+ * @param {ReadonlyMap<string, any> | null} rates
+ * @returns {string}
+ */
+function buildSitePriceAddendum(rates) {
+  const allow = collectAllAmounts(rates);
+  if (!allow.size) {
+    return [
+      "## Tarifas de lista",
+      "Las tarifas de lista no están disponibles en este momento.",
+      "No inventes montos.",
+      "Invita al formulario o al botón de WhatsApp del pie del chat.",
+    ].join("\n");
+  }
+  const lines = [
+    "## Tarifas de lista (room_rates)",
+    "Cotiza solo estos montos. Si una suite no aparece, no inventes el precio. Formulario o WhatsApp.",
+  ];
+  for (const entry of rates.values()) {
+    lines.push(formatRateEntry(entry));
+  }
+  return lines.join("\n");
+}
+
+/**
+ * Landing resuelta, o el catálogo general de amartesuite.com.
+ * @param {unknown} raw
+ */
+async function beginPriceTurn(raw) {
+  const landingTurn = await beginLandingTurn(raw);
+  if (landingTurn) return landingTurn;
+  let rates = null;
+  try {
+    rates = await getRoomRatesCatalog();
+  } catch (err) {
+    console.warn(
+      "[landingPolicy] room_rates:",
+      err && err.message ? err.message : err
+    );
+    rates = null;
+  }
+  const map = rates instanceof Map ? rates : null;
+  const allowedAmounts = collectAllAmounts(map);
+  return Object.freeze({
+    landing: null,
+    pricesAvailable: allowedAmounts.size > 0,
+    allowedAmounts,
+    addendum: buildSitePriceAddendum(map),
+  });
 }
 
 /**
@@ -404,12 +451,14 @@ function finishLandingReply(turn, reply, userMessage) {
     text = stripPaymentPromoBlocks(stripUntrustedCopAmounts(text, allow));
     if (!turn.pricesAvailable) text = appendUnavailablePriceLine(text, turn.landing);
   }
+  if (!turn.landing) return text;
   text = stripForeignUrls(text);
   return appendLandingRedirects(text, turn.landing, userMessage || "");
 }
 
 module.exports = {
   beginLandingTurn,
+  beginPriceTurn,
   clampLandingReservation,
   finishLandingReply,
   formatLandingPriceBlock,

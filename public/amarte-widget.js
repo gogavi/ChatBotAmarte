@@ -2126,6 +2126,7 @@
       }
       var price = lookupWidgetQuotePrice(tipo, pack, fecha);
       if (price == null) {
+        precioInput.value = "";
         return;
       }
       precioInput.value = formatCopClient(price);

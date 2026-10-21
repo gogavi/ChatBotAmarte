@@ -498,11 +498,13 @@ function formatQuoteWithPaymentOptions(totalCop, opts = {}) {
  */
 function buildPromoJacuzziConfirmMessage(row) {
   const name = firstNameUpper(row?.nombre);
-  const total = promoJacuzzi.price;
+  const precioNum = parseInt(String(row?.precio ?? "").replace(/\D/g, ""), 10);
+  const total = Number.isFinite(precioNum) && precioNum > 0 ? precioNum : 0;
+  const priceBit = total > 0 ? ` por **${formatCop(total)}**` : "";
   return [
     `Hola ${name},`,
     ``,
-    `Tienes una pre-reserva con la **${promoJacuzzi.name}** por **${formatCop(total)}** (${promoJacuzzi.hours} horas).`,
+    `Tienes una pre-reserva con la **${promoJacuzzi.name}**${priceBit} (${promoJacuzzi.hours} horas).`,
     `Incluye: ${promoJacuzzi.includes}.`,
     ``,
     `## 🔥 Promo ya aplicada`,

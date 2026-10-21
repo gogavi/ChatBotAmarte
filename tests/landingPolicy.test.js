@@ -3,11 +3,12 @@
  * No abre red. La matriz V2 no entra en este camino.
  */
 const assert = require("assert");
-const { formatCop, promoJacuzzi } = require("../config/amarteCatalog");
+const { formatCop } = require("../config/amarteCatalog");
 const { resolveLanding } = require("../config/landings");
 const { setRoomRatesCacheForTests, resetRoomRatesCache } = require("../services/roomRatesCatalog");
 const {
   beginLandingTurn,
+  beginPriceTurn,
   clampLandingReservation,
   finishLandingReply,
   formatLandingPriceBlock,
@@ -45,16 +46,22 @@ assert.ok(!missing.includes(formatCop(78000)));
 assert.ok(!missing.includes("pricing"));
 
 const promo = formatLandingPriceBlock(resolveLanding("promo-suite-jacuzzi"), null);
-assert.ok(promo.includes(formatCop(promoJacuzzi.price)));
-assert.match(promo, /no acumulable/i);
+assert.match(promo, /no están disponibles|no inventes/i);
+assert.ok(!promo.includes("150.000"));
+assert.ok(!promo.includes(formatCop(150000)));
 
 const scrubbed = stripUntrustedCopAmounts(
-  `Lista ${formatCop(240000)} y promo ${formatCop(promoJacuzzi.price)} y hora ${formatCop(30000)}.`
+  `Lista ${formatCop(240000)} y promo ${formatCop(150000)} y hora ${formatCop(30000)}.`
 );
 assert.ok(!scrubbed.includes(formatCop(240000)));
+assert.ok(!scrubbed.includes(formatCop(150000)));
+assert.ok(!scrubbed.includes(formatCop(30000)));
 assert.ok(scrubbed.includes("tarifa no disponible"));
-assert.ok(scrubbed.includes(formatCop(promoJacuzzi.price)));
-assert.ok(scrubbed.includes(formatCop(30000)));
+const keptRate = stripUntrustedCopAmounts(
+  `Árabe ${formatCop(240000)}.`,
+  new Set([240000])
+);
+assert.ok(keptRate.includes(formatCop(240000)));
 
 const decorationCollision = stripUntrustedCopAmounts(
   `deco ${formatCop(100000)} y ${formatCop(120000)} y vale 175.000 pesos`
@@ -125,8 +132,8 @@ const promoDown = finishLandingReply(
   "precio"
 );
 assert.ok(!promoDown.includes(`Suite Cabaña ${formatCop(150000)}`));
-assert.match(promoDown, /no acumulable/i);
-assert.ok(promoDown.includes(formatCop(promoJacuzzi.price)));
+assert.ok(!promoDown.includes("150.000"));
+assert.match(promoDown, /formulario|whatsapp/i);
 
 const dirtyPath = finishLandingReply(
   { landing: jacuzzi, pricesAvailable: true, addendum: "x" },
@@ -170,6 +177,26 @@ assert.strictEqual(flags.showDateTimePicker, false);
 assert.strictEqual(flags.pendingReservation, null);
 assert.strictEqual(flags.formPrefill, null);
 
+const siteFlags = clampLandingReservation(
+  { landing: null, pricesAvailable: true, allowedAmounts: new Set([90000]), addendum: "x" },
+  {
+    showReservationForm: true,
+    showDateTimePicker: true,
+    pendingReservation: { tipo: "Suite Amarte" },
+    formPrefill: { tipo: "Suite Amarte", precio: "90000" },
+  }
+);
+assert.strictEqual(siteFlags.showReservationForm, true);
+assert.deepStrictEqual(siteFlags.pendingReservation, { tipo: "Suite Amarte" });
+
+const bareAmount = stripUntrustedCopAmounts(
+  "Suite Amarte 4 h: $78000 y 200000 pesos",
+  new Set()
+);
+assert.ok(!bareAmount.includes("78000"));
+assert.ok(!bareAmount.includes("200000"));
+assert.ok(bareAmount.includes("tarifa no disponible"));
+
 const untouched = clampLandingReservation(null, {
   showReservationForm: true,
   showDateTimePicker: false,
@@ -208,6 +235,39 @@ assert.deepStrictEqual(untouched.pendingReservation, { tipo: "Suite Amarte" });
     "precio"
   );
   assert.ok(!inventedGamer.includes("175.000"));
+
+  setRoomRatesCacheForTests(null);
+  const siteDown = await beginPriceTurn(undefined);
+  assert.strictEqual(siteDown.landing, null);
+  assert.strictEqual(siteDown.pricesAvailable, false);
+  assert.match(siteDown.addendum, /no inventes/i);
+  assert.ok(!siteDown.addendum.includes("78.000"));
+  const siteReply = finishLandingReply(
+    siteDown,
+    `VIP Jacuzzi 8 h: ${formatCop(200000)}.`,
+    "precio"
+  );
+  assert.ok(!siteReply.includes("200.000"));
+  assert.match(siteReply, /formulario|whatsapp/i);
+
+  setRoomRatesCacheForTests(
+    new Map([
+      [
+        "Suite Amarte",
+        entry("Suite Amarte", { h4: 90000 }, { h4: 120000 }),
+      ],
+    ])
+  );
+  const siteUp = await beginPriceTurn("");
+  assert.strictEqual(siteUp.pricesAvailable, true);
+  assert.ok(siteUp.addendum.includes(formatCop(90000)));
+  const siteQuote = finishLandingReply(
+    siteUp,
+    `Amarte ${formatCop(90000)} y otra ${formatCop(78000)}.`,
+    "precio"
+  );
+  assert.ok(siteQuote.includes(formatCop(90000)));
+  assert.ok(!siteQuote.includes(formatCop(78000)));
 
   setRoomRatesCacheForTests(null);
   const down = await beginLandingTurn("suite-gamer");

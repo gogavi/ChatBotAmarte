@@ -255,7 +255,7 @@ function findDbCatalogEntry(suiteQuery, catalog) {
 
 /**
  * Inyecta un catálogo mock (solo tests).
- * `null` desactiva Supabase y fuerza fallback.
+ * `null` desactiva Supabase. El lookup no inventa un monto.
  * @param {Map<string, any> | null} map
  */
 function setRoomRatesCacheForTests(map) {

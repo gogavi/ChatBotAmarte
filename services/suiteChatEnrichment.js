@@ -98,7 +98,7 @@ function stripPaymentPromoBlocks(text) {
  * @param {string} reply
  * @returns {string}
  */
-function ensurePromoBlockOnExactQuote(reply) {
+function ensurePromoBlockOnExactQuote(reply, allowAmounts) {
   let text = String(reply || "");
   if (!text.trim()) return text;
 
@@ -127,6 +127,7 @@ function ensurePromoBlockOnExactQuote(reply) {
   );
   const total = amounts.find((n) => Number.isFinite(n) && n >= 50000);
   if (!total) return text;
+  if (allowAmounts instanceof Set && !allowAmounts.has(total)) return text;
 
   const promo = formatQuoteWithPaymentOptions(total);
   if (!promo) return text;
@@ -138,11 +139,11 @@ function ensurePromoBlockOnExactQuote(reply) {
  * @param {unknown} suiteShowcase
  * @returns {{ reply: string; suiteVideo: { id: string; title: string; videoUrl: string } | null }}
  */
-function enrichChatReply(reply, suiteShowcase) {
+function enrichChatReply(reply, suiteShowcase, allowAmounts) {
   const sanitized = sanitizeProductLinksInReply(reply);
   let suiteVideo =
     resolveSuiteVideoFromShowcase(suiteShowcase) || sanitized.suiteVideo;
-  const withPromo = ensurePromoBlockOnExactQuote(sanitized.text);
+  const withPromo = ensurePromoBlockOnExactQuote(sanitized.text, allowAmounts);
   return { reply: withPromo, suiteVideo };
 }
 

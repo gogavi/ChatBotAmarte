@@ -43,5 +43,8 @@ const withLanding = buildMartinaSystemPrompt({
 assert.strictEqual(withLanding, `${fixture}\n\nBLOQUE-LANDING-PRUEBA`);
 assert.ok(!fixture.includes("BLOQUE-LANDING-PRUEBA"));
 assert.ok(!fixture.includes("formatPricingForPrompt"));
+for (const amount of ["$60.000", "$150.000", "$100.000", "$120.000", "$30.000", "$78.000", "$175.000"]) {
+  assert.ok(!fixture.includes(amount), amount);
+}
 
 console.log("martinaPromptSnapshot.test.js ok");

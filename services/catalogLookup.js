@@ -1,6 +1,6 @@
 /**
- * Lookup de tarifas: SSOT = Supabase `room_rates` (vía roomRatesCatalog).
- * Fallback = `amarteCatalog.js` pricing si BD no disponible.
+ * Lookup de tarifas: solo Supabase `room_rates`.
+ * Si no hay fila con precio mayor que 0, no hay monto.
  */
 
 const { pricing, formatCop, suiteCategories, contact } = require("../config/amarteCatalog");
@@ -162,7 +162,7 @@ function normalizeDuration(raw) {
 }
 
 /**
- * Fallback estático (amarteCatalog banding) — solo si BD no responde.
+ * Resuelve el nombre de la suite. No devuelve montos.
  * @param {string} suiteQuery
  * @returns {{ key: string; name: string; kind: "suite"|"plan"; entry: object }|null}
  */
@@ -271,15 +271,12 @@ function availableDurationsFromBands(weekday, weekend, kind) {
           ["h12", "12 horas"],
           ["diaHotelero", "día hotelero"],
         ];
+  const week = weekday || {};
+  const end = weekend || {};
   for (const [key, label] of order) {
-    if (weekday[key] != null || weekend[key] != null) {
-      labels.push(label);
-    }
+    if (Number(week[key]) > 0 || Number(end[key]) > 0) labels.push(label);
   }
-  if (labels.length) return labels;
-  return kind === "suite"
-    ? ["4 horas", "8 horas", "12 horas", "día hotelero"]
-    : ["6 horas", "12 horas", "día hotelero"];
+  return labels;
 }
 
 /**
@@ -305,6 +302,14 @@ async function lookupCatalogPrice(input = {}) {
     );
 
     if (!durationKey) {
+      if (!availableDurations.length) {
+        return unavailableQuote({
+          found: true,
+          suite: dbEntry.name,
+          dateType,
+          duration: durationRaw || null,
+        });
+      }
       return {
         found: true,
         suite: dbEntry.name,
@@ -315,6 +320,7 @@ async function lookupCatalogPrice(input = {}) {
         formattedPrice: null,
         availableDurations,
         bookingUrl: contact.reservationsUrl,
+        whatsappUrl: contact.whatsappUrl,
         source: "supabase",
         message:
           "Indica la duración (4, 8, 12 horas o día hotelero; planes: 6, 12 o día hotelero).",
@@ -323,23 +329,17 @@ async function lookupCatalogPrice(input = {}) {
 
     const band = dbEntry[dateType] || {};
     const priceCop = band[durationKey];
-    if (priceCop == null || !Number.isFinite(Number(priceCop))) {
-      return {
+    const amount = Number(priceCop);
+    if (!(amount > 0)) {
+      return unavailableQuote({
         found: true,
         suite: dbEntry.name,
         dateType,
         duration: durationRaw,
-        priceCop: null,
-        spokenPrice: null,
-        formattedPrice: null,
         availableDurations,
-        bookingUrl: contact.reservationsUrl,
-        source: "supabase",
-        message: "Esa duración no aplica a esta suite o plan.",
-      };
+      });
     }
 
-    const amount = Number(priceCop);
     return {
       found: true,
       suite: dbEntry.name,
@@ -350,84 +350,40 @@ async function lookupCatalogPrice(input = {}) {
       formattedPrice: formatCop(amount),
       availableDurations,
       bookingUrl: contact.reservationsUrl,
+      whatsappUrl: contact.whatsappUrl,
       source: "supabase",
       message: null,
     };
   }
 
-  // Fallback estático
-  const found = findCatalogEntry(suite);
-  if (!found) {
-    return {
-      found: false,
-      suite: suite || null,
-      dateType: dateTypeFromIsoDate(date),
-      duration: durationRaw || null,
-      priceCop: null,
-      spokenPrice: null,
-      formattedPrice: null,
-      availableDurations: [],
-      bookingUrl: contact.reservationsUrl,
-      source: dbCatalog ? "supabase" : "fallback",
-      message: "No se encontró esa suite o plan en el catálogo oficial.",
-    };
-  }
+  return unavailableQuote({
+    suite: suite || null,
+    dateType: dateTypeFromIsoDate(date),
+    duration: durationRaw || null,
+  });
+}
 
-  /** @type {string[]} */
-  let availableDurations = [];
-  if (found.kind === "suite") {
-    availableDurations = ["4 horas", "8 horas", "12 horas", "día hotelero"];
-  } else {
-    availableDurations = ["6 horas", "12 horas", "día hotelero"];
-  }
+const UNAVAILABLE_MESSAGE =
+  "No tengo esa tarifa ahora. Puedes dejarla en el formulario o escribir por WhatsApp y un asesor te confirma el monto.";
 
-  if (!durationKey) {
-    return {
-      found: true,
-      suite: found.name,
-      dateType,
-      duration: durationRaw || null,
-      priceCop: null,
-      spokenPrice: null,
-      formattedPrice: null,
-      availableDurations,
-      bookingUrl: contact.reservationsUrl,
-      source: "fallback",
-      message:
-        "Indica la duración (4, 8, 12 horas o día hotelero; planes: 6, 12 o día hotelero).",
-    };
-  }
-
-  const band = found.entry[dateType];
-  if (!band || band[durationKey] == null) {
-    return {
-      found: true,
-      suite: found.name,
-      dateType,
-      duration: durationRaw,
-      priceCop: null,
-      spokenPrice: null,
-      formattedPrice: null,
-      availableDurations,
-      bookingUrl: contact.reservationsUrl,
-      source: "fallback",
-      message: "Esa duración no aplica a esta suite o plan.",
-    };
-  }
-
-  const priceCop = Number(band[durationKey]);
+/**
+ * @param {Record<string, unknown>} [partial]
+ */
+function unavailableQuote(partial = {}) {
   return {
-    found: true,
-    suite: found.name,
-    dateType,
-    duration: durationRaw,
-    priceCop,
-    spokenPrice: toSpokenPrice(priceCop),
-    formattedPrice: formatCop(priceCop),
-    availableDurations,
+    found: false,
+    suite: null,
+    dateType: null,
+    duration: null,
+    priceCop: null,
+    spokenPrice: null,
+    formattedPrice: null,
+    availableDurations: [],
     bookingUrl: contact.reservationsUrl,
-    source: "fallback",
-    message: null,
+    whatsappUrl: contact.whatsappUrl,
+    source: "unavailable",
+    message: UNAVAILABLE_MESSAGE,
+    ...partial,
   };
 }
 
@@ -457,25 +413,10 @@ async function buildWidgetQuoteCatalog(tipos, packs) {
         if (!durationKey) continue;
         const w = dbEntry.weekday[durationKey];
         const e = dbEntry.weekend[durationKey];
-        if (typeof w === "number" && Number.isFinite(w)) {
+        if (typeof w === "number" && w > 0) {
           weekday[pack] = w;
         }
-        if (typeof e === "number" && Number.isFinite(e)) {
-          weekend[pack] = e;
-        }
-      }
-    } else {
-      const found = findCatalogEntry(tipoStr);
-      if (!found || !found.entry) continue;
-      for (const pack of packList) {
-        const durationKey = normalizeDuration(String(pack || ""));
-        if (!durationKey) continue;
-        const w = found.entry.weekday && found.entry.weekday[durationKey];
-        const e = found.entry.weekend && found.entry.weekend[durationKey];
-        if (typeof w === "number" && Number.isFinite(w)) {
-          weekday[pack] = w;
-        }
-        if (typeof e === "number" && Number.isFinite(e)) {
+        if (typeof e === "number" && e > 0) {
           weekend[pack] = e;
         }
       }
@@ -490,7 +431,7 @@ async function buildWidgetQuoteCatalog(tipos, packs) {
 
   return {
     byTipo,
-    source: dbCatalog ? "supabase" : "fallback",
+    source: dbCatalog ? "supabase" : "unavailable",
   };
 }
 

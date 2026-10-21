@@ -24,7 +24,7 @@ const {
 } = require("./reservationService");
 const { enrichChatReply } = require("./services/suiteChatEnrichment");
 const {
-  beginLandingTurn,
+  beginPriceTurn,
   clampLandingReservation,
   finishLandingReply,
 } = require("./services/landingPolicy");
@@ -289,6 +289,17 @@ function sanitizeHistoryContent(content) {
  *   suiteVideo: { id: string; title: string; videoUrl: string } | null;
  * }>}
  */
+/**
+ * @param {unknown} raw
+ * @param {Set<number> | undefined} allow
+ * @returns {boolean}
+ */
+function precioPermitido(raw, allow) {
+  if (!(allow instanceof Set)) return false;
+  const amount = parseInt(String(raw ?? "").replace(/\D/g, ""), 10);
+  return Number.isFinite(amount) && allow.has(amount);
+}
+
 async function runChat(input) {
   const message = input.message.trim();
   const safeRoom =
@@ -303,7 +314,7 @@ async function runChat(input) {
     typeof input.conversationId === "string" ? input.conversationId : null;
 
   const suiteMatch = matchSuiteFromPageUrl(safePage);
-  const landingTurn = await beginLandingTurn(input.landing);
+  const landingTurn = await beginPriceTurn(input.landing);
 
   const systemPrompt = buildMartinaSystemPrompt({
     roomName: safeRoom,
@@ -361,6 +372,24 @@ async function runChat(input) {
   const pendingReservation = gated.pendingReservation;
   let suiteVideo = null;
 
+  if (
+    formPrefill &&
+    landingTurn &&
+    !landingTurn.landing &&
+    !precioPermitido(formPrefill.precio, landingTurn.allowedAmounts)
+  ) {
+    formPrefill = { ...formPrefill, precio: "" };
+  }
+
+  reply = finishLandingReply(landingTurn, reply, message);
+  const enriched = enrichChatReply(
+    reply,
+    built.suiteShowcase,
+    landingTurn && landingTurn.pricesAvailable ? landingTurn.allowedAmounts : new Set()
+  );
+  reply = enriched.reply;
+  suiteVideo = enriched.suiteVideo;
+
   const histForLink = getChatHistoryStore();
   const existingReservationId =
     conversationId && histForLink
@@ -407,11 +436,6 @@ async function runChat(input) {
     options = resolveChatActions(["promotions"]);
     showDateTimePicker = false;
   }
-
-  // Video + sanitizar fichas web + anexar promo canónica si cotizó exacto
-  const enriched = enrichChatReply(reply, built.suiteShowcase);
-  reply = finishLandingReply(landingTurn, enriched.reply, message);
-  suiteVideo = enriched.suiteVideo;
 
   // Historial: solo el texto visible (sin JSON ni URLs de botones).
   const rawText = reply;
