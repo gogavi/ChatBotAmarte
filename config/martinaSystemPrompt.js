@@ -11,6 +11,7 @@ const {
   bankAccounts,
 } = require("./amarteCatalog");
 const { loadMartinaMemoriaForPrompt } = require("./loadMemoria");
+const { formatPlanSuiteRulesForPrompt } = require("./planSuites");
 
 /**
  * @typedef {{
@@ -158,6 +159,8 @@ Si presentas o eliges una suite concreta: beneficio breve + **precios por pack**
 
 ## Planes (qué incluyen)
 Al ofrecer un **plan**, indica siempre qué incluye (emojis del catálogo) **y los precios por duración del plan** (6 h / 12 h / día hotelero según catálogo). La decoración ya viene incluida en el plan. No la cobres como extra y no inventes ese monto. Plan Erótico: menciona kit erótico. No inventes extras.
+
+${formatPlanSuiteRulesForPrompt()}
 
 ## Servicios destacados
 Cuando encaje: ${highlightedServices.join("; ")}.

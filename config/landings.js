@@ -1,3 +1,5 @@
+const { PLAN_SUITE_RULES } = require("./planSuites");
+
 /**
  * Catálogo único de las landings de Amarte.
  * `id` es el valor de `funnel_events.proyecto`.
@@ -245,12 +247,6 @@ function hasPhrase(norm, phrase) {
 }
 
 /**
- * Landings de producto distintas de la activa cuyo nombre aparece en el mensaje.
- * @param {string} userMessage
- * @param {Landing} active
- * @returns {Landing[]}
- */
-/**
  * @param {Landing} landing
  * @returns {{ phrase: string; roomTypeName: string | null }[]}
  */
@@ -269,17 +265,56 @@ function landingMatchPhrases(landing) {
   ];
 }
 
+/**
+ * Landings de producto, sin promo, que incluyen alguno de estos room types.
+ * @param {readonly string[]} roomTypeNames
+ * @returns {Landing[]}
+ */
+function landingsForRoomTypes(roomTypeNames) {
+  const wanted = new Set(roomTypeNames);
+  return LANDINGS.filter(
+    (landing) =>
+      landing.kind === "product" &&
+      landing.offer === null &&
+      landing.suites.some((suite) => wanted.has(suite.roomTypeName))
+  );
+}
+
+/**
+ * @param {string} norm
+ * @returns {Set<string>}
+ */
+function suppressedLandingPhrases(norm) {
+  /** @type {Set<string>} */
+  const suppressed = new Set();
+  for (const rule of PLAN_SUITE_RULES) {
+    if (!hasPhrase(norm, rule.plan)) continue;
+    for (const phrase of rule.suppressPhrases) {
+      suppressed.add(normalizeLandingText(phrase));
+    }
+  }
+  return suppressed;
+}
+
+/**
+ * Landings distintas de la activa que el mensaje pide, más la landing de las
+ * suites del plan cuando el mensaje nombra un plan de PLAN_SUITE_RULES.
+ * @param {string} userMessage
+ * @param {Landing} active
+ * @returns {Landing[]}
+ */
 function landingsAskedInMessage(userMessage, active) {
   const norm = normalizeLandingText(userMessage);
   if (!norm) return [];
   const activeRooms = new Set(active.suites.map((suite) => suite.roomTypeName));
+  const suppressed = suppressedLandingPhrases(norm);
   /** @type {{ landing: Landing; phrase: string; roomTypeName: string | null }[]} */
   const matches = [];
   for (const landing of LANDINGS) {
     if (landing.id === active.id || landing.kind === "form") continue;
     for (const item of landingMatchPhrases(landing)) {
       const phrase = normalizeLandingText(item.phrase);
-      if (!phrase || !hasPhrase(norm, phrase)) continue;
+      if (!phrase || suppressed.has(phrase) || !hasPhrase(norm, phrase)) continue;
       matches.push({ landing, phrase, roomTypeName: item.roomTypeName });
     }
   }
@@ -299,6 +334,14 @@ function landingsAskedInMessage(userMessage, active) {
     seen.add(hit.landing.id);
     hits.push(hit.landing);
   }
+  for (const rule of PLAN_SUITE_RULES) {
+    if (!hasPhrase(norm, rule.plan)) continue;
+    for (const landing of landingsForRoomTypes(rule.suites)) {
+      if (landing.id === active.id || seen.has(landing.id)) continue;
+      seen.add(landing.id);
+      hits.push(landing);
+    }
+  }
   return hits;
 }
 
@@ -309,4 +352,5 @@ module.exports = {
   landingBrowserOrigins,
   normalizeLandingText,
   landingsAskedInMessage,
+  landingsForRoomTypes,
 };

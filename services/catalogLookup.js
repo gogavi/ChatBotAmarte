@@ -14,7 +14,8 @@ const {
   extrasApplicableToNames,
   isDecorationExtra,
 } = require("./roomRatesCatalog");
-const { resolveLandingByAlias } = require("../config/landings");
+const { resolveLandingByAlias, landingsForRoomTypes } = require("../config/landings");
+const { ruleForPlan } = require("../config/planSuites");
 
 /** @typedef {"h4"|"h8"|"h12"|"diaHotelero"|"h6"} DurationKey */
 
@@ -305,6 +306,10 @@ async function lookupCatalogPrice(input = {}) {
       ? "plan"
       : "suite";
   const extras = await extrasForSuite(resolvedName, resolvedKind);
+  const planRule = resolvedKind === "plan" ? ruleForPlan(resolvedName) : null;
+  const suiteAdvice = planRule
+    ? adviceForRule(planRule, dbCatalog, dateType, durationKey)
+    : null;
 
   if (dbEntry) {
     const availableDurations = availableDurationsFromBands(
@@ -322,6 +327,7 @@ async function lookupCatalogPrice(input = {}) {
           duration: durationRaw || null,
           extras,
           decorationIncluded: resolvedKind === "plan",
+          suiteAdvice,
         });
       }
       return {
@@ -338,6 +344,7 @@ async function lookupCatalogPrice(input = {}) {
         source: "supabase",
         extras,
         decorationIncluded: resolvedKind === "plan",
+          suiteAdvice,
         message:
           "Indica la duración (4, 8, 12 horas o día hotelero; planes: 6, 12 o día hotelero).",
       };
@@ -355,6 +362,7 @@ async function lookupCatalogPrice(input = {}) {
         availableDurations,
         extras,
         decorationIncluded: resolvedKind === "plan",
+          suiteAdvice,
       });
     }
 
@@ -372,6 +380,7 @@ async function lookupCatalogPrice(input = {}) {
       source: "supabase",
       extras,
       decorationIncluded: resolvedKind === "plan",
+          suiteAdvice,
       message: null,
     };
   }
@@ -425,6 +434,7 @@ async function lookupCatalogPrice(input = {}) {
     duration: durationRaw || null,
     extras,
     decorationIncluded: resolvedKind === "plan",
+          suiteAdvice,
   });
 }
 
@@ -449,8 +459,35 @@ function unavailableQuote(partial = {}) {
     source: "unavailable",
     extras: null,
     decorationIncluded: false,
+    suiteAdvice: null,
     message: UNAVAILABLE_MESSAGE,
     ...partial,
+  };
+}
+
+/**
+ * Suites del plan y, si room_rates tiene la celda, su precio. Sin fila, priceCop es null.
+ * @param {{ mode: string; exclude: readonly string[]; suites: readonly string[] }} rule
+ * @param {Map<string, any> | null} dbCatalog
+ * @param {string} dateType
+ * @param {string | null} durationKey
+ */
+function adviceForRule(rule, dbCatalog, dateType, durationKey) {
+  return {
+    mode: rule.mode,
+    exclude: [...rule.exclude],
+    suites: rule.suites.map((name) => {
+      const landing = landingsForRoomTypes([name])[0] || null;
+      const entry = dbCatalog instanceof Map ? dbCatalog.get(name) : null;
+      const band = entry && durationKey ? entry[dateType] || {} : null;
+      const amount = band ? Number(band[durationKey]) : NaN;
+      return {
+        name,
+        landingId: landing ? landing.id : null,
+        landingUrl: landing ? landing.url : null,
+        priceCop: Number.isFinite(amount) && amount > 0 ? amount : null,
+      };
+    }),
   };
 }
 
