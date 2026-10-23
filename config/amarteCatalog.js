@@ -34,12 +34,6 @@ const suiteCategories = [
     description: "Suites premium con máximo confort.",
     suites: [
       {
-        id: "suite_diamante",
-        label: "Suite Diamante",
-        url: "https://amartesuite.com/producto/suite-deluxe-diamante/",
-        videoFile: "SUITE DELUXE DIAMANTE.mp4",
-      },
-      {
         id: "suite_gold",
         label: "Suite Gold",
         url: "https://amartesuite.com/producto/suite-deluxe-gold/",
@@ -72,16 +66,39 @@ const suiteCategories = [
         videoFile: "SUITE DELUXE ARABE.mp4",
       },
       {
+        id: "suite_queen",
+        label: "Suite Queen",
+        url: "https://amartesuite.com/producto/suite-deluxe-queen/",
+        videoFile: "SUITE DELUXE QUEEN.mp4",
+      },
+      {
         id: "suite_gotica",
         label: "Suite Gótica",
         url: "https://amartesuite.com/producto/suite-deluxe-gotica/",
         videoFile: "SUITE GOTICA.mp4",
       },
       {
-        id: "suite_queen",
-        label: "Suite Queen",
-        url: "https://amartesuite.com/producto/suite-deluxe-queen/",
-        videoFile: "SUITE DELUXE QUEEN.mp4",
+        id: "suite_diamante",
+        label: "Suite Diamante",
+        url: "https://amartesuite.com/producto/suite-deluxe-diamante/",
+        videoFile: "SUITE DELUXE DIAMANTE.mp4",
+      },
+    ],
+  },
+  {
+    id: "gamer",
+    emoji: "🎮",
+    title: "Gamer – Jacuzzi, arcade y consolas, sin cama",
+    description:
+      "No tiene cama, a propósito. Jacuzzi, sofá, columpio, cruz X, arcade, PlayStation y Xbox. Parqueadero sujeto a disponibilidad.",
+    suites: [
+      {
+        id: "suite_gamer",
+        label: "Suite Gamer",
+        // La página pública es el origen. Esta ruta no es `/`, para que la ficha
+        // no marque Suite Gamer en cada home.
+        url: "https://suitegamer.amartesuite.com/suite-gamer",
+        videoFile: "",
       },
     ],
   },
@@ -153,6 +170,7 @@ function getSuiteVideoByProductUrl(productUrl) {
     pathname = raw.replace(/\/+$/, "").toLowerCase();
   }
   for (const suite of flattenSuites()) {
+    if (!suite.videoFile) continue;
     let suitePath = "";
     try {
       suitePath = new URL(suite.url).pathname.replace(/\/+$/, "").toLowerCase();
@@ -189,6 +207,7 @@ function getSuiteVideoByLabel(nameOrId) {
       .toLowerCase()
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "");
+    if (!suite.videoFile) continue;
     if (
       needle === id ||
       needle === label ||
@@ -211,7 +230,7 @@ function getSuiteVideoByLabel(nameOrId) {
  * @returns {Array<{ id: string; title: string; productUrl: string; videoUrl: string }>}
  */
 function getSuiteVideosForWidget() {
-  return flattenSuites().map((suite) => ({
+  return flattenSuites().filter((suite) => suite.videoFile).map((suite) => ({
     id: suite.id,
     title: suite.label,
     productUrl: suite.url,

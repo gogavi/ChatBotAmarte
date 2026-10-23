@@ -32,7 +32,7 @@ const DURATION_ROWS = Object.freeze([
  * @returns {void}
  */
 function assertKnownOffer(offer) {
-  if (offer === null || offer === "promo-jacuzzi") return;
+  if (offer === null || offer === "promo-jacuzzi" || offer === "promo-amarte") return;
   const unknown = offer;
   throw new Error(`oferta de landing no reconocida: ${unknown}`);
 }
@@ -248,6 +248,8 @@ function offerAmount(landing) {
       return null;
     case "promo-jacuzzi":
       return promoJacuzzi.price;
+    case "promo-amarte":
+      return landing.promoAmarte.hourPrice;
     default: {
       const unknown = landing.offer;
       throw new Error(`oferta de landing no reconocida: ${unknown}`);
@@ -269,6 +271,8 @@ function durationsReplacedByOffer(landing) {
         promoJacuzzi.hours === 24 ? "diaHotelero" : `h${promoJacuzzi.hours}`;
       return new Set([key]);
     }
+    case "promo-amarte":
+      return new Set();
     default: {
       const unknown = landing.offer;
       throw new Error(`oferta de landing no reconocida: ${unknown}`);
@@ -290,6 +294,26 @@ function promoQuoteLines(landing) {
         `Cotiza esas ${promoJacuzzi.hours} h con este monto. No uses la tarifa de lista de ${promoJacuzzi.hours} h.`,
         "Si piden más tiempo, usa las tarifas de lista de abajo.",
       ];
+    case "promo-amarte": {
+      const terms = landing.promoAmarte;
+      const lines = [
+        `Oferta de esta landing (promo-amarte): la hora se paga a ${formatCop(terms.hourPrice)}.`,
+        "Si pagan parcial o el total de las 3 horas, hay descuento.",
+      ];
+      if (terms.threeHourDiscount == null) {
+        lines.push(
+          "El monto de ese descuento no está confirmado. No des un monto de descuento, ni un porcentaje, ni un total de 3 horas. Di que hay descuento y remite al formulario de esta página."
+        );
+      } else {
+        lines.push(
+          `Descuento confirmado de 3 horas: ${formatCop(terms.threeHourDiscount)}.`
+        );
+      }
+      lines.push(
+        "Los packs de 4 h en adelante salen de room_rates. Si no hay fila, no inventes el monto."
+      );
+      return lines;
+    }
     default: {
       const unknown = landing.offer;
       throw new Error(`oferta de landing no reconocida: ${unknown}`);
@@ -458,6 +482,10 @@ function collectLandingAmounts(landing, rates) {
   const allow = new Set();
   const quoted = offerAmount(landing);
   if (Number.isFinite(quoted) && quoted > 0) allow.add(quoted);
+  if (landing.offer === "promo-amarte") {
+    const discount = landing.promoAmarte.threeHourDiscount;
+    if (Number.isFinite(discount) && discount > 0) allow.add(discount);
+  }
   if (!(rates instanceof Map)) return allow;
   assertKnownKind(landing.kind);
   const skip = durationsReplacedByOffer(landing);

@@ -108,16 +108,29 @@ assert.strictEqual(
   "suite_vip_jacuzzi"
 );
 assert.strictEqual(resolveLanding("promo-suite-jacuzzi").offer, "promo-jacuzzi");
+const promoAmarte = resolveLanding("promo-suite-amarte");
+assert.strictEqual(promoAmarte.offer, "promo-amarte");
+assert.strictEqual(promoAmarte.promoAmarte.hourPrice, 30000);
+assert.strictEqual(promoAmarte.promoAmarte.threeHourDiscount, null);
 assert.deepStrictEqual(
   LANDINGS.filter((landing) => landing.offer === null).map((landing) => landing.id),
   [
     "suite-jacuzzi",
-    "promo-suite-amarte",
     "tematicas",
     "suite-sauna-jacuzzi",
     "suite-gamer",
     "reservas",
   ]
+);
+assert.strictEqual(resolveLanding("tematicas").grupo, "tematicas");
+assert.deepStrictEqual(
+  resolveLanding("tematicas").suites.map((suite) => suite.label),
+  ["Suite Árabe", "Suite Queen", "Suite Gótica", "Suite Diamante"]
+);
+assert.strictEqual(resolveLanding("suite-sauna-jacuzzi").grupo, "deluxe");
+assert.deepStrictEqual(
+  resolveLanding("suite-sauna-jacuzzi").suites.map((suite) => suite.label),
+  ["Suite Gold", "Suite Rubí", "Suite Zafiro"]
 );
 assert.strictEqual(resolveLanding("reservas").kind, "form");
 

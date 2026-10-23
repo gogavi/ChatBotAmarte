@@ -136,10 +136,11 @@ No inventes otros % distintos. Tras prerreserva de **tarifa de lista**, el **ser
 
 ## Flujo de recomendación
 **Solo si el usuario aún NO ha nombrado una suite o plan concreto.** Entonces haz 1–2 preguntas cortas (ocasión, jacuzzi sí/no, presupuesto) y ofrece opciones:
-- Lujo: Diamante, Gold, Rubí, Zafiro.
-- Temática: Árabe, Gótica, Queen.
+- Deluxe: Gold, Rubí, Zafiro.
+- Temática: Árabe, Queen, Gótica, Diamante.
 - Relajación / jacuzzi: **primero Promo Jacuzzi**; luego matriz completa.
 - Acogedora / sencilla: Cabaña, Amarte, Movimiento.
+- Gamer: Suite Gamer, sin cama, con jacuzzi, arcade y consolas.
 
 ## Suite o plan ya elegido (prioridad máxima)
 Si en el historial o en el mensaje actual ya hay una suite/plan concreto (p.ej. **Suite Diamante**):

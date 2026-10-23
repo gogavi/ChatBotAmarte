@@ -12,7 +12,12 @@ const { PLAN_SUITE_RULES, PLAN_CHOICE_GROUP } = require("./planSuites");
 
 /**
  * @typedef {"product"|"form"} LandingKind
- * @typedef {"promo-jacuzzi"|null} LandingOffer
+ * @typedef {"promo-jacuzzi"|"promo-amarte"|null} LandingOffer
+ * @typedef {"tematicas"|"deluxe"|null} LandingGrupo
+ * @typedef {{
+ *   hourPrice: number;
+ *   threeHourDiscount: number | null;
+ * }} PromoAmarteTerms
  * @typedef {{
  *   label: string;
  *   roomTypeName: string;
@@ -26,7 +31,9 @@ const { PLAN_SUITE_RULES, PLAN_CHOICE_GROUP } = require("./planSuites");
  *   url: string;
  *   aliasUrls: readonly string[];
  *   kind: LandingKind;
+ *   grupo?: LandingGrupo;
  *   offer: LandingOffer;
+ *   promoAmarte?: PromoAmarteTerms;
  *   distinctPhrases: readonly string[];
  *   suites: readonly LandingSuite[];
  * }} Landing
@@ -74,9 +81,13 @@ const LANDINGS = Object.freeze([
     url: "https://microservicio-promo-suite-amarte.vercel.app",
     aliasUrls: Object.freeze(["https://promoamarte.amartesuite.com"]),
     kind: "product",
-    // Sin oferta confirmada. El turno cotiza room_rates de Suite Amarte.
-    // No copiar la promo de la landing hasta que Guillermo dé id, montos y reglas.
-    offer: null,
+    // Beneficio confirmado por Guillermo: la hora a 30000.
+    // El descuento de 3 horas (pago parcial o total) sigue sin monto.
+    offer: "promo-amarte",
+    promoAmarte: Object.freeze({
+      hourPrice: 30000,
+      threeHourDiscount: null,
+    }),
     distinctPhrases: Object.freeze([]),
     suites: Object.freeze([
       Object.freeze({
@@ -95,6 +106,7 @@ const LANDINGS = Object.freeze([
     url: "https://microservicio-suite-tematicas.vercel.app",
     aliasUrls: Object.freeze(["https://tematica.amartesuite.com"]),
     kind: "product",
+    grupo: "tematicas",
     offer: null,
     distinctPhrases: Object.freeze([]),
     suites: Object.freeze([
@@ -130,6 +142,7 @@ const LANDINGS = Object.freeze([
     url: "https://microservicio-suite-sauna-jacuzzi.vercel.app",
     aliasUrls: Object.freeze(["https://deluxe.amartesuite.com"]),
     kind: "product",
+    grupo: "deluxe",
     offer: null,
     distinctPhrases: Object.freeze(["sauna", "suite sauna", "sauna jacuzzi"]),
     suites: Object.freeze([
@@ -316,7 +329,9 @@ function landingMatchPhrases(landing) {
 }
 
 /**
- * Landings de producto, sin promo, que incluyen alguno de estos room types.
+ * Landings de producto que incluyen alguno de estos room types.
+ * promo-jacuzzi no entra: esa suite ya tiene su página sin promo.
+ * promo-amarte sí entra: es la única página de Suite Amarte.
  * @param {readonly string[]} roomTypeNames
  * @returns {Landing[]}
  */
@@ -325,7 +340,7 @@ function landingsForRoomTypes(roomTypeNames) {
   return LANDINGS.filter(
     (landing) =>
       landing.kind === "product" &&
-      landing.offer === null &&
+      landing.offer !== "promo-jacuzzi" &&
       landing.suites.some((suite) => wanted.has(suite.roomTypeName))
   );
 }

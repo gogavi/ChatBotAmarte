@@ -79,6 +79,29 @@ assert.ok(listOn.includes(formatCop(200000)));
 assert.ok(listOn.includes(formatCop(240000)));
 assert.ok(!listOn.includes(formatCop(promoJacuzzi.price)));
 
+const promoAmarteLanding = resolveLanding("promo-suite-amarte");
+assert.strictEqual(promoAmarteLanding.promoAmarte.threeHourDiscount, null);
+const amarteRates = new Map([
+  [
+    "Suite Amarte",
+    entry("Suite Amarte", { h4: 90000, h8: 120000 }, { h4: 110000 }),
+  ],
+]);
+const promoAmarteBlock = formatLandingPriceBlock(promoAmarteLanding, amarteRates);
+assert.ok(promoAmarteBlock.includes(formatCop(promoAmarteLanding.promoAmarte.hourPrice)));
+assert.ok(promoAmarteBlock.includes("hay descuento"));
+assert.ok(promoAmarteBlock.includes("formulario"));
+assert.ok(promoAmarteBlock.includes(`4 h: ${formatCop(90000)}`));
+assert.ok(!promoAmarteBlock.includes(formatCop(60000)));
+assert.ok(!promoAmarteBlock.includes("60.000"));
+assert.ok(!/descuento de \$\d/.test(promoAmarteBlock));
+assert.ok(!promoAmarteBlock.includes("%"));
+const promoAmarteBare = formatLandingPriceBlock(promoAmarteLanding, null);
+assert.ok(promoAmarteBare.includes(formatCop(30000)));
+assert.ok(promoAmarteBare.includes("formulario"));
+assert.ok(!promoAmarteBare.includes("60.000"));
+assert.ok(!promoAmarteBare.includes("90.000"));
+
 const scrubbed = stripUntrustedCopAmounts(
   `Lista ${formatCop(240000)} y promo ${formatCop(150000)} y hora ${formatCop(30000)}.`
 );
@@ -267,12 +290,35 @@ assert.deepStrictEqual(untouched.pendingReservation, { tipo: "Suite Amarte" });
 
   const gamerGap = await beginLandingTurn("suite-gamer");
   assert.strictEqual(gamerGap.pricesAvailable, false);
+  assert.match(gamerGap.addendum, /formulario/i);
+  assert.ok(!gamerGap.addendum.includes("250.000"));
   const inventedGamer = finishLandingReply(
     gamerGap,
-    `Suite Gamer 4 h: ${formatCop(175000)}.`,
+    `Suite Gamer 4 h: ${formatCop(175000)}. Pack 6 h: ${formatCop(250000)}.`,
     "precio"
   );
   assert.ok(!inventedGamer.includes("175.000"));
+  assert.ok(!inventedGamer.includes("250.000"));
+
+  setRoomRatesCacheForTests(
+    new Map([
+      [
+        "Suite Gamer",
+        entry("Suite Gamer", { h6: 250000 }, { h6: 250000 }),
+      ],
+    ])
+  );
+  const gamerRow = await beginLandingTurn("suite-gamer");
+  assert.strictEqual(gamerRow.pricesAvailable, true);
+  assert.ok(gamerRow.addendum.includes(formatCop(250000)));
+  assert.ok(gamerRow.addendum.includes("6 h"));
+  const keptGamer = finishLandingReply(
+    gamerRow,
+    `Pack 6 h: ${formatCop(250000)}.`,
+    "precio"
+  );
+  assert.ok(keptGamer.includes(formatCop(250000)));
+  setRoomRatesCacheForTests(tematicasRates);
 
   const reservasTurn = await beginLandingTurn("reservas");
   assert.ok(reservasTurn.addendum.includes("no muestra el botón Wompi"));
@@ -306,6 +352,33 @@ assert.deepStrictEqual(untouched.pendingReservation, { tipo: "Suite Amarte" });
     "más tiempo"
   );
   assert.ok(keptLong.includes(formatCop(280000)));
+
+  setRoomRatesCacheForTests(amarteRates);
+  const amarteTurn = await beginLandingTurn("promo-suite-amarte");
+  assert.ok(amarteTurn.addendum.includes(formatCop(30000)));
+  assert.ok(amarteTurn.addendum.includes("hay descuento"));
+  assert.ok(amarteTurn.addendum.includes("formulario"));
+  assert.ok(!amarteTurn.addendum.includes("60.000"));
+  const keptHour = finishLandingReply(
+    amarteTurn,
+    `La hora sale a ${formatCop(30000)}.`,
+    "cuánto vale la hora"
+  );
+  assert.ok(keptHour.includes(formatCop(30000)));
+  const strippedDiscount = finishLandingReply(
+    amarteTurn,
+    `Hay descuento de ${formatCop(9000)} y 3 horas quedan en ${formatCop(75000)}.`,
+    "cuál es el descuento de 3 horas"
+  );
+  assert.ok(!strippedDiscount.includes("9.000"));
+  assert.ok(!strippedDiscount.includes("75.000"));
+  assert.ok(strippedDiscount.includes("tarifa no disponible"));
+  const keptList = finishLandingReply(
+    amarteTurn,
+    `4 h: ${formatCop(90000)}.`,
+    "pack de 4 horas"
+  );
+  assert.ok(keptList.includes(formatCop(90000)));
 
   setRoomRatesCacheForTests(null);
   const siteDown = await beginPriceTurn(undefined);
