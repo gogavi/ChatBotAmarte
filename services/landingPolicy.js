@@ -445,6 +445,20 @@ function catalogUrlKeys() {
 }
 
 /**
+ * Hosts del catálogo (vercel.app y alias de producción).
+ * @returns {Set<string>}
+ */
+function catalogHosts() {
+  const hosts = new Set();
+  for (const landing of LANDINGS) {
+    for (const url of [landing.url, ...landing.aliasUrls]) {
+      hosts.add(parsePolicyUrl(url).host);
+    }
+  }
+  return hosts;
+}
+
+/**
  * @param {string} url
  * @param {Set<string>} allowedKeys
  * @returns {boolean}
@@ -473,7 +487,7 @@ function isForeignUrl(url, allowedKeys) {
   ) {
     return true;
   }
-  if (host === "deluxe.amartesuite.com") return true;
+  if (catalogHosts().has(host)) return true;
   return false;
 }
 

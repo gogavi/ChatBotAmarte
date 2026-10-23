@@ -3,8 +3,10 @@ const { PLAN_SUITE_RULES, PLAN_CHOICE_GROUP } = require("./planSuites");
 /**
  * Catálogo único de las landings de Amarte.
  * `id` es el valor de `funnel_events.proyecto`.
- * Las URL se comprobaron con HTTP 200 el 21-oct-2026.
+ * Las URL de vercel.app se comprobaron con HTTP 200 el 21-oct-2026.
+ * Cada landing de producción vive en aliasUrls (mismo HTML que su url).
  * deluxe.amartesuite.com sirve el mismo HTML que suite-sauna-jacuzzi.
+ * tematica.amartesuite.com es el host real; tematicas.amartesuite.com no resuelve.
  */
 
 /**
@@ -34,7 +36,7 @@ const LANDINGS = Object.freeze([
     id: "suite-jacuzzi",
     nombre: "Suite Jacuzzi",
     url: "https://microservicio-suite-jacuzzi.vercel.app",
-    aliasUrls: Object.freeze([]),
+    aliasUrls: Object.freeze(["https://suitejacuzzi.amartesuite.com"]),
     kind: "product",
     offer: null,
     distinctPhrases: Object.freeze([]),
@@ -51,7 +53,7 @@ const LANDINGS = Object.freeze([
     id: "promo-suite-jacuzzi",
     nombre: "Promo Suite Jacuzzi",
     url: "https://microservicio-promo-suite-jacuzzi.vercel.app",
-    aliasUrls: Object.freeze([]),
+    aliasUrls: Object.freeze(["https://promojacuzzi.amartesuite.com"]),
     kind: "product",
     offer: "promo-jacuzzi",
     distinctPhrases: Object.freeze(["promo jacuzzi", "promo suite jacuzzi"]),
@@ -68,7 +70,7 @@ const LANDINGS = Object.freeze([
     id: "promo-suite-amarte",
     nombre: "Promo Suite Amarte",
     url: "https://microservicio-promo-suite-amarte.vercel.app",
-    aliasUrls: Object.freeze([]),
+    aliasUrls: Object.freeze(["https://promoamarte.amartesuite.com"]),
     kind: "product",
     offer: null,
     distinctPhrases: Object.freeze([]),
@@ -85,7 +87,7 @@ const LANDINGS = Object.freeze([
     id: "tematicas",
     nombre: "Suites temáticas",
     url: "https://microservicio-suite-tematicas.vercel.app",
-    aliasUrls: Object.freeze([]),
+    aliasUrls: Object.freeze(["https://tematica.amartesuite.com"]),
     kind: "product",
     offer: null,
     distinctPhrases: Object.freeze([]),
@@ -149,7 +151,7 @@ const LANDINGS = Object.freeze([
     id: "suite-gamer",
     nombre: "Suite Gamer",
     url: "https://microservicio-suite-gamer.vercel.app",
-    aliasUrls: Object.freeze([]),
+    aliasUrls: Object.freeze(["https://suitegamer.amartesuite.com"]),
     kind: "product",
     offer: null,
     distinctPhrases: Object.freeze([]),
@@ -166,7 +168,7 @@ const LANDINGS = Object.freeze([
     id: "reservas",
     nombre: "Pre-reserva",
     url: "https://microservicio-reservas.vercel.app",
-    aliasUrls: Object.freeze([]),
+    aliasUrls: Object.freeze(["https://reservas.amartesuite.com"]),
     kind: "form",
     offer: null,
     distinctPhrases: Object.freeze([]),
@@ -183,6 +185,42 @@ function resolveLanding(raw) {
   const id = raw.trim().toLowerCase();
   if (!id) return null;
   return LANDINGS.find((landing) => landing.id === id) || null;
+}
+
+/**
+ * Landing cuyo origen (url o alias) coincide con el de la página.
+ * www.amartesuite.com y amartesuite.com no son una landing.
+ * @param {unknown} pageUrl
+ * @returns {Landing | null}
+ */
+function resolveLandingByPageUrl(pageUrl) {
+  if (typeof pageUrl !== "string" || !pageUrl.trim()) return null;
+  let origin;
+  try {
+    const url = new URL(pageUrl.trim());
+    if (url.protocol !== "https:" && url.protocol !== "http:") return null;
+    origin = url.origin;
+  } catch {
+    return null;
+  }
+  for (const landing of LANDINGS) {
+    for (const item of [landing.url, ...landing.aliasUrls]) {
+      if (new URL(item).origin === origin) return landing;
+    }
+  }
+  return null;
+}
+
+/**
+ * El id explícito gana. Si no es un id del catálogo, la página elige por origen.
+ * @param {unknown} rawLanding
+ * @param {unknown} pageUrl
+ * @returns {Landing | null}
+ */
+function resolveChatLanding(rawLanding, pageUrl) {
+  const explicit = resolveLanding(rawLanding);
+  if (explicit) return explicit;
+  return resolveLandingByPageUrl(pageUrl);
 }
 
 /**
@@ -205,7 +243,7 @@ function resolveLandingByAlias(raw) {
 
 /**
  * Orígenes de navegador derivados del catálogo, en el mismo orden.
- * deluxe queda junto a suite-sauna-jacuzzi.
+ * Cada alias de producción queda junto a su url de vercel.app.
  * @returns {string[]}
  */
 function landingBrowserOrigins() {
@@ -368,6 +406,8 @@ function landingsAskedInMessage(userMessage, active) {
 module.exports = {
   LANDINGS,
   resolveLanding,
+  resolveLandingByPageUrl,
+  resolveChatLanding,
   resolveLandingByAlias,
   landingBrowserOrigins,
   normalizeLandingText,

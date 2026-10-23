@@ -7,6 +7,7 @@ const multer = require("multer");
 const { OpenAI, toFile } = require("openai");
 const { buildMartinaSystemPrompt } = require("./config/martinaSystemPrompt");
 const { allowCorsOrigin } = require("./config/corsPolicy");
+const { resolveChatLanding } = require("./config/landings");
 const { matchSuiteFromPageUrl } = require("./config/suitePageHints");
 const {
   MARTINA_REPLY_JSON_SCHEMA,
@@ -330,7 +331,10 @@ async function runChat(input) {
     typeof input.conversationId === "string" ? input.conversationId : null;
 
   const suiteMatch = matchSuiteFromPageUrl(safePage);
-  const landingTurn = await beginPriceTurn(input.landing);
+  const chatLanding = resolveChatLanding(input.landing, safePage);
+  const landingTurn = await beginPriceTurn(
+    chatLanding ? chatLanding.id : input.landing
+  );
 
   const systemPrompt = buildMartinaSystemPrompt({
     roomName: safeRoom,

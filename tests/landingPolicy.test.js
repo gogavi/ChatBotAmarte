@@ -148,6 +148,15 @@ assert.ok(
   dirtyPath.includes("[Suite Gamer](https://microservicio-suite-gamer.vercel.app)")
 );
 
+const productionPath = finishLandingReply(
+  { landing: jacuzzi, pricesAvailable: true, addendum: "x" },
+  "Mira https://suitegamer.amartesuite.com/admin y https://suitegamer.amartesuite.com y https://amartesuite.com/",
+  "hola"
+);
+assert.ok(!productionPath.includes("/admin"));
+assert.ok(productionPath.includes("https://suitegamer.amartesuite.com"));
+assert.ok(productionPath.includes("https://amartesuite.com/"));
+
 const promoPage = finishLandingReply(
   { landing: resolveLanding("promo-suite-jacuzzi"), pricesAvailable: true, addendum: "x" },
   "Te hablo de la suite.",
