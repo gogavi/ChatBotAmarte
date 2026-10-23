@@ -375,8 +375,11 @@ function formatLandingPriceBlock(landing, rates) {
     return lines.join("\n");
   }
 
+  const listTitle = skip.size
+    ? "Tarifas de lista para más tiempo (sin el pack de la oferta):"
+    : "Tarifas de lista para 4 h en adelante:";
   const lines = quote.length
-    ? [...quote, "Tarifas de lista para más tiempo (sin el pack de la oferta):"]
+    ? [...quote, listTitle]
     : ["Tarifas de lista de esta landing (room_rates):"];
   for (const suite of landing.suites) {
     const entry = rates.get(suite.roomTypeName);

@@ -1,7 +1,7 @@
 /**
  * CORS: landings de vercel.app, dominios de producción y el sitio.
  * Sin comodín *.vercel.app ni *.amartesuite.com.
- * Preview solo si el host es un label https que termina en -gogavis-projects.vercel.app.
+ * Preview solo si el host es https, un slug del catálogo, y git o un id de deploy.
  */
 const assert = require("assert");
 const { allowCorsOrigin } = require("../config/corsPolicy");
@@ -41,8 +41,17 @@ allows(
   "https://microservicio-suite-gamer-git-main-gogavis-projects.vercel.app"
 );
 allows("https://chatbotamarte-git-master-gogavis-projects.vercel.app");
+allows(
+  "https://microservicio-suite-tematicas-2j1qs77te-gogavis-projects.vercel.app"
+);
 
 blocks("https://evil.vercel.app");
+blocks("https://evil-gogavis-projects.vercel.app");
+blocks("https://evil-git-main-gogavis-projects.vercel.app");
+blocks("https://not-git-branch-gogavis-projects.vercel.app");
+blocks(
+  "https://microservicio-suite-gamer-production-gogavis-projects.vercel.app"
+);
 blocks("https://microservicio-suite-jacuzzi.vercel.app.evil.com");
 blocks("https://otro.amartesuite.com");
 blocks("https://tematicas.amartesuite.com");

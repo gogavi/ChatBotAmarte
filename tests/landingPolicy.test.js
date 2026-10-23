@@ -74,6 +74,7 @@ assert.ok(
 );
 assert.ok(promoOn.includes(formatCop(280000)));
 assert.ok(promoOn.includes(formatCop(320000)));
+assert.ok(promoOn.includes("sin el pack de la oferta"));
 const listOn = formatLandingPriceBlock(resolveLanding("suite-jacuzzi"), jacuzziList);
 assert.ok(listOn.includes(formatCop(200000)));
 assert.ok(listOn.includes(formatCop(240000)));
@@ -102,6 +103,8 @@ assert.ok(promoAmarteBlock.includes("10%"));
 assert.ok(promoAmarteBlock.includes("20%"));
 assert.ok(promoAmarteBlock.includes("50%"));
 assert.ok(promoAmarteBlock.includes(`4 h: ${formatCop(95000)}`));
+assert.ok(promoAmarteBlock.includes("Tarifas de lista para 4 h en adelante:"));
+assert.ok(!promoAmarteBlock.includes("sin el pack de la oferta"));
 assert.ok(!promoAmarteBlock.includes(formatCop(75000)));
 const promoAmarteBare = formatLandingPriceBlock(promoAmarteLanding, null);
 assert.ok(promoAmarteBare.includes(formatCop(30000)));

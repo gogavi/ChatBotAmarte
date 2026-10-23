@@ -407,7 +407,8 @@ async function runChat(input) {
   const enriched = enrichChatReply(
     reply,
     built.suiteShowcase,
-    rateAllowlist(landingTurn)
+    rateAllowlist(landingTurn),
+    landingTurn ? landingTurn.landing : null
   );
   reply = enriched.reply;
   suiteVideo = enriched.suiteVideo;

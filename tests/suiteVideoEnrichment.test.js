@@ -10,6 +10,7 @@ const {
   ensurePromoBlockOnExactQuote,
 } = require("../services/suiteChatEnrichment");
 const { formatQuoteWithPaymentOptions } = require("../reservationService");
+const { resolveLanding, promoAmarteAmounts } = require("../config/landings");
 
 const jacuzzi = getSuiteVideoByLabel("suite_vip_jacuzzi");
 assert.ok(jacuzzi);
@@ -84,6 +85,50 @@ const jacuzziPromoQuote = ensurePromoBlockOnExactQuote(
 );
 assert.ok(!jacuzziPromoQuote.includes("DESCUENTO ESPECIAL"));
 assert.ok(!jacuzziPromoQuote.includes("25% OFF"));
+
+const promoAmarteLanding = resolveLanding("promo-suite-amarte");
+const promoAmarteMath = promoAmarteAmounts(promoAmarteLanding.promoAmarte);
+const promoAllow = new Set([
+  promoAmarteLanding.promoAmarte.hourPrice,
+  promoAmarteMath.twoHours,
+  promoAmarteMath.base,
+  promoAmarteMath.depositPayNow,
+  promoAmarteMath.depositPayAtHotel,
+  promoAmarteMath.depositTotal,
+  promoAmarteMath.fullTotal,
+  95000,
+]);
+const amarteThreeHours = ensurePromoBlockOnExactQuote(
+  "**Suite Amarte** · 3 h: **$90.000**",
+  promoAllow,
+  promoAmarteLanding
+);
+assert.ok(amarteThreeHours.includes("$90.000"));
+assert.ok(!amarteThreeHours.includes("25% OFF"));
+assert.ok(!amarteThreeHours.includes("$67.500"));
+assert.ok(!amarteThreeHours.includes("$40.500"));
+const amarteTwoHours = ensurePromoBlockOnExactQuote(
+  "**Suite Amarte** · 2 h: **$60.000**",
+  promoAllow,
+  promoAmarteLanding
+);
+assert.ok(amarteTwoHours.includes("$60.000"));
+assert.ok(!amarteTwoHours.includes("25% OFF"));
+assert.ok(!amarteTwoHours.includes("$45.000"));
+const amarteDepositTotal = ensurePromoBlockOnExactQuote(
+  "**Suite Amarte** · 3 h: **$81.000**",
+  promoAllow,
+  promoAmarteLanding
+);
+assert.ok(amarteDepositTotal.includes("$81.000"));
+assert.ok(!amarteDepositTotal.includes("25% OFF"));
+const amarteListFour = ensurePromoBlockOnExactQuote(
+  "**Suite Amarte** · 4 h · domingo–jueves: **$95.000**",
+  promoAllow,
+  promoAmarteLanding
+);
+assert.ok(amarteListFour.includes("25% OFF"));
+assert.ok(amarteListFour.includes("$71.250"));
 
 const enriched = enrichChatReply(
   "Te recomiendo [Suite VIP Jacuzzi](https://amartesuite.com/producto/suite-vip-jacuzzi/).\n**Suite VIP Jacuzzi** · 8 h · domingo–jueves: **$240.000**",
