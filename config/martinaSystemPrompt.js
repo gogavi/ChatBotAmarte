@@ -13,6 +13,7 @@ const {
 const { loadMartinaMemoriaForPrompt } = require("./loadMemoria");
 const { formatPlanSuiteRulesForPrompt } = require("./planSuites");
 const { formatPlansForPrompt } = require("./planPrompt");
+const { formatSaunaMentionForPrompt } = require("./saunaMention");
 
 /**
  * @typedef {{
@@ -161,6 +162,8 @@ Si presentas o eliges una suite concreta: beneficio breve + **precios por pack**
 
 ## Planes (qué incluyen)
 ${formatPlansForPrompt()}
+
+${formatSaunaMentionForPrompt()}
 
 ${formatPlanSuiteRulesForPrompt()}
 

@@ -1,15 +1,11 @@
 /**
  * Texto de planes para el prompt de Martina.
  * Los nombres salen de PLAN_SUITE_RULES. Lo que incluye cada plan sale de
- * pricing.plans, partido por plan. Si el catálogo no tiene el plan, se pide
- * confirmar con un asesor.
+ * config/planCatalog.js, una fila por plan.
  */
 
-const { pricing } = require("./amarteCatalog");
 const { PLAN_SUITE_RULES, PLAN_CHOICE_GROUP } = require("./planSuites");
-
-const CONFIRM_INCLUDES =
-  "Confirma con un asesor qué incluye este plan. No lo inventes ni copies el contenido de otro plan.";
+const { includesForPlan } = require("./planCatalog");
 
 /**
  * @param {string} plan
@@ -31,86 +27,6 @@ function canonicalPlanNames() {
   return names;
 }
 
-/**
- * "Plan Romántico / Cumpleaños / Erótico" y
- * "Plan Cabaña o Plan Cama Movimiento" nombran varios planes en una fila.
- * @param {string} name
- * @returns {string[]}
- */
-function splitCatalogPlanName(name) {
-  const raw = String(name || "");
-  const parts = raw.includes(" / ")
-    ? raw.split(" / ")
-    : raw.includes(" o ")
-      ? raw.split(" o ")
-      : [raw];
-  return parts.map((part) => {
-    const trimmed = part.trim();
-    if (trimmed.startsWith("Plan ")) return trimmed;
-    return `Plan ${trimmed}`;
-  });
-}
-
-/**
- * @param {string} plan
- * @returns {{ name: string; includes?: { emoji: string; label: string }[]; includesErotico?: { emoji: string; label: string }[] } | null}
- */
-function catalogEntryForPlan(plan) {
-  const hits = [];
-  for (const entry of Object.values(pricing.plans)) {
-    if (splitCatalogPlanName(entry.name).includes(plan)) hits.push(entry);
-  }
-  if (hits.length > 1) {
-    throw new Error(`plan en más de una fila del catálogo: ${plan}`);
-  }
-  return hits[0] || null;
-}
-
-/**
- * @param {{ emoji: string; label: string }} item
- * @returns {string}
- */
-function formatIncludeItem(item) {
-  return `${item.emoji} ${item.label}`;
-}
-
-/**
- * Una viñeta del grupo puede nombrar un solo plan, p.ej. "(Plan Romántico)".
- * @param {string} label
- * @param {string} plan
- * @returns {boolean}
- */
-function scopedToOtherPlan(label, plan) {
-  const match = String(label).match(/\(Plan ([^)]+)\)/);
-  if (!match) return false;
-  return `Plan ${match[1]}` !== plan;
-}
-
-/**
- * @param {string} plan
- * @returns {string[] | null} null si el catálogo no tiene ese plan.
- */
-function includesForPlan(plan) {
-  const entry = catalogEntryForPlan(plan);
-  if (!entry) return null;
-  const lines = [];
-  const shared = Array.isArray(entry.includes) ? entry.includes : [];
-  for (const item of shared) {
-    if (scopedToOtherPlan(item.label, plan)) continue;
-    lines.push(formatIncludeItem(item));
-  }
-  if (plan === "Plan Erótico" && Array.isArray(entry.includesErotico)) {
-    for (const item of entry.includesErotico) {
-      const line = formatIncludeItem(item);
-      if (!lines.includes(line)) lines.push(line);
-    }
-  }
-  if (lines.length === 0) {
-    throw new Error(`el catálogo no dejó includes para ${plan}`);
-  }
-  return lines;
-}
-
 function formatCanonicalPlansForPrompt() {
   const plans = canonicalPlanNames();
   return [
@@ -122,12 +38,7 @@ function formatCanonicalPlansForPrompt() {
 function formatPlanIncludesForPrompt() {
   const lines = ["## Qué incluye cada plan"];
   for (const plan of canonicalPlanNames()) {
-    const items = includesForPlan(plan);
-    if (!items) {
-      lines.push(`- ${plan}: ${CONFIRM_INCLUDES}`);
-      continue;
-    }
-    lines.push(`- ${plan}: ${items.join("; ")}.`);
+    lines.push(`- ${plan}: ${includesForPlan(plan).join("; ")}.`);
   }
   return lines.join("\n");
 }
@@ -243,5 +154,4 @@ module.exports = {
   formatPlanIncludesForPrompt,
   formatDecorationPolicyForPrompt,
   formatPlansForPrompt,
-  CONFIRM_INCLUDES,
 };

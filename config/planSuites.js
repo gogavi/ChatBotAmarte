@@ -62,6 +62,7 @@ const PLAN_SUITE_RULES = Object.freeze([
       "Suite Gótica",
       "Suite Árabe",
       "Suite Diamante",
+      "Suite Zafiro",
     ]),
     exclude: Object.freeze([]),
     suppressPhrases: Object.freeze([]),
@@ -69,7 +70,12 @@ const PLAN_SUITE_RULES = Object.freeze([
   Object.freeze({
     plan: "Plan Romántico",
     mode: "recommend",
-    suites: Object.freeze(["Suite Rubí", "Suite Gold", "Suite Diamante"]),
+    suites: Object.freeze([
+      "Suite Rubí",
+      "Suite Gold",
+      "Suite Diamante",
+      "Suite Zafiro",
+    ]),
     exclude: Object.freeze(["Suite Gótica"]),
     suppressPhrases: Object.freeze([]),
   }),

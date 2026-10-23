@@ -23,6 +23,7 @@ const {
   buildPrereservaConfirmMessage,
 } = require("./reservationService");
 const { enrichChatReply } = require("./services/suiteChatEnrichment");
+const { planImageForReply } = require("./config/planCatalog");
 const {
   beginPriceTurn,
   clampLandingReservation,
@@ -454,6 +455,7 @@ async function runChat(input) {
 
   // Historial: solo el texto visible (sin JSON ni URLs de botones).
   const rawText = reply;
+  const planImage = planImageForReply(reply);
   console.log(
     `IA respondió a ${safeRoom}: ${options.length} botones (${built.actionTypes.join(", ")})${showReservationForm ? " +form" : ""}${showDateTimePicker ? " +datepicker" : ""}${suiteVideo ? ` +video:${suiteVideo.id}` : ""}.`
   );
@@ -466,6 +468,7 @@ async function runChat(input) {
     showDateTimePicker,
     formPrefill: showReservationForm ? formPrefill || {} : null,
     suiteVideo,
+    planImage,
   };
 }
 
@@ -553,6 +556,7 @@ function formatHistoryForUi(rows) {
         role: "assistant",
         content: content || reply,
         options: Array.isArray(built.options) ? built.options : [],
+        planImage: planImageForReply(content || reply),
       };
     });
 }
@@ -659,6 +663,7 @@ app.post("/chat", chatIpHourlyLimiter, chatConversationLimiter, async (req, res)
         ? result.formPrefill || {}
         : null,
       suiteVideo: result.suiteVideo || null,
+      planImage: result.planImage || null,
     });
   } catch (err) {
     console.error("Error en /chat:", err);
@@ -815,6 +820,7 @@ app.post(
         showDateTimePicker,
         formPrefill,
         suiteVideo,
+        planImage,
       } = await runChat({
         message: transcript,
         roomName,
@@ -877,6 +883,7 @@ app.post(
         showDateTimePicker: Boolean(showDateTimePicker),
         formPrefill: showReservationForm ? formPrefill || {} : null,
         suiteVideo: suiteVideo || null,
+        planImage: planImage || null,
         ...(audioBase64
           ? { audioBase64, audioMimeType }
           : {}),

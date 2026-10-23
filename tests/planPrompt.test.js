@@ -3,7 +3,8 @@
  * si piden decoración, ofrece primero el plan y después el extra suelto.
  */
 const assert = require("assert");
-const { pricing } = require("../config/amarteCatalog");
+const { includesForPlan } = require("../config/planCatalog");
+const { formatSaunaMentionForPrompt, SAUNA_MENTION_SUITES } = require("../config/saunaMention");
 const { PLAN_CHOICE_GROUP, PLAN_SUITE_RULES } = require("../config/planSuites");
 const { buildMartinaSystemPrompt } = require("../config/martinaSystemPrompt");
 const {
@@ -11,7 +12,6 @@ const {
   formatPlanIncludesForPrompt,
   formatDecorationPolicyForPrompt,
   formatPlansForPrompt,
-  CONFIRM_INCLUDES,
 } = require("../config/planPrompt");
 const { lookupCatalogPrice } = require("../services/catalogLookup");
 const { beginPriceTurn, finishLandingReply } = require("../services/landingPolicy");
@@ -64,40 +64,62 @@ function lineFor(plan) {
   return line;
 }
 
-function assertLabels(plan, items) {
+function assertLabels(plan, labels) {
   const line = lineFor(plan);
-  for (const item of items) {
-    assert.ok(line.includes(`${item.emoji} ${item.label}`), `${plan} ${item.label}`);
+  for (const label of labels) {
+    assert.ok(line.includes(label), `${plan} ${label}`);
   }
+  assert.ok(!/sauna/i.test(line), plan);
 }
 
-assertLabels("Plan Amarte", pricing.plans.plan_amarte.includes);
-assertLabels("Plan Húmedo", pricing.plans.plan_humedo.includes);
-assertLabels("Plan Cabaña", pricing.plans.plan_cabana_movimiento.includes);
-assertLabels("Plan Cama Movimiento", pricing.plans.plan_cabana_movimiento.includes);
-
-const grouped = pricing.plans.plan_romantico_cumple_erotico;
-const shared = grouped.includes.filter(
-  (item) => !String(item.label).includes("(Plan Romántico)")
-);
-const sauna = grouped.includes.filter((item) =>
-  String(item.label).includes("(Plan Romántico)")
-);
-assert.ok(sauna.length === 1);
-assertLabels("Plan Romántico", grouped.includes);
-assertLabels("Plan Cumpleaños", shared);
-assert.ok(!lineFor("Plan Cumpleaños").includes(sauna[0].label));
-assertLabels("Plan Erótico", shared);
-assertLabels("Plan Erótico", grouped.includesErotico);
-assert.ok(!lineFor("Plan Erótico").includes(sauna[0].label));
-
-const movimiento = lineFor("Plan Movimiento");
-assert.ok(movimiento.includes(CONFIRM_INCLUDES));
-assert.ok(movimiento.toLowerCase().includes("confirma"));
-for (const item of pricing.plans.plan_cabana_movimiento.includes) {
-  assert.ok(!movimiento.includes(item.label));
+for (const plan of EIGHT) {
+  assertLabels(plan, includesForPlan(plan));
 }
+assert.deepStrictEqual(
+  [...includesForPlan("Plan Amarte")],
+  [...includesForPlan("Plan Cabaña")]
+);
+assert.deepStrictEqual(
+  [...includesForPlan("Plan Amarte")],
+  [...includesForPlan("Plan Movimiento")]
+);
+assert.ok(lineFor("Plan Amarte").includes("Columpio"));
+assert.ok(lineFor("Plan Amarte").includes("Vino espumoso"));
+assert.ok(!lineFor("Plan Amarte").includes("Champaña"));
+assert.ok(lineFor("Plan Húmedo").includes("Jacuzzi"));
+assert.ok(!lineFor("Plan Húmedo").includes("Columpio"));
+assert.ok(lineFor("Plan Cumpleaños").includes("Jacuzzi"));
+assert.ok(lineFor("Plan Cumpleaños").includes("Velas"));
+assert.ok(!lineFor("Plan Cumpleaños").includes("Cintas"));
+assert.ok(lineFor("Plan Romántico").includes("Jacuzzi"));
+assert.ok(!/sauna/i.test(lineFor("Plan Romántico")));
+const erotico = lineFor("Plan Erótico");
+assert.ok(erotico.includes("Antifaz"));
+assert.ok(erotico.includes("Body"));
+assert.ok(!erotico.includes("Body en malla"));
+assert.ok(erotico.includes("Esposas"));
+assert.ok(erotico.includes("Látigo"));
+assert.deepStrictEqual(
+  [...includesForPlan("Plan Cama Movimiento")],
+  ["Pétalos de rosas", "Globos", "Champaña", "Chocolates (2)", "Crispetas (80gr)"]
+);
+assert.ok(!lineFor("Plan Movimiento").includes("Champaña"));
+assert.ok(!lineFor("Plan Movimiento").toLowerCase().includes("confirma"));
 assert.ok(!/\$\s*\d/.test(includesText));
+
+const saunaText = formatSaunaMentionForPrompt();
+assert.ok(prompt.includes(saunaText));
+for (const suite of SAUNA_MENTION_SUITES) {
+  assert.ok(saunaText.includes(suite), suite);
+}
+assert.deepStrictEqual([...SAUNA_MENTION_SUITES], [
+  "Suite Gold",
+  "Suite Gótica",
+  "Suite Zafiro",
+]);
+assert.ok(!saunaText.includes("Suite Rubí"));
+assert.ok(!saunaText.includes("Suite Jacuzzi"));
+assert.ok(!/sauna/i.test(includesText));
 
 const decoration = formatDecorationPolicyForPrompt();
 assert.ok(prompt.includes(decoration));

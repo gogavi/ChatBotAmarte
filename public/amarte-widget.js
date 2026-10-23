@@ -495,6 +495,8 @@
   var suiteVideoModalEl = null;
   var suiteVideoPlayerEl = null;
   var suiteVideoTitleEl = null;
+  var planImageModalEl = null;
+  var planImageFullEl = null;
 
   var LIVE_ACTION_URLS = {
     reservation: DEFAULT_QUICK_RESERVE,
@@ -1161,6 +1163,73 @@
   }
 
   /**
+   * El servidor manda /plans/<slug>.webp. El widget lo cuelga del origen del script.
+   * @param {string} src
+   * @returns {string}
+   */
+  function resolvePlanImageSrc(src) {
+    if (!src) return "";
+    if (/^https?:\/\//i.test(src)) return src;
+    if (src.charAt(0) === "/") return BACKEND_URL + src;
+    return BACKEND_URL + "/" + src;
+  }
+
+  function ensurePlanImageModal() {
+    if (planImageModalEl) return;
+    planImageModalEl = document.createElement("div");
+    planImageModalEl.className = "amarte-plan-image-modal";
+    planImageModalEl.setAttribute("role", "dialog");
+    planImageModalEl.setAttribute("aria-modal", "true");
+    planImageModalEl.setAttribute("aria-hidden", "true");
+    planImageModalEl.innerHTML =
+      '<div class="amarte-plan-image-backdrop" data-amarte-plan-close="1"></div>' +
+      '<div class="amarte-plan-image-dialog">' +
+      '<button type="button" class="amarte-plan-image-close" aria-label="Cerrar imagen" data-amarte-plan-close="1">✕</button>' +
+      '<img class="amarte-plan-image-full" alt="">' +
+      "</div>";
+    document.body.appendChild(planImageModalEl);
+    planImageFullEl = planImageModalEl.querySelector(".amarte-plan-image-full");
+    planImageModalEl.addEventListener("click", function (ev) {
+      var t = ev.target;
+      if (t && t.getAttribute && t.getAttribute("data-amarte-plan-close") === "1") {
+        closePlanImageModal();
+      }
+    });
+    document.addEventListener("keydown", function (ev) {
+      if (
+        ev.key === "Escape" &&
+        planImageModalEl &&
+        planImageModalEl.classList.contains("amarte-open")
+      ) {
+        closePlanImageModal();
+      }
+    });
+  }
+
+  function closePlanImageModal() {
+    if (!planImageModalEl) return;
+    planImageModalEl.classList.remove("amarte-open");
+    planImageModalEl.setAttribute("aria-hidden", "true");
+    if (planImageFullEl) {
+      planImageFullEl.removeAttribute("src");
+    }
+  }
+
+  /**
+   * @param {{ src: string; alt?: string }} image
+   */
+  function openPlanImageModal(image) {
+    if (!image || !image.src) return;
+    ensurePlanImageModal();
+    if (planImageFullEl) {
+      planImageFullEl.src = image.src;
+      planImageFullEl.alt = image.alt || "";
+    }
+    planImageModalEl.classList.add("amarte-open");
+    planImageModalEl.setAttribute("aria-hidden", "false");
+  }
+
+  /**
    * @param {{ title?: string; videoUrl: string }} video
    */
   function openSuiteVideoModal(video) {
@@ -1298,6 +1367,20 @@
       "cursor:pointer;line-height:1;padding:4px 8px;}" +
       ".amarte-suite-video-close:hover{color:#E91E63;}" +
       ".amarte-suite-video-player{display:block;width:100%;max-height:min(70vh,560px);background:#000;}" +
+      ".amarte-plan-image-cta{display:block;margin-top:10px;padding:0;border:none;background:transparent;" +
+      "cursor:pointer;border-radius:12px;overflow:hidden;max-width:160px;}" +
+      ".amarte-plan-image-thumb{display:block;width:160px;height:140px;object-fit:cover;object-position:top;border-radius:12px;}" +
+      ".amarte-plan-image-modal{position:fixed;inset:0;z-index:2147483000;display:none;" +
+      "align-items:center;justify-content:center;padding:16px;}" +
+      ".amarte-plan-image-modal.amarte-open{display:flex;}" +
+      ".amarte-plan-image-backdrop{position:absolute;inset:0;background:rgba(13,13,17,0.72);}" +
+      ".amarte-plan-image-dialog{position:relative;z-index:1;max-width:min(480px,100%);" +
+      "max-height:100%;background:#111;border-radius:16px;overflow:hidden;" +
+      "box-shadow:0 20px 60px rgba(0,0,0,0.45);}" +
+      ".amarte-plan-image-close{position:absolute;top:8px;right:8px;z-index:2;border:none;" +
+      "background:rgba(0,0,0,0.55);color:#fff;font-size:1.35rem;cursor:pointer;line-height:1;" +
+      "padding:6px 10px;border-radius:999px;}" +
+      ".amarte-plan-image-full{display:block;width:100%;max-height:min(92vh,1280px);object-fit:contain;background:#000;}" +
       ".amarte-msg-bot .amarte-bubble-inner{background:#fff;border:1px solid #e0e0e0;color:#1a1a1a;}" +
       ".amarte-msg-bot .amarte-promo-title{display:block;margin:12px 0 6px;color:#D81B60;" +
       "font-weight:800;font-size:1.05rem;letter-spacing:0.01em;line-height:1.3;}" +
@@ -1509,6 +1592,29 @@
     if (
       role === "bot" &&
       extras &&
+      extras.planImage &&
+      extras.planImage.src
+    ) {
+      var planSrc = resolvePlanImageSrc(extras.planImage.src);
+      var planBtn = document.createElement("button");
+      planBtn.type = "button";
+      planBtn.className = "amarte-plan-image-cta";
+      planBtn.setAttribute("data-amarte-plan-src", planSrc);
+      planBtn.setAttribute(
+        "data-amarte-plan-alt",
+        extras.planImage.alt || extras.planImage.plan || ""
+      );
+      var thumb = document.createElement("img");
+      thumb.className = "amarte-plan-image-thumb";
+      thumb.alt = extras.planImage.alt || extras.planImage.plan || "";
+      thumb.src = planSrc;
+      planBtn.appendChild(thumb);
+      row.appendChild(planBtn);
+    }
+
+    if (
+      role === "bot" &&
+      extras &&
       extras.audioBase64 &&
       extras.audioMimeType
     ) {
@@ -1582,11 +1688,9 @@
           if (m.role === "user") {
             appendMessage("user", m.content, null);
           } else {
-            appendMessage(
-              "bot",
-              m.content,
-              Array.isArray(m.options) ? m.options : []
-            );
+            appendMessage("bot", m.content, Array.isArray(m.options) ? m.options : [], {
+              planImage: m.planImage && m.planImage.src ? m.planImage : null,
+            });
           }
         }
         welcomeShown = true;
@@ -2313,6 +2417,9 @@
     if (data.suiteVideo && data.suiteVideo.videoUrl) {
       payloadExtras.suiteVideo = data.suiteVideo;
     }
+    if (data.planImage && data.planImage.src) {
+      payloadExtras.planImage = data.planImage;
+    }
     appendMessage("bot", reply || " ", options, payloadExtras);
     if (data.showReservationForm) {
       appendReservationForm(data.formPrefill || {});
@@ -2995,6 +3102,15 @@
         openSuiteVideoModal({
           videoUrl: btn.getAttribute("data-amarte-video-url") || "",
           title: btn.getAttribute("data-amarte-video-title") || "",
+        });
+        return;
+      }
+      var planBtn = t.closest && t.closest(".amarte-plan-image-cta");
+      if (planBtn) {
+        ev.preventDefault();
+        openPlanImageModal({
+          src: planBtn.getAttribute("data-amarte-plan-src") || "",
+          alt: planBtn.getAttribute("data-amarte-plan-alt") || "",
         });
         return;
       }

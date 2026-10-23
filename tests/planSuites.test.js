@@ -25,14 +25,14 @@ const cumple = ruleForPlan("Plan Cumpleaños");
 assert.strictEqual(cumple.mode, "recommend");
 assert.deepStrictEqual(
   [...cumple.suites],
-  ["Suite Queen", "Suite Gótica", "Suite Árabe", "Suite Diamante"]
+  ["Suite Queen", "Suite Gótica", "Suite Árabe", "Suite Diamante", "Suite Zafiro"]
 );
 
 const romantico = ruleForPlan("Plan Romántico");
 assert.strictEqual(romantico.mode, "recommend");
 assert.deepStrictEqual(
   [...romantico.suites],
-  ["Suite Rubí", "Suite Gold", "Suite Diamante"]
+  ["Suite Rubí", "Suite Gold", "Suite Diamante", "Suite Zafiro"]
 );
 assert.ok(!romantico.suites.includes("Suite Gótica"));
 assert.ok(romantico.exclude.includes("Suite Gótica"));
@@ -129,7 +129,7 @@ assert.ok(romHits.some((landing) => landing.id === "suite-sauna-jacuzzi"));
 const cumHits = landingsAskedInMessage("Plan Cumpleaños", gamer);
 assert.deepStrictEqual(
   cumHits.map((landing) => landing.id),
-  ["tematicas"]
+  ["tematicas", "suite-sauna-jacuzzi"]
 );
 
 assert.deepStrictEqual(

@@ -241,55 +241,15 @@ const pricing = {
   plans: {
     plan_amarte: {
       name: "Plan Amarte",
-      includes: [
-        { emoji: "🌹", label: "Pétalos de rosas" },
-        { emoji: "🎈", label: "Globos" },
-        { emoji: "🍾", label: "Champaña" },
-        { emoji: "🍫", label: "Chocolates (2)" },
-        { emoji: "🍿", label: "Crispetas (80gr)" },
-      ],
     },
     plan_cabana_movimiento: {
       name: "Plan Cabaña o Plan Cama Movimiento",
-      includes: [
-        { emoji: "🌹", label: "Pétalos de rosas" },
-        { emoji: "🎈", label: "Globos" },
-        { emoji: "🍾", label: "Champaña" },
-        { emoji: "🍫", label: "Chocolates (2)" },
-        { emoji: "🍿", label: "Crispetas (80gr)" },
-      ],
     },
     plan_humedo: {
       name: "Plan Húmedo",
-      includes: [
-        { emoji: "🌹", label: "Pétalos de rosas" },
-        { emoji: "🎈", label: "Globos" },
-        { emoji: "🍾", label: "Champaña" },
-        { emoji: "🍫", label: "Chocolates (2)" },
-        { emoji: "🍿", label: "Crispetas (80gr)" },
-      ],
     },
     plan_romantico_cumple_erotico: {
       name: "Plan Romántico / Cumpleaños / Erótico",
-      includes: [
-        { emoji: "🌹", label: "Pétalos de rosas" },
-        { emoji: "🎈", label: "Globos" },
-        { emoji: "🎀", label: "Cintas" },
-        { emoji: "🕯️", label: "Velas" },
-        { emoji: "🍾", label: "Champaña" },
-        { emoji: "🍫", label: "Chocolates (2)" },
-        { emoji: "🍿", label: "Crispetas" },
-        { emoji: "🛁", label: "Jacuzzi ilimitado" },
-        { emoji: "♨️", label: "Sauna ilimitado (Plan Romántico)" },
-      ],
-      /** Extras solo cuando el usuario elige la variante Erótico */
-      includesErotico: [
-        { emoji: "🧴", label: "Body en malla" },
-        { emoji: "🎭", label: "Antifaz" },
-        { emoji: "⛓️", label: "Esposas" },
-        { emoji: "🪢", label: "Látigo" },
-        { emoji: "🛁", label: "Jacuzzi ilimitado" },
-      ],
     },
   },
 };
