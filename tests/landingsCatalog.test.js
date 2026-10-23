@@ -87,6 +87,21 @@ assert.strictEqual(resolveLanding("no-existe"), null);
 assert.strictEqual(resolveLanding(null), null);
 assert.strictEqual(resolveLanding("https://deluxe.amartesuite.com"), null);
 
+const tematicas = resolveLanding("tematicas");
+const tematicasAlias = resolveLanding("suite-tematicas");
+assert.strictEqual(tematicasAlias, tematicas);
+assert.strictEqual(tematicasAlias.id, "tematicas");
+assert.deepStrictEqual(
+  tematicasAlias.suites.map((suite) => suite.label),
+  ["Suite Árabe", "Suite Queen", "Suite Gótica", "Suite Diamante"]
+);
+assert.strictEqual(resolveLanding("  Suite-Tematicas  ").id, "tematicas");
+assert.strictEqual(resolveLanding("suite-tematica"), null);
+assert.strictEqual(
+  resolveChatLanding("suite-tematicas", "https://www.amartesuite.com/").id,
+  "tematicas"
+);
+
 assert.strictEqual(resolveLanding("suite-gamer").suites[0].catalogId, null);
 assert.strictEqual(
   resolveLanding("suite-jacuzzi").suites[0].catalogId,

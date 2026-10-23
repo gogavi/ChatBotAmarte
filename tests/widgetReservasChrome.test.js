@@ -1,7 +1,7 @@
 /**
  * En la landing reservas el pie no lleva el checkout genérico de Wompi.
- * Si «Reservar sin Pago» pisa la esquina de reposo del lanzador, el widget
- * sube esa esquina (móvil y escritorio) sin ocultar el botón.
+ * Si «Reservar sin Pago» o «Sube tu comprobante» pisan la esquina de reposo
+ * del lanzador, el widget sube esa esquina (móvil y escritorio) sin ocultarlo.
  */
 const assert = require("assert");
 const fs = require("fs");
@@ -228,6 +228,38 @@ function wompiLink(document) {
   assert.ok(
     desktop.document.querySelector(".amarte-widget-root").classList.contains("amarte-clear-reserve"),
     "a 1280×800 la esquina del botón también sube"
+  );
+
+  const phone = boot();
+  setViewport(phone, 375, 667);
+  const receipt = phone.document.createElement("button");
+  receipt.type = "submit";
+  receipt.textContent = "Sube tu comprobante";
+  receipt.getBoundingClientRect = box({
+    left: 16,
+    top: 615,
+    right: 375,
+    bottom: 667,
+    width: 359,
+    height: 52,
+  });
+  phone.document.body.appendChild(receipt);
+  await flush();
+  const phoneRoot = phone.document.querySelector(".amarte-widget-root");
+  const phoneLauncher = phone.document.querySelector(".amarte-widget-launcher");
+  assert.ok(
+    phoneRoot.classList.contains("amarte-clear-reserve"),
+    "a 375×667 el comprobante sube el lanzador"
+  );
+  assert.strictEqual(phoneLauncher.hidden, false);
+  await flush();
+  assert.ok(phoneRoot.classList.contains("amarte-clear-reserve"), "no oscila en 375×667");
+
+  receipt.textContent = "Elegir comprobante";
+  await flush();
+  assert.ok(
+    !phoneRoot.classList.contains("amarte-clear-reserve"),
+    "otro rótulo de archivo no cuenta"
   );
 
   console.log("widgetReservasChrome.test.js ok");

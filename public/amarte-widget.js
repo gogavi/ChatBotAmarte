@@ -3162,11 +3162,12 @@
      * diálogo está visible, se ocultan los dos. Los diálogos del propio
      * widget no cuentan.
      *
-     * «Reservar sin Pago» no es un diálogo: es un botón del formulario
-     * (min-height 52px). Si su rectángulo pisa la esquina fija del lanzador,
-     * la clase amarte-clear-reserve lo sube 64px (52 del botón + 12 de aire)
-     * y conserva z-index 99998 / 99999. El hueco es el de reposo, no el rect
-     * ya desplazado, para no oscilar.
+     * «Reservar sin Pago» y «Sube tu comprobante» no son diálogos: son
+     * botones del formulario. Si su rectángulo pisa la esquina fija del
+     * lanzador, la clase amarte-clear-reserve lo sube 64px y conserva
+     * z-index 99998 / 99999. En móvil (375×667) eso destapa el tercio
+     * derecho del comprobante. El hueco es el de reposo, no el rect ya
+     * desplazado, para no oscilar.
      */
     var LAUNCHER_REST = {
       desktop: { right: 24, bottom: 24, width: 220, height: 56 },
@@ -3193,21 +3194,21 @@
       return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
     }
 
-    function isReserveWithoutPayControl(el) {
+    function isLauncherCornerControl(el) {
       if (!el || el.nodeType !== 1) return false;
       var tag = el.tagName;
       if (tag !== "BUTTON" && tag !== "A" && el.getAttribute("role") !== "button") return false;
       var text = String(el.textContent || "").replace(/\s+/g, " ").trim();
-      return /reservar\s+sin\s+pago/i.test(text);
+      return /reservar\s+sin\s+pago/i.test(text) || /sube\s+tu\s+comprobante/i.test(text);
     }
 
-    function reserveWithoutPayBlocksLauncher() {
+    function launcherCornerBlocked() {
       var slot = launcherRestSlot();
       if (slot.width <= 0 || slot.height <= 0 || slot.right <= 0 || slot.bottom <= 0) return false;
       var nodes = document.querySelectorAll("button, a, [role='button']");
       for (var i = 0; i < nodes.length; i++) {
         var el = nodes[i];
-        if (!isReserveWithoutPayControl(el) || !pageDialogCoversLauncher(el)) continue;
+        if (!isLauncherCornerControl(el) || !pageDialogCoversLauncher(el)) continue;
         if (typeof el.getBoundingClientRect !== "function") continue;
         var rect = el.getBoundingClientRect();
         if (!rect || rect.width <= 0 || rect.height <= 0) continue;
@@ -3263,7 +3264,7 @@
         }
         setHidden(launcher, open);
         setHidden(panel, open);
-        if (reserveWithoutPayBlocksLauncher()) {
+        if (launcherCornerBlocked()) {
           if (!widgetRoot.classList.contains("amarte-clear-reserve")) {
             widgetRoot.classList.add("amarte-clear-reserve");
           }

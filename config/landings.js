@@ -2,7 +2,8 @@ const { PLAN_SUITE_RULES, PLAN_CHOICE_GROUP } = require("./planSuites");
 
 /**
  * Catálogo único de las landings de Amarte.
- * `id` es el valor de `funnel_events.proyecto`.
+ * `id` es el id del catálogo. En temáticas el embudo manda `suite-tematicas`;
+ * ese valor es un alias de id y resuelve la misma landing.
  * Las URL de vercel.app se comprobaron con HTTP 200 el 21-oct-2026.
  * Cada landing de producción vive en aliasUrls (mismo HTML que su url).
  * deluxe.amartesuite.com sirve el mismo HTML que suite-sauna-jacuzzi.
@@ -20,6 +21,7 @@ const { PLAN_SUITE_RULES, PLAN_CHOICE_GROUP } = require("./planSuites");
  * }} LandingSuite
  * @typedef {{
  *   id: string;
+ *   idAliases?: readonly string[];
  *   nombre: string;
  *   url: string;
  *   aliasUrls: readonly string[];
@@ -87,6 +89,8 @@ const LANDINGS = Object.freeze([
   }),
   Object.freeze({
     id: "tematicas",
+    // proyecto del embudo de la página. El id canónico sigue siendo tematicas.
+    idAliases: Object.freeze(["suite-tematicas"]),
     nombre: "Suites temáticas",
     url: "https://microservicio-suite-tematicas.vercel.app",
     aliasUrls: Object.freeze(["https://tematica.amartesuite.com"]),
@@ -186,7 +190,13 @@ function resolveLanding(raw) {
   if (typeof raw !== "string") return null;
   const id = raw.trim().toLowerCase();
   if (!id) return null;
-  return LANDINGS.find((landing) => landing.id === id) || null;
+  return (
+    LANDINGS.find((landing) => {
+      if (landing.id === id) return true;
+      const aliases = landing.idAliases || [];
+      return aliases.some((alias) => alias === id);
+    }) || null
+  );
 }
 
 /**

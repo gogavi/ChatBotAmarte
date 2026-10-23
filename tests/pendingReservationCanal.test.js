@@ -33,6 +33,10 @@ assert.strictEqual(
   widgetReservationCanal("https://deluxe.amartesuite.com"),
   "widget-martina"
 );
+assert.strictEqual(
+  widgetReservationCanal("suite-tematicas"),
+  "widget-martina/tematicas"
+);
 
 const fromPage = resolveChatLanding("", "https://deluxe.amartesuite.com/promo");
 assert.ok(fromPage);
