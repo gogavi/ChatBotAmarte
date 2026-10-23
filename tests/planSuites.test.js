@@ -8,6 +8,7 @@ const {
   PLAN_CHOICE_GROUP,
 } = require("../config/planSuites");
 const { landingsAskedInMessage, resolveLanding } = require("../config/landings");
+const { suiteCategories, getSuiteVideoByLabel } = require("../config/amarteCatalog");
 const { finishLandingReply } = require("../services/landingPolicy");
 const { lookupCatalogPrice } = require("../services/catalogLookup");
 const { buildMartinaSystemPrompt } = require("../config/martinaSystemPrompt");
@@ -25,14 +26,14 @@ const cumple = ruleForPlan("Plan Cumpleaños");
 assert.strictEqual(cumple.mode, "recommend");
 assert.deepStrictEqual(
   [...cumple.suites],
-  ["Suite Queen", "Suite Gótica", "Suite Árabe", "Suite Diamante"]
+  ["Suite Queen", "Suite Gótica", "Suite Árabe", "Suite Diamante", "Suite Zafiro"]
 );
 
 const romantico = ruleForPlan("Plan Romántico");
 assert.strictEqual(romantico.mode, "recommend");
 assert.deepStrictEqual(
   [...romantico.suites],
-  ["Suite Rubí", "Suite Gold", "Suite Diamante"]
+  ["Suite Rubí", "Suite Gold", "Suite Diamante", "Suite Zafiro"]
 );
 assert.ok(!romantico.suites.includes("Suite Gótica"));
 assert.ok(romantico.exclude.includes("Suite Gótica"));
@@ -90,6 +91,26 @@ assert.ok(choiceText.includes("Suite Gold"));
 assert.ok(choiceText.includes("esas seis"));
 assert.ok(choiceText.includes("Suite Gamer"));
 assert.ok(!choiceText.includes("120"));
+assert.ok(rulesText.includes("## Suite Gamer"));
+assert.ok(rulesText.includes("No tiene cama"));
+assert.ok(rulesText.includes("PlayStation"));
+assert.ok(rulesText.includes("formulario"));
+assert.ok(!rulesText.includes("250.000"));
+assert.ok(!rulesText.includes("$250"));
+const deluxe = suiteCategories.find((cat) => cat.id === "deluxe");
+const tematicasCat = suiteCategories.find((cat) => cat.id === "tematicas");
+const gamerCat = suiteCategories.find((cat) => cat.id === "gamer");
+assert.deepStrictEqual(
+  deluxe.suites.map((suite) => suite.label),
+  ["Suite Gold", "Suite Rubí", "Suite Zafiro"]
+);
+assert.deepStrictEqual(
+  tematicasCat.suites.map((suite) => suite.label),
+  ["Suite Árabe", "Suite Queen", "Suite Gótica", "Suite Diamante"]
+);
+assert.strictEqual(gamerCat.suites[0].label, "Suite Gamer");
+assert.strictEqual(gamerCat.suites[0].videoFile, "");
+assert.strictEqual(getSuiteVideoByLabel("Suite Gamer"), null);
 assert.deepStrictEqual(
   [...PLAN_CHOICE_GROUP.suites],
   ["Suite Queen", "Suite Gótica", "Suite Rubí", "Suite Diamante", "Suite Árabe", "Suite Gold"]
@@ -107,6 +128,9 @@ const prompt = buildMartinaSystemPrompt({
   referenceIso: "2026-10-21T15:30:00.000Z",
 });
 assert.ok(prompt.includes(rulesText));
+assert.ok(prompt.includes("Deluxe: Gold, Rubí, Zafiro."));
+assert.ok(prompt.includes("Temática: Árabe, Queen, Gótica, Diamante."));
+assert.ok(prompt.includes("Suite Gamer, sin cama"));
 
 const gamer = resolveLanding("suite-gamer");
 const humedoHits = landingsAskedInMessage(
@@ -129,7 +153,7 @@ assert.ok(romHits.some((landing) => landing.id === "suite-sauna-jacuzzi"));
 const cumHits = landingsAskedInMessage("Plan Cumpleaños", gamer);
 assert.deepStrictEqual(
   cumHits.map((landing) => landing.id),
-  ["tematicas"]
+  ["tematicas", "suite-sauna-jacuzzi"]
 );
 
 assert.deepStrictEqual(

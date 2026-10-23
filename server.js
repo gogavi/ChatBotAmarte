@@ -7,6 +7,7 @@ const multer = require("multer");
 const { OpenAI, toFile } = require("openai");
 const { buildMartinaSystemPrompt } = require("./config/martinaSystemPrompt");
 const { allowCorsOrigin } = require("./config/corsPolicy");
+const { resolveChatLanding } = require("./config/landings");
 const { matchSuiteFromPageUrl } = require("./config/suitePageHints");
 const {
   MARTINA_REPLY_JSON_SCHEMA,
@@ -23,6 +24,7 @@ const {
   buildPrereservaConfirmMessage,
 } = require("./reservationService");
 const { enrichChatReply } = require("./services/suiteChatEnrichment");
+const { planImageForReply } = require("./config/planCatalog");
 const {
   beginPriceTurn,
   clampLandingReservation,
@@ -89,6 +91,8 @@ app.use(
         filePath.endsWith("amarte-widget.js") ||
         filePath.endsWith("amarte-live-agent.bundle.js")
       ) {
+        // Sin hash en el nombre. no-cache revalida en cada carga: un deploy
+        // de este archivo cambia en el acto las landings que lo enlazan.
         res.setHeader("Cache-Control", "no-cache, must-revalidate");
       }
     },
@@ -329,7 +333,10 @@ async function runChat(input) {
     typeof input.conversationId === "string" ? input.conversationId : null;
 
   const suiteMatch = matchSuiteFromPageUrl(safePage);
-  const landingTurn = await beginPriceTurn(input.landing);
+  const chatLanding = resolveChatLanding(input.landing, safePage);
+  const landingTurn = await beginPriceTurn(
+    chatLanding ? chatLanding.id : input.landing
+  );
 
   const systemPrompt = buildMartinaSystemPrompt({
     roomName: safeRoom,
@@ -400,7 +407,8 @@ async function runChat(input) {
   const enriched = enrichChatReply(
     reply,
     built.suiteShowcase,
-    rateAllowlist(landingTurn)
+    rateAllowlist(landingTurn),
+    landingTurn ? landingTurn.landing : null
   );
   reply = enriched.reply;
   suiteVideo = enriched.suiteVideo;
@@ -425,6 +433,7 @@ async function runChat(input) {
   ) {
     const created = await createPendingReservation(pendingReservation, {
       conversationId,
+      landingId: chatLanding ? chatLanding.id : "",
     });
     if (created.ok) {
       reservationId = created.id;
@@ -454,6 +463,7 @@ async function runChat(input) {
 
   // Historial: solo el texto visible (sin JSON ni URLs de botones).
   const rawText = reply;
+  const planImage = planImageForReply(reply);
   console.log(
     `IA respondió a ${safeRoom}: ${options.length} botones (${built.actionTypes.join(", ")})${showReservationForm ? " +form" : ""}${showDateTimePicker ? " +datepicker" : ""}${suiteVideo ? ` +video:${suiteVideo.id}` : ""}.`
   );
@@ -466,6 +476,7 @@ async function runChat(input) {
     showDateTimePicker,
     formPrefill: showReservationForm ? formPrefill || {} : null,
     suiteVideo,
+    planImage,
   };
 }
 
@@ -553,6 +564,7 @@ function formatHistoryForUi(rows) {
         role: "assistant",
         content: content || reply,
         options: Array.isArray(built.options) ? built.options : [],
+        planImage: planImageForReply(content || reply),
       };
     });
 }
@@ -659,6 +671,7 @@ app.post("/chat", chatIpHourlyLimiter, chatConversationLimiter, async (req, res)
         ? result.formPrefill || {}
         : null,
       suiteVideo: result.suiteVideo || null,
+      planImage: result.planImage || null,
     });
   } catch (err) {
     console.error("Error en /chat:", err);
@@ -704,9 +717,12 @@ app.post("/reservations/pending", async (req, res) => {
       precio: body.precio,
       abono: body.abono || "",
     };
+    const pageUrl = typeof body.pageUrl === "string" ? body.pageUrl : "";
+    const pendingLanding = resolveChatLanding(body.landing, pageUrl);
 
     const created = await createPendingReservation(payload, {
       conversationId,
+      landingId: pendingLanding ? pendingLanding.id : "",
     });
     if (!created.ok) {
       return res.status(400).json({
@@ -720,8 +736,6 @@ app.post("/reservations/pending", async (req, res) => {
     if (histStore) {
       await histStore.linkReservation(conversationId, created.id);
       try {
-        const pageUrl =
-          typeof body.pageUrl === "string" ? body.pageUrl : "";
         const roomName =
           typeof body.roomName === "string" ? body.roomName : "";
         await histStore.appendTurn(
@@ -815,6 +829,7 @@ app.post(
         showDateTimePicker,
         formPrefill,
         suiteVideo,
+        planImage,
       } = await runChat({
         message: transcript,
         roomName,
@@ -877,6 +892,7 @@ app.post(
         showDateTimePicker: Boolean(showDateTimePicker),
         formPrefill: showReservationForm ? formPrefill || {} : null,
         suiteVideo: suiteVideo || null,
+        planImage: planImage || null,
         ...(audioBase64
           ? { audioBase64, audioMimeType }
           : {}),

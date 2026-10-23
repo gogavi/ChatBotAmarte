@@ -2,14 +2,37 @@ const { PLAN_SUITE_RULES, PLAN_CHOICE_GROUP } = require("./planSuites");
 
 /**
  * Catálogo único de las landings de Amarte.
- * `id` es el valor de `funnel_events.proyecto`.
- * Las URL se comprobaron con HTTP 200 el 21-oct-2026.
+ * `id` es el id del catálogo. En temáticas el embudo manda `suite-tematicas`;
+ * ese valor es un alias de id y resuelve la misma landing.
+ * Las URL de vercel.app se comprobaron con HTTP 200 el 21-oct-2026.
+ * Cada landing de producción vive en aliasUrls (mismo HTML que su url).
  * deluxe.amartesuite.com sirve el mismo HTML que suite-sauna-jacuzzi.
+ * tematica.amartesuite.com es el host real; tematicas.amartesuite.com no resuelve.
  */
 
 /**
  * @typedef {"product"|"form"} LandingKind
- * @typedef {"promo-jacuzzi"|null} LandingOffer
+ * @typedef {"promo-jacuzzi"|"promo-amarte"|null} LandingOffer
+ * @typedef {"tematicas"|"deluxe"|null} LandingGrupo
+ * @typedef {{
+ *   hours: number;
+ *   depositSharePercent: number;
+ *   depositDiscountPercent: number;
+ *   fullDiscountPercent: number;
+ * }} PromoAmarteThreeHourDiscount
+ * @typedef {{
+ *   hourPrice: number;
+ *   threeHourDiscount: PromoAmarteThreeHourDiscount;
+ * }} PromoAmarteTerms
+ * @typedef {{
+ *   hours: number;
+ *   twoHours: number;
+ *   base: number;
+ *   depositPayNow: number;
+ *   depositPayAtHotel: number;
+ *   depositTotal: number;
+ *   fullTotal: number;
+ * }} PromoAmarteAmounts
  * @typedef {{
  *   label: string;
  *   roomTypeName: string;
@@ -18,11 +41,14 @@ const { PLAN_SUITE_RULES, PLAN_CHOICE_GROUP } = require("./planSuites");
  * }} LandingSuite
  * @typedef {{
  *   id: string;
+ *   idAliases?: readonly string[];
  *   nombre: string;
  *   url: string;
  *   aliasUrls: readonly string[];
  *   kind: LandingKind;
+ *   grupo?: LandingGrupo;
  *   offer: LandingOffer;
+ *   promoAmarte?: PromoAmarteTerms;
  *   distinctPhrases: readonly string[];
  *   suites: readonly LandingSuite[];
  * }} Landing
@@ -34,7 +60,7 @@ const LANDINGS = Object.freeze([
     id: "suite-jacuzzi",
     nombre: "Suite Jacuzzi",
     url: "https://microservicio-suite-jacuzzi.vercel.app",
-    aliasUrls: Object.freeze([]),
+    aliasUrls: Object.freeze(["https://suitejacuzzi.amartesuite.com"]),
     kind: "product",
     offer: null,
     distinctPhrases: Object.freeze([]),
@@ -51,7 +77,7 @@ const LANDINGS = Object.freeze([
     id: "promo-suite-jacuzzi",
     nombre: "Promo Suite Jacuzzi",
     url: "https://microservicio-promo-suite-jacuzzi.vercel.app",
-    aliasUrls: Object.freeze([]),
+    aliasUrls: Object.freeze(["https://promojacuzzi.amartesuite.com"]),
     kind: "product",
     offer: "promo-jacuzzi",
     distinctPhrases: Object.freeze(["promo jacuzzi", "promo suite jacuzzi"]),
@@ -68,9 +94,20 @@ const LANDINGS = Object.freeze([
     id: "promo-suite-amarte",
     nombre: "Promo Suite Amarte",
     url: "https://microservicio-promo-suite-amarte.vercel.app",
-    aliasUrls: Object.freeze([]),
+    aliasUrls: Object.freeze(["https://promoamarte.amartesuite.com"]),
     kind: "product",
-    offer: null,
+    // Hora suelta a 30000. Las 3 h de la landing son hours * PRICE_PER_HOUR.
+    // Abono 50%: total base * 0.9. Pago total: base * 0.8.
+    offer: "promo-amarte",
+    promoAmarte: Object.freeze({
+      hourPrice: 30000,
+      threeHourDiscount: Object.freeze({
+        hours: 3,
+        depositSharePercent: 50,
+        depositDiscountPercent: 10,
+        fullDiscountPercent: 20,
+      }),
+    }),
     distinctPhrases: Object.freeze([]),
     suites: Object.freeze([
       Object.freeze({
@@ -83,10 +120,13 @@ const LANDINGS = Object.freeze([
   }),
   Object.freeze({
     id: "tematicas",
+    // proyecto del embudo de la página. El id canónico sigue siendo tematicas.
+    idAliases: Object.freeze(["suite-tematicas"]),
     nombre: "Suites temáticas",
     url: "https://microservicio-suite-tematicas.vercel.app",
-    aliasUrls: Object.freeze([]),
+    aliasUrls: Object.freeze(["https://tematica.amartesuite.com"]),
     kind: "product",
+    grupo: "tematicas",
     offer: null,
     distinctPhrases: Object.freeze([]),
     suites: Object.freeze([
@@ -122,6 +162,7 @@ const LANDINGS = Object.freeze([
     url: "https://microservicio-suite-sauna-jacuzzi.vercel.app",
     aliasUrls: Object.freeze(["https://deluxe.amartesuite.com"]),
     kind: "product",
+    grupo: "deluxe",
     offer: null,
     distinctPhrases: Object.freeze(["sauna", "suite sauna", "sauna jacuzzi"]),
     suites: Object.freeze([
@@ -149,7 +190,7 @@ const LANDINGS = Object.freeze([
     id: "suite-gamer",
     nombre: "Suite Gamer",
     url: "https://microservicio-suite-gamer.vercel.app",
-    aliasUrls: Object.freeze([]),
+    aliasUrls: Object.freeze(["https://suitegamer.amartesuite.com"]),
     kind: "product",
     offer: null,
     distinctPhrases: Object.freeze([]),
@@ -166,7 +207,7 @@ const LANDINGS = Object.freeze([
     id: "reservas",
     nombre: "Pre-reserva",
     url: "https://microservicio-reservas.vercel.app",
-    aliasUrls: Object.freeze([]),
+    aliasUrls: Object.freeze(["https://reservas.amartesuite.com"]),
     kind: "form",
     offer: null,
     distinctPhrases: Object.freeze([]),
@@ -178,11 +219,77 @@ const LANDINGS = Object.freeze([
  * @param {unknown} raw
  * @returns {Landing | null}
  */
+/**
+ * Montos de promo-amarte. Salen de la hora y de los porcentajes.
+ * La base de 3 h es hourPrice * hours, la misma cuenta que getBasePrice
+ * de la landing (3 * 30000 = 90000).
+ * @param {PromoAmarteTerms} terms
+ * @returns {PromoAmarteAmounts}
+ */
+function promoAmarteAmounts(terms) {
+  const discount = terms.threeHourDiscount;
+  const base = terms.hourPrice * discount.hours;
+  const depositTotal = Math.round(base * (1 - discount.depositDiscountPercent / 100));
+  const fullTotal = Math.round(base * (1 - discount.fullDiscountPercent / 100));
+  const depositPayNow = Math.round(base * (discount.depositSharePercent / 100));
+  return {
+    hours: discount.hours,
+    twoHours: terms.hourPrice * 2,
+    base,
+    depositPayNow,
+    depositPayAtHotel: depositTotal - depositPayNow,
+    depositTotal,
+    fullTotal,
+  };
+}
+
 function resolveLanding(raw) {
   if (typeof raw !== "string") return null;
   const id = raw.trim().toLowerCase();
   if (!id) return null;
-  return LANDINGS.find((landing) => landing.id === id) || null;
+  return (
+    LANDINGS.find((landing) => {
+      if (landing.id === id) return true;
+      const aliases = landing.idAliases || [];
+      return aliases.some((alias) => alias === id);
+    }) || null
+  );
+}
+
+/**
+ * Landing cuyo origen (url o alias) coincide con el de la página.
+ * www.amartesuite.com y amartesuite.com no son una landing.
+ * @param {unknown} pageUrl
+ * @returns {Landing | null}
+ */
+function resolveLandingByPageUrl(pageUrl) {
+  if (typeof pageUrl !== "string" || !pageUrl.trim()) return null;
+  let origin;
+  try {
+    const url = new URL(pageUrl.trim());
+    if (url.protocol !== "https:" && url.protocol !== "http:") return null;
+    origin = url.origin;
+  } catch {
+    return null;
+  }
+  for (const landing of LANDINGS) {
+    for (const item of [landing.url, ...landing.aliasUrls]) {
+      if (new URL(item).origin === origin) return landing;
+    }
+  }
+  return null;
+}
+
+/**
+ * El id explícito gana. Si no es un id del catálogo, la página elige por origen.
+ * @param {unknown} rawLanding
+ * @param {unknown} pageUrl
+ * @returns {Landing | null}
+ */
+function resolveChatLanding(rawLanding, pageUrl) {
+  const explicit = resolveLanding(rawLanding);
+  if (explicit) return explicit;
+  return resolveLandingByPageUrl(pageUrl);
 }
 
 /**
@@ -205,7 +312,7 @@ function resolveLandingByAlias(raw) {
 
 /**
  * Orígenes de navegador derivados del catálogo, en el mismo orden.
- * deluxe queda junto a suite-sauna-jacuzzi.
+ * Cada alias de producción queda junto a su url de vercel.app.
  * @returns {string[]}
  */
 function landingBrowserOrigins() {
@@ -266,7 +373,9 @@ function landingMatchPhrases(landing) {
 }
 
 /**
- * Landings de producto, sin promo, que incluyen alguno de estos room types.
+ * Landings de producto que incluyen alguno de estos room types.
+ * promo-jacuzzi no entra: esa suite ya tiene su página sin promo.
+ * promo-amarte sí entra: es la única página de Suite Amarte.
  * @param {readonly string[]} roomTypeNames
  * @returns {Landing[]}
  */
@@ -275,7 +384,7 @@ function landingsForRoomTypes(roomTypeNames) {
   return LANDINGS.filter(
     (landing) =>
       landing.kind === "product" &&
-      landing.offer === null &&
+      landing.offer !== "promo-jacuzzi" &&
       landing.suites.some((suite) => wanted.has(suite.roomTypeName))
   );
 }
@@ -368,9 +477,12 @@ function landingsAskedInMessage(userMessage, active) {
 module.exports = {
   LANDINGS,
   resolveLanding,
+  resolveLandingByPageUrl,
+  resolveChatLanding,
   resolveLandingByAlias,
   landingBrowserOrigins,
   normalizeLandingText,
   landingsAskedInMessage,
   landingsForRoomTypes,
+  promoAmarteAmounts,
 };

@@ -225,6 +225,14 @@ function findCatalogEntry(suiteQuery) {
             entry: pricing.suites.suite_jacuzzi,
           };
         }
+        if (cat.id === "gamer") {
+          return {
+            key: "suite_gamer",
+            name: s.label,
+            kind: "suite",
+            entry: { name: s.label },
+          };
+        }
         if (cat.id === "deluxe" || cat.id === "tematicas") {
           return {
             key: "suites_deluxe_tematicas",
@@ -271,8 +279,9 @@ function availableDurationsFromBands(weekday, weekend, kind) {
           ["h12", "12 horas"],
           ["diaHotelero", "día hotelero"],
         ]
-      : [
+        : [
           ["h4", "4 horas"],
+          ["h6", "6 horas"],
           ["h8", "8 horas"],
           ["h12", "12 horas"],
           ["diaHotelero", "día hotelero"],
@@ -346,7 +355,7 @@ async function lookupCatalogPrice(input = {}) {
         decorationIncluded: resolvedKind === "plan",
           suiteAdvice,
         message:
-          "Indica la duración (4, 8, 12 horas o día hotelero; planes: 6, 12 o día hotelero).",
+          "Indica la duración (4, 6, 8, 12 horas o día hotelero; planes: 6, 12 o día hotelero).",
       };
     }
 

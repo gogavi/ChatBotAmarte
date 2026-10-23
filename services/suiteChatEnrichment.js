@@ -2,6 +2,7 @@ const {
   getSuiteVideoByLabel,
   getSuiteVideoByProductUrl,
 } = require("../config/amarteCatalog");
+const { promoAmarteAmounts } = require("../config/landings");
 const { formatQuoteWithPaymentOptions, isPromoJacuzziQuoteText } = require("../reservationService");
 
 const PRODUCT_MD_LINK_RE =
@@ -93,12 +94,38 @@ function stripPaymentPromoBlocks(text) {
 }
 
 /**
+ * Montos que promo-amarte calcula de la hora. El abono/25% de lista no se les pega.
+ * @param {import("../config/landings").Landing | null | undefined} landing
+ * @param {number} total
+ * @returns {boolean}
+ */
+function isPromoAmarteComputedAmount(landing, total) {
+  if (!landing || landing.offer !== "promo-amarte" || !landing.promoAmarte) {
+    return false;
+  }
+  const amounts = promoAmarteAmounts(landing.promoAmarte);
+  const figures = [
+    landing.promoAmarte.hourPrice,
+    amounts.twoHours,
+    amounts.base,
+    amounts.depositPayNow,
+    amounts.depositPayAtHotel,
+    amounts.depositTotal,
+    amounts.fullTotal,
+  ];
+  return figures.includes(total);
+}
+
+/**
  * Si hay cotización exacta, asegura el bloque canónico de abono/25% (con títulos ##).
- * Reemplaza versiones planas de la IA. No aplica a Promo Jacuzzi ni listas de packs.
+ * Reemplaza versiones planas de la IA. No aplica a Promo Jacuzzi, a las cifras
+ * de promo-amarte (1 h, 2 h y 3 h) ni a listas de packs.
  * @param {string} reply
+ * @param {Set<number> | undefined} allowAmounts
+ * @param {import("../config/landings").Landing | null} [landing]
  * @returns {string}
  */
-function ensurePromoBlockOnExactQuote(reply, allowAmounts) {
+function ensurePromoBlockOnExactQuote(reply, allowAmounts, landing) {
   let text = String(reply || "");
   if (!text.trim()) return text;
 
@@ -132,6 +159,9 @@ function ensurePromoBlockOnExactQuote(reply, allowAmounts) {
     : NaN;
   if (!Number.isFinite(total) || total < 50000) return text;
   if (allowAmounts instanceof Set && !allowAmounts.has(total)) return text;
+  // 3 h × hora, abono y pago total de promo-amarte ya traen su propio descuento.
+  // Una línea de 4 h o más sigue siendo tarifa de lista.
+  if (!packLine && isPromoAmarteComputedAmount(landing, total)) return text;
 
   const promo = formatQuoteWithPaymentOptions(total);
   if (!promo) return text;
@@ -143,11 +173,15 @@ function ensurePromoBlockOnExactQuote(reply, allowAmounts) {
  * @param {unknown} suiteShowcase
  * @returns {{ reply: string; suiteVideo: { id: string; title: string; videoUrl: string } | null }}
  */
-function enrichChatReply(reply, suiteShowcase, allowAmounts) {
+function enrichChatReply(reply, suiteShowcase, allowAmounts, landing) {
   const sanitized = sanitizeProductLinksInReply(reply);
   let suiteVideo =
     resolveSuiteVideoFromShowcase(suiteShowcase) || sanitized.suiteVideo;
-  const withPromo = ensurePromoBlockOnExactQuote(sanitized.text, allowAmounts);
+  const withPromo = ensurePromoBlockOnExactQuote(
+    sanitized.text,
+    allowAmounts,
+    landing
+  );
   return { reply: withPromo, suiteVideo };
 }
 

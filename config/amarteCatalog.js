@@ -34,12 +34,6 @@ const suiteCategories = [
     description: "Suites premium con máximo confort.",
     suites: [
       {
-        id: "suite_diamante",
-        label: "Suite Diamante",
-        url: "https://amartesuite.com/producto/suite-deluxe-diamante/",
-        videoFile: "SUITE DELUXE DIAMANTE.mp4",
-      },
-      {
         id: "suite_gold",
         label: "Suite Gold",
         url: "https://amartesuite.com/producto/suite-deluxe-gold/",
@@ -72,16 +66,39 @@ const suiteCategories = [
         videoFile: "SUITE DELUXE ARABE.mp4",
       },
       {
+        id: "suite_queen",
+        label: "Suite Queen",
+        url: "https://amartesuite.com/producto/suite-deluxe-queen/",
+        videoFile: "SUITE DELUXE QUEEN.mp4",
+      },
+      {
         id: "suite_gotica",
         label: "Suite Gótica",
         url: "https://amartesuite.com/producto/suite-deluxe-gotica/",
         videoFile: "SUITE GOTICA.mp4",
       },
       {
-        id: "suite_queen",
-        label: "Suite Queen",
-        url: "https://amartesuite.com/producto/suite-deluxe-queen/",
-        videoFile: "SUITE DELUXE QUEEN.mp4",
+        id: "suite_diamante",
+        label: "Suite Diamante",
+        url: "https://amartesuite.com/producto/suite-deluxe-diamante/",
+        videoFile: "SUITE DELUXE DIAMANTE.mp4",
+      },
+    ],
+  },
+  {
+    id: "gamer",
+    emoji: "🎮",
+    title: "Gamer – Jacuzzi, arcade y consolas, sin cama",
+    description:
+      "No tiene cama, a propósito. Jacuzzi, sofá, columpio, cruz X, arcade, PlayStation y Xbox. Parqueadero sujeto a disponibilidad.",
+    suites: [
+      {
+        id: "suite_gamer",
+        label: "Suite Gamer",
+        // La página pública es el origen. Esta ruta no es `/`, para que la ficha
+        // no marque Suite Gamer en cada home.
+        url: "https://suitegamer.amartesuite.com/suite-gamer",
+        videoFile: "",
       },
     ],
   },
@@ -153,6 +170,7 @@ function getSuiteVideoByProductUrl(productUrl) {
     pathname = raw.replace(/\/+$/, "").toLowerCase();
   }
   for (const suite of flattenSuites()) {
+    if (!suite.videoFile) continue;
     let suitePath = "";
     try {
       suitePath = new URL(suite.url).pathname.replace(/\/+$/, "").toLowerCase();
@@ -189,6 +207,7 @@ function getSuiteVideoByLabel(nameOrId) {
       .toLowerCase()
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "");
+    if (!suite.videoFile) continue;
     if (
       needle === id ||
       needle === label ||
@@ -211,7 +230,7 @@ function getSuiteVideoByLabel(nameOrId) {
  * @returns {Array<{ id: string; title: string; productUrl: string; videoUrl: string }>}
  */
 function getSuiteVideosForWidget() {
-  return flattenSuites().map((suite) => ({
+  return flattenSuites().filter((suite) => suite.videoFile).map((suite) => ({
     id: suite.id,
     title: suite.label,
     productUrl: suite.url,
@@ -241,62 +260,23 @@ const pricing = {
   plans: {
     plan_amarte: {
       name: "Plan Amarte",
-      includes: [
-        { emoji: "🌹", label: "Pétalos de rosas" },
-        { emoji: "🎈", label: "Globos" },
-        { emoji: "🍾", label: "Champaña" },
-        { emoji: "🍫", label: "Chocolates (2)" },
-        { emoji: "🍿", label: "Crispetas (80gr)" },
-      ],
     },
     plan_cabana_movimiento: {
       name: "Plan Cabaña o Plan Cama Movimiento",
-      includes: [
-        { emoji: "🌹", label: "Pétalos de rosas" },
-        { emoji: "🎈", label: "Globos" },
-        { emoji: "🍾", label: "Champaña" },
-        { emoji: "🍫", label: "Chocolates (2)" },
-        { emoji: "🍿", label: "Crispetas (80gr)" },
-      ],
     },
     plan_humedo: {
       name: "Plan Húmedo",
-      includes: [
-        { emoji: "🌹", label: "Pétalos de rosas" },
-        { emoji: "🎈", label: "Globos" },
-        { emoji: "🍾", label: "Champaña" },
-        { emoji: "🍫", label: "Chocolates (2)" },
-        { emoji: "🍿", label: "Crispetas (80gr)" },
-      ],
     },
     plan_romantico_cumple_erotico: {
       name: "Plan Romántico / Cumpleaños / Erótico",
-      includes: [
-        { emoji: "🌹", label: "Pétalos de rosas" },
-        { emoji: "🎈", label: "Globos" },
-        { emoji: "🎀", label: "Cintas" },
-        { emoji: "🕯️", label: "Velas" },
-        { emoji: "🍾", label: "Champaña" },
-        { emoji: "🍫", label: "Chocolates (2)" },
-        { emoji: "🍿", label: "Crispetas" },
-        { emoji: "🛁", label: "Jacuzzi ilimitado" },
-        { emoji: "♨️", label: "Sauna ilimitado (Plan Romántico)" },
-      ],
-      /** Extras solo cuando el usuario elige la variante Erótico */
-      includesErotico: [
-        { emoji: "🧴", label: "Body en malla" },
-        { emoji: "🎭", label: "Antifaz" },
-        { emoji: "⛓️", label: "Esposas" },
-        { emoji: "🪢", label: "Látigo" },
-        { emoji: "🛁", label: "Jacuzzi ilimitado" },
-      ],
     },
   },
 };
 
 /**
- * Promo Jacuzzi. `price` solo clasifica la prerreserva para no apilar el 25%.
- * El chat no lo cita: el monto sale de `room_rates` o no se dice.
+ * Promo Jacuzzi. `price` es la tarifa de esas horas en la landing promo-suite-jacuzzi.
+ * En las demás landings no se cita: ahí manda room_rates.
+ * También clasifica la prerreserva para no apilar el 25%.
  */
 const promoJacuzzi = Object.freeze({
   name: "Promo Jacuzzi",

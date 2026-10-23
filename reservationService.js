@@ -1,5 +1,9 @@
 const { getSupabase, isSupabaseConfigured } = require("./supabaseClient");
 const { payment, formatCop, promoJacuzzi } = require("./config/amarteCatalog");
+const { resolveLanding } = require("./config/landings");
+
+/** Canal de las prerreservas que crea el widget. No es un medio de pago. */
+const WIDGET_CANAL = "widget-martina";
 
 /** Packs válidos en el SaaS (`rate_types`). */
 const VALID_PACKS = Object.freeze([
@@ -334,9 +338,63 @@ function validatePendingPayload(payload) {
 }
 
 /**
+ * Canal del insert. La landing de origen entra solo si es un id del catálogo.
+ * @param {unknown} landingId
+ * @returns {string}
+ */
+function widgetReservationCanal(landingId) {
+  const landing = resolveLanding(typeof landingId === "string" ? landingId : "");
+  if (!landing) return WIDGET_CANAL;
+  return `${WIDGET_CANAL}/${landing.id}`;
+}
+
+/**
+ * Fila que va a `reservations`. No copia canal, forma_pago ni beneficio_ruleta
+ * del cliente. forma_pago sigue en "Wompi" porque este formulario no pregunta
+ * el medio. beneficio_ruleta no se escribe: no hay premio y la columna puede
+ * no existir.
+ * @param {Record<string, string>} data
+ * @param {{ conversationId?: string | null; landingId?: string | null }} [opts]
+ * @returns {Record<string, unknown>}
+ */
+function buildPendingReservationInsert(data, opts = {}) {
+  const conversationId =
+    typeof opts.conversationId === "string" ? opts.conversationId : "";
+  const trace = conversationId
+    ? `conversation_id=${conversationId}`
+    : "sin conversation_id";
+  const landingId = typeof opts.landingId === "string" ? opts.landingId : "";
+
+  return {
+    documento: data.documento,
+    nombre: data.nombre,
+    correo: data.correo,
+    whatsapp: data.whatsapp,
+    tipo: data.tipo,
+    suite: "—",
+    fecha_reserva: data.fecha_reserva,
+    hora_reserva: data.hora_reserva,
+    pack_tiempo: data.pack_tiempo,
+    decoracion: "",
+    tipo_plan: "Sin Decoración",
+    mensaje: `Prerreserva creada por Martina (chat). ${trace}`,
+    precio: data.precio,
+    abono: data.abono,
+    asesora: "Martina",
+    canal: widgetReservationCanal(landingId),
+    modificado_por: "Chatbot",
+    hotel_observations: `Pendiente de pago / asignación. ${trace}`,
+    forma_pago: "Wompi",
+    is_taken: false,
+    estado_pago: "no_aplica",
+    guest_client_type: "referido",
+  };
+}
+
+/**
  * Crea una prerreserva pendiente de pago en el SaaS.
  * @param {unknown} payload
- * @param {{ conversationId?: string | null }} [opts]
+ * @param {{ conversationId?: string | null; landingId?: string | null }} [opts]
  * @returns {Promise<{ ok: true; id: string; row: Record<string, unknown> } | { ok: false; error: string }>}
  */
 async function createPendingReservation(payload, opts = {}) {
@@ -353,36 +411,7 @@ async function createPendingReservation(payload, opts = {}) {
     return validated;
   }
 
-  const conversationId =
-    typeof opts.conversationId === "string" ? opts.conversationId : "";
-  const trace = conversationId
-    ? `conversation_id=${conversationId}`
-    : "sin conversation_id";
-
-  const row = {
-    documento: validated.data.documento,
-    nombre: validated.data.nombre,
-    correo: validated.data.correo,
-    whatsapp: validated.data.whatsapp,
-    tipo: validated.data.tipo,
-    suite: "—",
-    fecha_reserva: validated.data.fecha_reserva,
-    hora_reserva: validated.data.hora_reserva,
-    pack_tiempo: validated.data.pack_tiempo,
-    decoracion: "",
-    tipo_plan: "Sin Decoración",
-    mensaje: `Prerreserva creada por Martina (chat). ${trace}`,
-    precio: validated.data.precio,
-    abono: validated.data.abono,
-    asesora: "Martina",
-    canal: "Chatbot",
-    modificado_por: "Chatbot",
-    hotel_observations: `Pendiente de pago / asignación. ${trace}`,
-    forma_pago: "Wompi",
-    is_taken: false,
-    estado_pago: "no_aplica",
-    guest_client_type: "referido",
-  };
+  const row = buildPendingReservationInsert(validated.data, opts);
 
   const { data, error } = await sb
     .from("reservations")
@@ -565,6 +594,8 @@ module.exports = {
   resolveHora,
   resolvePrecio,
   validatePendingPayload,
+  widgetReservationCanal,
+  buildPendingReservationInsert,
   createPendingReservation,
   buildPrereservaConfirmMessage,
   formatQuoteWithPaymentOptions,

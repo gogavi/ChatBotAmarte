@@ -4,11 +4,12 @@
  * Sin `landing`, las tres funciones de servidor no cambian el turno.
  */
 
-const { formatCop } = require("../config/amarteCatalog");
+const { formatCop, promoJacuzzi } = require("../config/amarteCatalog");
 const {
   LANDINGS,
   resolveLanding,
   landingsAskedInMessage,
+  promoAmarteAmounts,
 } = require("../config/landings");
 const { VALID_TIPOS } = require("../reservationService");
 const {
@@ -32,7 +33,7 @@ const DURATION_ROWS = Object.freeze([
  * @returns {void}
  */
 function assertKnownOffer(offer) {
-  if (offer === null || offer === "promo-jacuzzi") return;
+  if (offer === null || offer === "promo-jacuzzi" || offer === "promo-amarte") return;
   const unknown = offer;
   throw new Error(`oferta de landing no reconocida: ${unknown}`);
 }
@@ -81,14 +82,16 @@ function formatExtrasBlock(rows) {
       "## Extras (room_extras)",
       "No hay extras con tarifa para esta consulta.",
       "No inventes persona adicional, decoración ni hora suelta.",
-      "Los planes ya incluyen la decoración. No sumes ese extra ni inventes su monto.",
-      "Formulario o WhatsApp.",
+    "Los planes ya incluyen la decoración. No sumes ese extra encima de un plan ni inventes su monto.",
+    "Si no quiere plan y no hay fila de decoración, no inventes el monto.",
+    "Formulario o WhatsApp.",
     ].join("\n");
   }
   const lines = [
     "## Extras (room_extras)",
     "Cotiza solo estas filas. Si el extra no está, no inventes el monto.",
-    "Los planes ya incluyen la decoración. No sumes ese extra ni inventes su monto.",
+    "Los planes ya incluyen la decoración. No sumes ese extra encima de un plan.",
+    "Si no quiere plan, cotiza la fila de decoración que aplique a su suite. Si no está, no inventes el monto.",
   ];
   for (const row of rows) {
     const scope = row.appliesTo === "*" ? "cualquier suite" : row.appliesTo;
@@ -126,14 +129,41 @@ function decorationAmountsFrom(rows) {
 
 /**
  * @param {string} [userMessage]
- * @returns {boolean}
+ * @returns {string}
  */
-function asksPlan(userMessage) {
-  const norm = String(userMessage || "")
+function normalizeMessage(userMessage) {
+  return String(userMessage || "")
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
+}
+
+/**
+ * @param {string} [userMessage]
+ * @returns {boolean}
+ */
+function asksPlan(userMessage) {
+  const norm = normalizeMessage(userMessage);
   return /(?:^|[^a-z0-9])plan(?:es)?(?:[^a-z0-9]|$)/.test(norm);
+}
+
+/**
+ * Rechazó el plan y pide la decoración suelta. En ese caso el monto de
+ * room_extras sí se puede decir.
+ * @param {string} [userMessage]
+ * @returns {boolean}
+ */
+function wantsLooseDecoration(userMessage) {
+  const norm = normalizeMessage(userMessage);
+  if (!/decor/.test(norm)) return false;
+  const refusesPlan =
+    /\bno\b(?:\s+(?!plan(?:es)?\b)\w+){0,4}\s+\bplan(?:es)?\b/.test(norm) ||
+    /\bsin\b(?:\s+(?:el|un|ese|ningun))?\s+\bplan(?:es)?\b/.test(norm) ||
+    (/\b(aparte|suelta)\b/.test(norm) && /\bplan(?:es)?\b/.test(norm));
+  if (!refusesPlan) return false;
+  const switchesPlan = /\bquiero\s+el\s+plan\b/.test(norm);
+  if (switchesPlan && !/\b(aparte|suelta)\b/.test(norm)) return false;
+  return true;
 }
 
 function amountsFromExtras(rows) {
@@ -155,14 +185,41 @@ const MONEY_RE =
  * @param {Set<number>} [allow]
  * @returns {string}
  */
+function amountInToken(token) {
+  const digits = String(token).replace(/mil/i, "000").replace(/\D/g, "");
+  return Number(digits);
+}
+
 function stripUntrustedCopAmounts(text, allow) {
   const allowed = allow instanceof Set ? allow : canonicalAmounts();
+  MONEY_RE.lastIndex = 0;
   return String(text || "").replace(MONEY_RE, (token) => {
-    const digits = token.replace(/mil/i, "000").replace(/\D/g, "");
-    const amount = Number(digits);
+    const amount = amountInToken(token);
     if (allowed.has(amount)) return token;
     return "tarifa no disponible";
   });
+}
+
+/**
+ * En una pregunta de plan, un monto de decoración se cae aunque ese mismo
+ * número también sea una celda de room_rates. La celda de la suite, en otra
+ * línea, se queda.
+ * @param {string} text
+ * @param {Set<number>} decorationAmounts
+ * @returns {string}
+ */
+function stripPlanDecorationSentences(text, decorationAmounts) {
+  return String(text || "")
+    .split("\n")
+    .map((line) => {
+      if (!/decor/i.test(line)) return line;
+      MONEY_RE.lastIndex = 0;
+      return line.replace(MONEY_RE, (token) => {
+        if (decorationAmounts.has(amountInToken(token))) return "tarifa no disponible";
+        return token;
+      });
+    })
+    .join("\n");
 }
 
 /**
@@ -182,7 +239,90 @@ function unavailablePriceSentence(landing) {
  * @param {{ weekday?: Record<string, number>; weekend?: Record<string, number>; name: string }} entry
  * @returns {string}
  */
-function formatRateEntry(entry) {
+/**
+ * @param {import("../config/landings").Landing} landing
+ * @returns {number | null}
+ */
+function offerAmount(landing) {
+  switch (landing.offer) {
+    case null:
+      return null;
+    case "promo-jacuzzi":
+      return promoJacuzzi.price;
+    case "promo-amarte":
+      return landing.promoAmarte.hourPrice;
+    default: {
+      const unknown = landing.offer;
+      throw new Error(`oferta de landing no reconocida: ${unknown}`);
+    }
+  }
+}
+
+/**
+ * Packs de room_rates que esta oferta reemplaza. El resto de la matriz sigue.
+ * @param {import("../config/landings").Landing} landing
+ * @returns {Set<string>}
+ */
+function durationsReplacedByOffer(landing) {
+  switch (landing.offer) {
+    case null:
+      return new Set();
+    case "promo-jacuzzi": {
+      const key =
+        promoJacuzzi.hours === 24 ? "diaHotelero" : `h${promoJacuzzi.hours}`;
+      return new Set([key]);
+    }
+    case "promo-amarte":
+      return new Set();
+    default: {
+      const unknown = landing.offer;
+      throw new Error(`oferta de landing no reconocida: ${unknown}`);
+    }
+  }
+}
+
+/**
+ * @param {import("../config/landings").Landing} landing
+ * @returns {string[]}
+ */
+function promoQuoteLines(landing) {
+  switch (landing.offer) {
+    case null:
+      return [];
+    case "promo-jacuzzi":
+      return [
+        `Oferta de esta landing (${landing.offer}): **${promoJacuzzi.name}**, ${promoJacuzzi.hours} h: ${formatCop(promoJacuzzi.price)}. Incluye: ${promoJacuzzi.includes}.`,
+        `Cotiza esas ${promoJacuzzi.hours} h con este monto. No uses la tarifa de lista de ${promoJacuzzi.hours} h.`,
+        "Si piden más tiempo, usa las tarifas de lista de abajo.",
+      ];
+    case "promo-amarte": {
+      const terms = landing.promoAmarte;
+      const amounts = promoAmarteAmounts(terms);
+      const discount = terms.threeHourDiscount;
+      return [
+        `Oferta de esta landing (promo-amarte): la hora suelta se paga a ${formatCop(terms.hourPrice)}.`,
+        `1 hora y 2 horas se pagan completas, sin el descuento de 3 horas. 2 horas: ${formatCop(amounts.twoHours)}.`,
+        `Si reservan ${amounts.hours} horas, la base es ${amounts.hours} × ${formatCop(terms.hourPrice)} = ${formatCop(amounts.base)}.`,
+        `Si abonan el ${discount.depositSharePercent}% (${formatCop(amounts.depositPayNow)} ahora), el descuento es del ${discount.depositDiscountPercent}% y el total queda en ${formatCop(amounts.depositTotal)}. El resto (${formatCop(amounts.depositPayAtHotel)}) se paga en el hotel.`,
+        `Si pagan el total, el descuento es del ${discount.fullDiscountPercent}% y pagan ${formatCop(amounts.fullTotal)}.`,
+        "Esos montos salen solo de la hora y de esos porcentajes. No uses otra base de 3 horas ni otro descuento.",
+        "Los packs de 4 h en adelante salen de room_rates. Si no hay fila, no inventes el monto.",
+      ];
+    }
+    default: {
+      const unknown = landing.offer;
+      throw new Error(`oferta de landing no reconocida: ${unknown}`);
+    }
+  }
+}
+
+/**
+ * @param {{ weekday?: Record<string, number>; weekend?: Record<string, number>; name: string }} entry
+ * @param {Set<string>} [skipDurations]
+ * @returns {string}
+ */
+function formatRateEntry(entry, skipDurations) {
+  const skip = skipDurations instanceof Set ? skipDurations : new Set();
   const lines = [`**${entry.name}**`];
   const bands = [
     ["weekday", "Domingo–jueves"],
@@ -191,6 +331,7 @@ function formatRateEntry(entry) {
   for (const [key, title] of bands) {
     const table = entry[key] || {};
     const rows = DURATION_ROWS.filter(([duration]) => {
+      if (skip.has(duration)) return false;
       const price = table[duration];
       return Number.isFinite(price) && price > 0;
     });
@@ -200,6 +341,7 @@ function formatRateEntry(entry) {
       lines.push(`- ${label}: ${formatCop(table[duration])}`);
     }
   }
+  if (lines.length === 1) return "";
   return lines.join("\n");
 }
 
@@ -210,7 +352,15 @@ function formatRateEntry(entry) {
  */
 function formatLandingPriceBlock(landing, rates) {
   assertKnownKind(landing.kind);
-  if (!(rates instanceof Map)) return unavailablePriceSentence(landing);
+  const quote = promoQuoteLines(landing);
+  const skip = durationsReplacedByOffer(landing);
+  if (!(rates instanceof Map)) {
+    if (!quote.length) return unavailablePriceSentence(landing);
+    return [
+      ...quote,
+      "Las otras tarifas de lista no están disponibles en este momento. No inventes montos de otros packs.",
+    ].join("\n");
+  }
 
   if (landing.kind === "form") {
     const lines = [
@@ -219,12 +369,18 @@ function formatLandingPriceBlock(landing, rates) {
     for (const name of VALID_TIPOS) {
       const entry = rates.get(name);
       if (!entry) continue;
-      lines.push(formatRateEntry(entry));
+      const text = formatRateEntry(entry);
+      if (text) lines.push(text);
     }
     return lines.join("\n");
   }
 
-  const lines = ["Tarifas de lista de esta landing (room_rates):"];
+  const listTitle = skip.size
+    ? "Tarifas de lista para más tiempo (sin el pack de la oferta):"
+    : "Tarifas de lista para 4 h en adelante:";
+  const lines = quote.length
+    ? [...quote, listTitle]
+    : ["Tarifas de lista de esta landing (room_rates):"];
   for (const suite of landing.suites) {
     const entry = rates.get(suite.roomTypeName);
     if (!entry) {
@@ -233,7 +389,8 @@ function formatLandingPriceBlock(landing, rates) {
       );
       continue;
     }
-    lines.push(formatRateEntry(entry));
+    const text = formatRateEntry(entry, skip);
+    if (text) lines.push(text);
   }
   return lines.join("\n");
 }
@@ -249,6 +406,10 @@ function buildLandingAddendum(landing, rates) {
     landing.kind === "form"
       ? "Esta página es el formulario general de pre-reserva, no una sola suite."
       : `Enfócate en ${landing.suites.map((suite) => suite.label).join(", ")}.`;
+  const wompiFoot =
+    landing.kind === "form"
+      ? "En esta landing el pie del chat no muestra el botón Wompi. Ese enlace fijo es un checkout genérico y no es el link de pago de cada reserva. Ese link lo crea la página y no está en este catálogo: no inventes una URL de pago. Invita a los botones del formulario."
+      : "";
   const others = LANDINGS.filter((item) => item.id !== landing.id)
     .map((item) => `- ${item.nombre} (${item.id})`)
     .join("\n");
@@ -258,11 +419,16 @@ function buildLandingAddendum(landing, rates) {
     `nombre: ${landing.nombre}`,
     focus,
     "No abras el formulario del chat: showReservationForm false, showDateTimePicker false, pendingReservation null. Invita al formulario de esta página o a WhatsApp del pie.",
+    wompiFoot,
     "Si preguntan por otra suite, nómbrala. El servidor añade el enlace oficial. No inventes URLs ni enlaces a amartesuite.com/producto.",
     "Otras landings:",
     others,
     formatLandingPriceBlock(landing, rates),
-  ].join("\n");
+  ]
+    .filter(function (line) {
+      return line !== "";
+    })
+    .join("\n");
 }
 
 /**
@@ -312,8 +478,24 @@ async function beginLandingTurn(raw) {
  */
 function collectLandingAmounts(landing, rates) {
   const allow = new Set();
+  const quoted = offerAmount(landing);
+  if (Number.isFinite(quoted) && quoted > 0) allow.add(quoted);
+  if (landing.offer === "promo-amarte") {
+    const amounts = promoAmarteAmounts(landing.promoAmarte);
+    for (const amount of [
+      amounts.twoHours,
+      amounts.base,
+      amounts.depositPayNow,
+      amounts.depositPayAtHotel,
+      amounts.depositTotal,
+      amounts.fullTotal,
+    ]) {
+      if (Number.isFinite(amount) && amount > 0) allow.add(amount);
+    }
+  }
   if (!(rates instanceof Map)) return allow;
   assertKnownKind(landing.kind);
+  const skip = durationsReplacedByOffer(landing);
   const names =
     landing.kind === "form"
       ? VALID_TIPOS
@@ -324,6 +506,7 @@ function collectLandingAmounts(landing, rates) {
     for (const band of ["weekday", "weekend"]) {
       const table = entry[band] || {};
       for (const [duration] of DURATION_ROWS) {
+        if (skip.has(duration)) continue;
         const price = table[duration];
         if (Number.isFinite(price) && price > 0) allow.add(price);
       }
@@ -389,6 +572,20 @@ function catalogUrlKeys() {
 }
 
 /**
+ * Hosts del catálogo (vercel.app y alias de producción).
+ * @returns {Set<string>}
+ */
+function catalogHosts() {
+  const hosts = new Set();
+  for (const landing of LANDINGS) {
+    for (const url of [landing.url, ...landing.aliasUrls]) {
+      hosts.add(parsePolicyUrl(url).host);
+    }
+  }
+  return hosts;
+}
+
+/**
  * @param {string} url
  * @param {Set<string>} allowedKeys
  * @returns {boolean}
@@ -417,7 +614,7 @@ function isForeignUrl(url, allowedKeys) {
   ) {
     return true;
   }
-  if (host === "deluxe.amartesuite.com") return true;
+  if (catalogHosts().has(host)) return true;
   return false;
 }
 
@@ -562,7 +759,11 @@ function replyAmountAllowlist(turn, userMessage) {
   if (turn.allowedAmounts instanceof Set) allow = new Set(turn.allowedAmounts);
   else if (!turn.pricesAvailable) allow = new Set();
   if (!(allow instanceof Set)) return null;
-  if (asksPlan(userMessage) && turn.decorationAmounts instanceof Set) {
+  if (
+    asksPlan(userMessage) &&
+    !wantsLooseDecoration(userMessage) &&
+    turn.decorationAmounts instanceof Set
+  ) {
     const rates = turn.rateAmounts instanceof Set ? turn.rateAmounts : new Set();
     for (const amount of turn.decorationAmounts) {
       if (!rates.has(amount)) allow.delete(amount);
@@ -574,6 +775,13 @@ function replyAmountAllowlist(turn, userMessage) {
 function finishLandingReply(turn, reply, userMessage) {
   if (!turn) return reply;
   let text = String(reply || "");
+  if (
+    asksPlan(userMessage) &&
+    !wantsLooseDecoration(userMessage) &&
+    turn.decorationAmounts instanceof Set
+  ) {
+    text = stripPlanDecorationSentences(text, turn.decorationAmounts);
+  }
   const allow = replyAmountAllowlist(turn, userMessage);
   if (allow) {
     text = stripPaymentPromoBlocks(stripUntrustedCopAmounts(text, allow));

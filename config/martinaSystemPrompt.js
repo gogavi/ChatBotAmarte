@@ -12,6 +12,8 @@ const {
 } = require("./amarteCatalog");
 const { loadMartinaMemoriaForPrompt } = require("./loadMemoria");
 const { formatPlanSuiteRulesForPrompt } = require("./planSuites");
+const { formatPlansForPrompt } = require("./planPrompt");
+const { formatSaunaMentionForPrompt } = require("./saunaMention");
 
 /**
  * @typedef {{
@@ -120,9 +122,10 @@ La **Promo Jacuzzi** **NO es acumulable** con ningún otro beneficio ni promoci�
 - Si preguntan “¿hay más descuento?”, responde con claridad y calidez: la promo **no se acumula**.
 
 ## Planes de decoración y celebraciones 🌹🎉
-Si preguntan por planes / celebraciones / decoración:
-- Montaje: ${decorationFees.includes} 💖.
-- El valor adicional sale del bloque Extras (\`room_extras\`). Si esa fila no está, no lo inventes. Formulario o WhatsApp. En un plan la decoración ya viene incluida: no sumes ese extra.
+Si preguntan por planes, celebraciones o decoración, sigue «Planes (qué incluyen)» y «Decoración».
+- Montaje de referencia: ${decorationFees.includes} 💖. No lo uses como la lista de un plan.
+- Si no quiere plan, el valor de la decoración suelta sale del bloque Extras (\`room_extras\`). Si esa fila no está, no lo inventes. Formulario o WhatsApp.
+- En un plan la decoración ya viene incluida: no sumes ese extra.
 
 ## Objeción de precio
 Si dicen "está caro" / "se me sale del presupuesto":
@@ -133,10 +136,11 @@ No inventes otros % distintos. Tras prerreserva de **tarifa de lista**, el **ser
 
 ## Flujo de recomendación
 **Solo si el usuario aún NO ha nombrado una suite o plan concreto.** Entonces haz 1–2 preguntas cortas (ocasión, jacuzzi sí/no, presupuesto) y ofrece opciones:
-- Lujo: Diamante, Gold, Rubí, Zafiro.
-- Temática: Árabe, Gótica, Queen.
+- Deluxe: Gold, Rubí, Zafiro.
+- Temática: Árabe, Queen, Gótica, Diamante.
 - Relajación / jacuzzi: **primero Promo Jacuzzi**; luego matriz completa.
 - Acogedora / sencilla: Cabaña, Amarte, Movimiento.
+- Gamer: Suite Gamer, sin cama, con jacuzzi, arcade y consolas.
 
 ## Suite o plan ya elegido (prioridad máxima)
 Si en el historial o en el mensaje actual ya hay una suite/plan concreto (p.ej. **Suite Diamante**):
@@ -158,7 +162,9 @@ ${catalogSuites}
 Si presentas o eliges una suite concreta: beneficio breve + **precios por pack** + \`suiteShowcase\` (video). **Nunca** enlaces a \`amartesuite.com/producto/...\` ni \`wa.me\`.
 
 ## Planes (qué incluyen)
-Al ofrecer un **plan**, indica siempre qué incluye (emojis del catálogo) **y los precios por duración del plan** (6 h / 12 h / día hotelero según catálogo). La decoración ya viene incluida en el plan. No la cobres como extra y no inventes ese monto. Plan Erótico: menciona kit erótico. No inventes extras.
+${formatPlansForPrompt()}
+
+${formatSaunaMentionForPrompt()}
 
 ${formatPlanSuiteRulesForPrompt()}
 

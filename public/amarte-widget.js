@@ -495,6 +495,8 @@
   var suiteVideoModalEl = null;
   var suiteVideoPlayerEl = null;
   var suiteVideoTitleEl = null;
+  var planImageModalEl = null;
+  var planImageFullEl = null;
 
   var LIVE_ACTION_URLS = {
     reservation: DEFAULT_QUICK_RESERVE,
@@ -1112,6 +1114,7 @@
     suiteVideoModalEl.setAttribute("role", "dialog");
     suiteVideoModalEl.setAttribute("aria-modal", "true");
     suiteVideoModalEl.setAttribute("aria-hidden", "true");
+    suiteVideoModalEl.setAttribute("data-amarte-widget-dialog", "true");
     suiteVideoModalEl.innerHTML =
       '<div class="amarte-suite-video-backdrop" data-amarte-video-close="1"></div>' +
       '<div class="amarte-suite-video-dialog">' +
@@ -1158,6 +1161,74 @@
         suiteVideoPlayerEl.load();
       } catch (e1) {}
     }
+  }
+
+  /**
+   * El servidor manda /plans/<slug>.webp. El widget lo cuelga del origen del script.
+   * @param {string} src
+   * @returns {string}
+   */
+  function resolvePlanImageSrc(src) {
+    if (!src) return "";
+    if (/^https?:\/\//i.test(src)) return src;
+    if (src.charAt(0) === "/") return BACKEND_URL + src;
+    return BACKEND_URL + "/" + src;
+  }
+
+  function ensurePlanImageModal() {
+    if (planImageModalEl) return;
+    planImageModalEl = document.createElement("div");
+    planImageModalEl.className = "amarte-plan-image-modal";
+    planImageModalEl.setAttribute("role", "dialog");
+    planImageModalEl.setAttribute("aria-modal", "true");
+    planImageModalEl.setAttribute("aria-hidden", "true");
+    planImageModalEl.setAttribute("data-amarte-widget-dialog", "true");
+    planImageModalEl.innerHTML =
+      '<div class="amarte-plan-image-backdrop" data-amarte-plan-close="1"></div>' +
+      '<div class="amarte-plan-image-dialog">' +
+      '<button type="button" class="amarte-plan-image-close" aria-label="Cerrar imagen" data-amarte-plan-close="1">✕</button>' +
+      '<img class="amarte-plan-image-full" alt="">' +
+      "</div>";
+    document.body.appendChild(planImageModalEl);
+    planImageFullEl = planImageModalEl.querySelector(".amarte-plan-image-full");
+    planImageModalEl.addEventListener("click", function (ev) {
+      var t = ev.target;
+      if (t && t.getAttribute && t.getAttribute("data-amarte-plan-close") === "1") {
+        closePlanImageModal();
+      }
+    });
+    document.addEventListener("keydown", function (ev) {
+      if (
+        ev.key === "Escape" &&
+        planImageModalEl &&
+        planImageModalEl.classList.contains("amarte-open")
+      ) {
+        closePlanImageModal();
+      }
+    });
+  }
+
+  function closePlanImageModal() {
+    if (!planImageModalEl) return;
+    planImageModalEl.classList.remove("amarte-open");
+    planImageModalEl.setAttribute("aria-hidden", "true");
+    if (planImageFullEl) {
+      planImageFullEl.removeAttribute("src");
+    }
+  }
+
+  /**
+   * @param {{ src: string; alt?: string }} image
+   */
+  function openPlanImageModal(image) {
+    if (!image || !image.src) return;
+    ensurePlanImageModal();
+    if (planImageFullEl) {
+      planImageFullEl.src = image.src;
+      planImageFullEl.alt = image.alt || "";
+    }
+    planImageModalEl.classList.add("amarte-open");
+    planImageModalEl.setAttribute("aria-hidden", "false");
   }
 
   /**
@@ -1256,6 +1327,11 @@
       ".amarte-widget-launcher-icon{width:40px;height:40px;border-radius:50%;flex-shrink:0;" +
       "background:rgba(255,255,255,0.15);display:flex;align-items:center;justify-content:center;}" +
       ".amarte-widget-root.amarte-chat-open .amarte-widget-launcher{opacity:0;visibility:hidden;pointer-events:none;transform:scale(0.92);}" +
+      ".amarte-widget-root.amarte-page-dialog .amarte-widget-launcher{opacity:0;visibility:hidden;pointer-events:none;transform:scale(0.92);}" +
+      ".amarte-widget-root.amarte-page-dialog .amarte-widget-panel{opacity:0;visibility:hidden;pointer-events:none;}" +
+      ".amarte-widget-root.amarte-clear-reserve .amarte-widget-launcher{" +
+      "bottom:calc(24px + 64px + env(safe-area-inset-bottom,0px));z-index:99998;}" +
+      ".amarte-widget-root.amarte-clear-reserve .amarte-widget-panel{z-index:99999;}" +
       ".amarte-widget-panel{position:fixed;right:24px;left:auto;bottom:96px;width:min(380px,calc(100vw - 32px));" +
       "max-height:min(560px,calc(100vh - 120px));background:rgba(255,255,255,0.92);border:1px solid #fff;" +
       "border-radius:25px;box-shadow:0 12px 40px rgba(0,0,0,0.1);backdrop-filter:blur(15px);-webkit-backdrop-filter:blur(15px);" +
@@ -1298,6 +1374,20 @@
       "cursor:pointer;line-height:1;padding:4px 8px;}" +
       ".amarte-suite-video-close:hover{color:#E91E63;}" +
       ".amarte-suite-video-player{display:block;width:100%;max-height:min(70vh,560px);background:#000;}" +
+      ".amarte-plan-image-cta{display:block;margin-top:10px;padding:0;border:none;background:transparent;" +
+      "cursor:pointer;border-radius:12px;overflow:hidden;max-width:160px;}" +
+      ".amarte-plan-image-thumb{display:block;width:160px;height:140px;object-fit:cover;object-position:top;border-radius:12px;}" +
+      ".amarte-plan-image-modal{position:fixed;inset:0;z-index:2147483000;display:none;" +
+      "align-items:center;justify-content:center;padding:16px;}" +
+      ".amarte-plan-image-modal.amarte-open{display:flex;}" +
+      ".amarte-plan-image-backdrop{position:absolute;inset:0;background:rgba(13,13,17,0.72);}" +
+      ".amarte-plan-image-dialog{position:relative;z-index:1;max-width:min(480px,100%);" +
+      "max-height:100%;background:#111;border-radius:16px;overflow:hidden;" +
+      "box-shadow:0 20px 60px rgba(0,0,0,0.45);}" +
+      ".amarte-plan-image-close{position:absolute;top:8px;right:8px;z-index:2;border:none;" +
+      "background:rgba(0,0,0,0.55);color:#fff;font-size:1.35rem;cursor:pointer;line-height:1;" +
+      "padding:6px 10px;border-radius:999px;}" +
+      ".amarte-plan-image-full{display:block;width:100%;max-height:min(92vh,1280px);object-fit:contain;background:#000;}" +
       ".amarte-msg-bot .amarte-bubble-inner{background:#fff;border:1px solid #e0e0e0;color:#1a1a1a;}" +
       ".amarte-msg-bot .amarte-promo-title{display:block;margin:12px 0 6px;color:#D81B60;" +
       "font-weight:800;font-size:1.05rem;letter-spacing:0.01em;line-height:1.3;}" +
@@ -1399,7 +1489,11 @@
       "bottom:calc(16px + env(safe-area-inset-bottom,0px));}" +
       ".amarte-widget-launcher-icon{width:36px;height:36px;}" +
       ".amarte-widget-launcher-icon svg{width:18px;height:18px;}" +
-      ".amarte-widget-panel{right:16px;bottom:calc(80px + env(safe-area-inset-bottom,0px));}}" +
+      ".amarte-widget-panel{right:16px;bottom:calc(80px + env(safe-area-inset-bottom,0px));}" +
+      ".amarte-widget-root.amarte-clear-reserve .amarte-widget-launcher{right:16px;" +
+      "bottom:calc(16px + 64px + env(safe-area-inset-bottom,0px));z-index:99998;}" +
+      ".amarte-widget-root.amarte-clear-reserve .amarte-widget-panel{right:16px;" +
+      "bottom:calc(80px + 64px + env(safe-area-inset-bottom,0px));z-index:99999;}}" +
       "@media (min-width:769px){.amarte-widget-panel{width:min(420px,calc(100vw - 48px));" +
       "max-height:min(720px,calc(100vh - 140px));}.amarte-widget-messages{min-height:0;}}" +
       /* Live voice */
@@ -1509,6 +1603,29 @@
     if (
       role === "bot" &&
       extras &&
+      extras.planImage &&
+      extras.planImage.src
+    ) {
+      var planSrc = resolvePlanImageSrc(extras.planImage.src);
+      var planBtn = document.createElement("button");
+      planBtn.type = "button";
+      planBtn.className = "amarte-plan-image-cta";
+      planBtn.setAttribute("data-amarte-plan-src", planSrc);
+      planBtn.setAttribute(
+        "data-amarte-plan-alt",
+        extras.planImage.alt || extras.planImage.plan || ""
+      );
+      var thumb = document.createElement("img");
+      thumb.className = "amarte-plan-image-thumb";
+      thumb.alt = extras.planImage.alt || extras.planImage.plan || "";
+      thumb.src = planSrc;
+      planBtn.appendChild(thumb);
+      row.appendChild(planBtn);
+    }
+
+    if (
+      role === "bot" &&
+      extras &&
       extras.audioBase64 &&
       extras.audioMimeType
     ) {
@@ -1582,11 +1699,9 @@
           if (m.role === "user") {
             appendMessage("user", m.content, null);
           } else {
-            appendMessage(
-              "bot",
-              m.content,
-              Array.isArray(m.options) ? m.options : []
-            );
+            appendMessage("bot", m.content, Array.isArray(m.options) ? m.options : [], {
+              planImage: m.planImage && m.planImage.src ? m.planImage : null,
+            });
           }
         }
         welcomeShown = true;
@@ -2209,6 +2324,7 @@
       var payload = {
         conversationId: getConversationId(),
         pageUrl: window.location.href || "",
+        landing: readAmarteLanding(),
         roomName: document.title || "",
         nombre: nombre,
         whatsapp: whatsapp,
@@ -2312,6 +2428,9 @@
     var payloadExtras = extras && typeof extras === "object" ? extras : {};
     if (data.suiteVideo && data.suiteVideo.videoUrl) {
       payloadExtras.suiteVideo = data.suiteVideo;
+    }
+    if (data.planImage && data.planImage.src) {
+      payloadExtras.planImage = data.planImage;
     }
     appendMessage("bot", reply || " ", options, payloadExtras);
     if (data.showReservationForm) {
@@ -2757,6 +2876,7 @@
    * Construye el DOM del widget y engancha los eventos.
    */
   function buildWidget() {
+    if (document.querySelector(".amarte-widget-root")) return;
     // Contenedor raíz del widget
     rootEl = document.createElement("div");
     rootEl.className = "amarte-widget-root";
@@ -2881,7 +3001,12 @@
     quickRow.appendChild(callLink);
     quickRow.appendChild(buildQuickLink(urlPromos, "🎁 PROMOCIONES", ""));
     quickRow.appendChild(buildQuickLink(urlRes, "📅 Reservar", ""));
-    quickRow.appendChild(buildQuickLink(urlWompi, "💳 Wompi", ""));
+    // reservas es la única landing kind form. Su pago por reserva lo crea la
+    // página (create-wompi-payment-link). Este href es el checkout genérico y
+    // no hay otra URL en este repo: el pie no lo muestra.
+    if (readAmarteLanding().toLowerCase() !== "reservas") {
+      quickRow.appendChild(buildQuickLink(urlWompi, "💳 Wompi", ""));
+    }
 
     var liveBtn = document.createElement("button");
     liveBtn.type = "button";
@@ -2947,6 +3072,7 @@
     liveOverlay.className = "amarte-live-overlay";
     liveOverlay.setAttribute("role", "dialog");
     liveOverlay.setAttribute("aria-modal", "true");
+    liveOverlay.setAttribute("data-amarte-widget-dialog", "true");
     liveOverlay.setAttribute("aria-label", "Confirmar conversación en vivo");
     var liveCard = document.createElement("div");
     liveCard.className = "amarte-live-card";
@@ -2998,6 +3124,15 @@
         });
         return;
       }
+      var planBtn = t.closest && t.closest(".amarte-plan-image-cta");
+      if (planBtn) {
+        ev.preventDefault();
+        openPlanImageModal({
+          src: planBtn.getAttribute("data-amarte-plan-src") || "",
+          alt: planBtn.getAttribute("data-amarte-plan-alt") || "",
+        });
+        return;
+      }
       var link = t.closest && t.closest("a.amarte-inline-link");
       if (link && link.href) {
         var suite = findSuiteVideoByProductUrl(link.href);
@@ -3019,6 +3154,147 @@
     rootEl.appendChild(launcher);
     rootEl.appendChild(panel);
     document.body.appendChild(rootEl);
+    var widgetRoot = rootEl;
+
+    /**
+     * Un modal de la landing (role=dialog o aria-modal) queda debajo del
+     * lanzador (z-index 99998) y del panel (z-index 99999). Mientras ese
+     * diálogo está visible, se ocultan los dos. Los diálogos del propio
+     * widget no cuentan.
+     *
+     * «Reservar sin Pago» y «Sube tu comprobante» no son diálogos: son
+     * botones del formulario. Si su rectángulo pisa la esquina fija del
+     * lanzador, la clase amarte-clear-reserve lo sube 64px y conserva
+     * z-index 99998 / 99999. En móvil (375×667) eso destapa el tercio
+     * derecho del comprobante. El hueco es el de reposo, no el rect ya
+     * desplazado, para no oscilar.
+     */
+    var LAUNCHER_REST = {
+      desktop: { right: 24, bottom: 24, width: 220, height: 56 },
+      mobile: { right: 16, bottom: 16, width: 180, height: 52 },
+    };
+
+    function launcherRestSlot() {
+      var viewportWidth = window.innerWidth || 0;
+      var viewportHeight = window.innerHeight || 0;
+      var spec = viewportWidth <= 768 ? LAUNCHER_REST.mobile : LAUNCHER_REST.desktop;
+      var right = viewportWidth - spec.right;
+      var bottom = viewportHeight - spec.bottom;
+      return {
+        left: right - spec.width,
+        top: bottom - spec.height,
+        right: right,
+        bottom: bottom,
+        width: spec.width,
+        height: spec.height,
+      };
+    }
+
+    function rectsOverlap(a, b) {
+      return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+    }
+
+    function isLauncherCornerControl(el) {
+      if (!el || el.nodeType !== 1) return false;
+      var tag = el.tagName;
+      if (tag !== "BUTTON" && tag !== "A" && el.getAttribute("role") !== "button") return false;
+      var text = String(el.textContent || "").replace(/\s+/g, " ").trim();
+      return /reservar\s+sin\s+pago/i.test(text) || /sube\s+tu\s+comprobante/i.test(text);
+    }
+
+    function launcherCornerBlocked() {
+      var slot = launcherRestSlot();
+      if (slot.width <= 0 || slot.height <= 0 || slot.right <= 0 || slot.bottom <= 0) return false;
+      var nodes = document.querySelectorAll("button, a, [role='button']");
+      for (var i = 0; i < nodes.length; i++) {
+        var el = nodes[i];
+        if (!isLauncherCornerControl(el) || !pageDialogCoversLauncher(el)) continue;
+        if (typeof el.getBoundingClientRect !== "function") continue;
+        var rect = el.getBoundingClientRect();
+        if (!rect || rect.width <= 0 || rect.height <= 0) continue;
+        if (rectsOverlap(rect, slot)) return true;
+      }
+      return false;
+    }
+
+    function pageDialogCoversLauncher(el) {
+      if (!el || el.nodeType !== 1) return false;
+      if (el.closest("[data-amarte-widget-dialog], .amarte-widget-root")) return false;
+      if (el.hidden) return false;
+      if (el.getAttribute("aria-hidden") === "true") return false;
+      if (el.getAttribute("data-state") === "closed") return false;
+      if (el.tagName === "DIALOG" && !el.open) return false;
+      var node = el;
+      while (node && node.nodeType === 1) {
+        if (node.hidden) return false;
+        if (node.getAttribute("aria-hidden") === "true") return false;
+        var style = window.getComputedStyle(node);
+        if (style.display === "none" || style.visibility === "hidden") return false;
+        node = node.parentElement;
+      }
+      return true;
+    }
+
+    var syncingPageDialog = false;
+    function syncPageDialogLauncher() {
+      if (syncingPageDialog) return;
+      syncingPageDialog = true;
+      try {
+        var nodes = document.querySelectorAll('[role="dialog"], [aria-modal="true"]');
+        var open = false;
+        for (var i = 0; i < nodes.length; i++) {
+          if (pageDialogCoversLauncher(nodes[i])) {
+            open = true;
+            break;
+          }
+        }
+        function setHidden(el, hidden) {
+          if (hidden) {
+            if (!el.hasAttribute("hidden")) el.setAttribute("hidden", "");
+          } else if (el.hasAttribute("hidden")) {
+            el.removeAttribute("hidden");
+          }
+        }
+        if (open) {
+          if (!widgetRoot.classList.contains("amarte-page-dialog")) {
+            widgetRoot.classList.add("amarte-page-dialog");
+          }
+        } else if (widgetRoot.classList.contains("amarte-page-dialog")) {
+          widgetRoot.classList.remove("amarte-page-dialog");
+        }
+        setHidden(launcher, open);
+        setHidden(panel, open);
+        if (launcherCornerBlocked()) {
+          if (!widgetRoot.classList.contains("amarte-clear-reserve")) {
+            widgetRoot.classList.add("amarte-clear-reserve");
+          }
+        } else if (widgetRoot.classList.contains("amarte-clear-reserve")) {
+          widgetRoot.classList.remove("amarte-clear-reserve");
+        }
+      } finally {
+        syncingPageDialog = false;
+      }
+    }
+
+    syncPageDialogLauncher();
+    window.addEventListener("scroll", syncPageDialogLauncher, true);
+    window.addEventListener("resize", syncPageDialogLauncher);
+    var pageDialogObserver = new MutationObserver(syncPageDialogLauncher);
+    pageDialogObserver.observe(document.documentElement, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: [
+        "role",
+        "aria-modal",
+        "aria-hidden",
+        "hidden",
+        "style",
+        "class",
+        "open",
+        "data-state",
+      ],
+    });
 
     function togglePanel() {
       var isOpen = panel.classList.toggle("amarte-open");

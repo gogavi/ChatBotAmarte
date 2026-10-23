@@ -37,6 +37,19 @@ async function run() {
   assert.match(hitFallback.message, /formulario|whatsapp/i);
   assert.ok(hitFallback.bookingUrl.includes("amartesuite.com"));
 
+  const gamerMiss = await lookupCatalogPrice({
+    suite: "Suite Gamer",
+    date: "2026-10-21",
+    duration: "6 horas",
+  });
+  assert.strictEqual(gamerMiss.priceCop, null);
+  assert.strictEqual(gamerMiss.formattedPrice, null);
+  assert.match(gamerMiss.message, /formulario|whatsapp/i);
+  const gamerKnown = findCatalogEntry("Suite Gamer");
+  assert.ok(gamerKnown);
+  assert.strictEqual(gamerKnown.name, "Suite Gamer");
+  assert.ok(gamerKnown.entry.weekday == null);
+
   const staticJacuzzi = findCatalogEntry("VIP Jacuzzi");
   assert.ok(staticJacuzzi);
   assert.strictEqual(staticJacuzzi.name, "Suite VIP Jacuzzi");

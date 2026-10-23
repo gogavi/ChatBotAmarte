@@ -20,7 +20,7 @@
  * Cada plan tiene una sola tarifa, sin columna por suite, y las tres tarifas
  * positivas coinciden. Por eso samePrice es true y el prompt no escribe montos.
  * room_extras no existe en esa base: no afirmar decoración de 120000.
- * Suite Gamer no entra.
+ * Suite Gamer se nombra y se describe. No entra en este grupo ni en un plan.
  *
  * @typedef {{
  *   pendingConfirmation: false;
@@ -62,6 +62,7 @@ const PLAN_SUITE_RULES = Object.freeze([
       "Suite Gótica",
       "Suite Árabe",
       "Suite Diamante",
+      "Suite Zafiro",
     ]),
     exclude: Object.freeze([]),
     suppressPhrases: Object.freeze([]),
@@ -69,7 +70,12 @@ const PLAN_SUITE_RULES = Object.freeze([
   Object.freeze({
     plan: "Plan Romántico",
     mode: "recommend",
-    suites: Object.freeze(["Suite Rubí", "Suite Gold", "Suite Diamante"]),
+    suites: Object.freeze([
+      "Suite Rubí",
+      "Suite Gold",
+      "Suite Diamante",
+      "Suite Zafiro",
+    ]),
     exclude: Object.freeze(["Suite Gótica"]),
     suppressPhrases: Object.freeze([]),
   }),
@@ -155,6 +161,16 @@ function formatPlanChoiceForPrompt() {
   ].join("\n");
 }
 
+function formatSuiteGamerForPrompt() {
+  return [
+    "## Suite Gamer",
+    "Nómbrala cuando pidan suites o una experiencia de juego.",
+    "No tiene cama, a propósito: jacuzzi, sofá, columpio, cruz X, arcade, PlayStation y Xbox. Parqueadero sujeto a disponibilidad.",
+    "No entra en la elección de esas seis ni en un plan de decoración.",
+    "Su monto sale solo de room_rates. Si no hay fila, no des un monto: remite al formulario de su landing.",
+  ].join("\n");
+}
+
 /**
  * @param {unknown} plan
  * @returns {{ pendingConfirmation: false; samePrice: true; suites: string[] } | null}
@@ -176,7 +192,7 @@ function formatPlanSuiteRulesForPrompt() {
   for (const rule of PLAN_SUITE_RULES) {
     lines.push(formatPlanSuiteRule(rule));
   }
-  return `${lines.join("\n")}\n\n${formatPlanChoiceForPrompt()}`;
+  return `${lines.join("\n")}\n\n${formatPlanChoiceForPrompt()}\n\n${formatSuiteGamerForPrompt()}`;
 }
 
 module.exports = {
@@ -186,4 +202,5 @@ module.exports = {
   choiceForPlan,
   formatPlanSuiteRule,
   formatPlanSuiteRulesForPrompt,
+  formatSuiteGamerForPrompt,
 };
