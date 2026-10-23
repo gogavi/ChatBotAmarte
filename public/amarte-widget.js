@@ -1114,6 +1114,7 @@
     suiteVideoModalEl.setAttribute("role", "dialog");
     suiteVideoModalEl.setAttribute("aria-modal", "true");
     suiteVideoModalEl.setAttribute("aria-hidden", "true");
+    suiteVideoModalEl.setAttribute("data-amarte-widget-dialog", "true");
     suiteVideoModalEl.innerHTML =
       '<div class="amarte-suite-video-backdrop" data-amarte-video-close="1"></div>' +
       '<div class="amarte-suite-video-dialog">' +
@@ -1181,6 +1182,7 @@
     planImageModalEl.setAttribute("role", "dialog");
     planImageModalEl.setAttribute("aria-modal", "true");
     planImageModalEl.setAttribute("aria-hidden", "true");
+    planImageModalEl.setAttribute("data-amarte-widget-dialog", "true");
     planImageModalEl.innerHTML =
       '<div class="amarte-plan-image-backdrop" data-amarte-plan-close="1"></div>' +
       '<div class="amarte-plan-image-dialog">' +
@@ -1325,6 +1327,7 @@
       ".amarte-widget-launcher-icon{width:40px;height:40px;border-radius:50%;flex-shrink:0;" +
       "background:rgba(255,255,255,0.15);display:flex;align-items:center;justify-content:center;}" +
       ".amarte-widget-root.amarte-chat-open .amarte-widget-launcher{opacity:0;visibility:hidden;pointer-events:none;transform:scale(0.92);}" +
+      ".amarte-widget-root.amarte-page-dialog .amarte-widget-launcher{opacity:0;visibility:hidden;pointer-events:none;transform:scale(0.92);}" +
       ".amarte-widget-panel{position:fixed;right:24px;left:auto;bottom:96px;width:min(380px,calc(100vw - 32px));" +
       "max-height:min(560px,calc(100vh - 120px));background:rgba(255,255,255,0.92);border:1px solid #fff;" +
       "border-radius:25px;box-shadow:0 12px 40px rgba(0,0,0,0.1);backdrop-filter:blur(15px);-webkit-backdrop-filter:blur(15px);" +
@@ -2864,6 +2867,7 @@
    * Construye el DOM del widget y engancha los eventos.
    */
   function buildWidget() {
+    if (document.querySelector(".amarte-widget-root")) return;
     // Contenedor raíz del widget
     rootEl = document.createElement("div");
     rootEl.className = "amarte-widget-root";
@@ -3054,6 +3058,7 @@
     liveOverlay.className = "amarte-live-overlay";
     liveOverlay.setAttribute("role", "dialog");
     liveOverlay.setAttribute("aria-modal", "true");
+    liveOverlay.setAttribute("data-amarte-widget-dialog", "true");
     liveOverlay.setAttribute("aria-label", "Confirmar conversación en vivo");
     var liveCard = document.createElement("div");
     liveCard.className = "amarte-live-card";
@@ -3135,6 +3140,77 @@
     rootEl.appendChild(launcher);
     rootEl.appendChild(panel);
     document.body.appendChild(rootEl);
+    var widgetRoot = rootEl;
+
+    /**
+     * Un modal de la landing (role=dialog o aria-modal) tapa menos que el
+     * lanzador (z-index 99998). Mientras ese diálogo está visible, el botón
+     * se oculta. Los diálogos del propio widget no cuentan.
+     */
+    function pageDialogCoversLauncher(el) {
+      if (!el || el.nodeType !== 1) return false;
+      if (el.closest("[data-amarte-widget-dialog], .amarte-widget-root")) return false;
+      if (el.hidden) return false;
+      if (el.getAttribute("aria-hidden") === "true") return false;
+      if (el.getAttribute("data-state") === "closed") return false;
+      if (el.tagName === "DIALOG" && !el.open) return false;
+      var node = el;
+      while (node && node.nodeType === 1) {
+        if (node.hidden) return false;
+        if (node.getAttribute("aria-hidden") === "true") return false;
+        var style = window.getComputedStyle(node);
+        if (style.display === "none" || style.visibility === "hidden") return false;
+        node = node.parentElement;
+      }
+      return true;
+    }
+
+    var syncingPageDialog = false;
+    function syncPageDialogLauncher() {
+      if (syncingPageDialog) return;
+      syncingPageDialog = true;
+      try {
+        var nodes = document.querySelectorAll('[role="dialog"], [aria-modal="true"]');
+        var open = false;
+        for (var i = 0; i < nodes.length; i++) {
+          if (pageDialogCoversLauncher(nodes[i])) {
+            open = true;
+            break;
+          }
+        }
+        if (open) {
+          if (!widgetRoot.classList.contains("amarte-page-dialog")) {
+            widgetRoot.classList.add("amarte-page-dialog");
+          }
+          if (!launcher.hasAttribute("hidden")) launcher.setAttribute("hidden", "");
+        } else {
+          if (widgetRoot.classList.contains("amarte-page-dialog")) {
+            widgetRoot.classList.remove("amarte-page-dialog");
+          }
+          if (launcher.hasAttribute("hidden")) launcher.removeAttribute("hidden");
+        }
+      } finally {
+        syncingPageDialog = false;
+      }
+    }
+
+    syncPageDialogLauncher();
+    var pageDialogObserver = new MutationObserver(syncPageDialogLauncher);
+    pageDialogObserver.observe(document.documentElement, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: [
+        "role",
+        "aria-modal",
+        "aria-hidden",
+        "hidden",
+        "style",
+        "class",
+        "open",
+        "data-state",
+      ],
+    });
 
     function togglePanel() {
       var isOpen = panel.classList.toggle("amarte-open");

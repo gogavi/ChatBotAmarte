@@ -93,6 +93,17 @@ assert.strictEqual(
   "suite_vip_jacuzzi"
 );
 assert.strictEqual(resolveLanding("promo-suite-jacuzzi").offer, "promo-jacuzzi");
+assert.deepStrictEqual(
+  LANDINGS.filter((landing) => landing.offer === null).map((landing) => landing.id),
+  [
+    "suite-jacuzzi",
+    "promo-suite-amarte",
+    "tematicas",
+    "suite-sauna-jacuzzi",
+    "suite-gamer",
+    "reservas",
+  ]
+);
 assert.strictEqual(resolveLanding("reservas").kind, "form");
 
 const origins = landingBrowserOrigins();

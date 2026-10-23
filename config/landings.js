@@ -72,6 +72,8 @@ const LANDINGS = Object.freeze([
     url: "https://microservicio-promo-suite-amarte.vercel.app",
     aliasUrls: Object.freeze(["https://promoamarte.amartesuite.com"]),
     kind: "product",
+    // Sin oferta confirmada. El turno cotiza room_rates de Suite Amarte.
+    // No copiar la promo de la landing hasta que Guillermo dé id, montos y reglas.
     offer: null,
     distinctPhrases: Object.freeze([]),
     suites: Object.freeze([
