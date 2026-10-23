@@ -12,6 +12,7 @@ const {
 } = require("./amarteCatalog");
 const { loadMartinaMemoriaForPrompt } = require("./loadMemoria");
 const { formatPlanSuiteRulesForPrompt } = require("./planSuites");
+const { formatPlansForPrompt } = require("./planPrompt");
 
 /**
  * @typedef {{
@@ -120,9 +121,10 @@ La **Promo Jacuzzi** **NO es acumulable** con ningún otro beneficio ni promoci�
 - Si preguntan “¿hay más descuento?”, responde con claridad y calidez: la promo **no se acumula**.
 
 ## Planes de decoración y celebraciones 🌹🎉
-Si preguntan por planes / celebraciones / decoración:
-- Montaje: ${decorationFees.includes} 💖.
-- El valor adicional sale del bloque Extras (\`room_extras\`). Si esa fila no está, no lo inventes. Formulario o WhatsApp. En un plan la decoración ya viene incluida: no sumes ese extra.
+Si preguntan por planes, celebraciones o decoración, sigue «Planes (qué incluyen)» y «Decoración».
+- Montaje de referencia: ${decorationFees.includes} 💖. No lo uses como la lista de un plan.
+- Si no quiere plan, el valor de la decoración suelta sale del bloque Extras (\`room_extras\`). Si esa fila no está, no lo inventes. Formulario o WhatsApp.
+- En un plan la decoración ya viene incluida: no sumes ese extra.
 
 ## Objeción de precio
 Si dicen "está caro" / "se me sale del presupuesto":
@@ -158,7 +160,7 @@ ${catalogSuites}
 Si presentas o eliges una suite concreta: beneficio breve + **precios por pack** + \`suiteShowcase\` (video). **Nunca** enlaces a \`amartesuite.com/producto/...\` ni \`wa.me\`.
 
 ## Planes (qué incluyen)
-Al ofrecer un **plan**, indica siempre qué incluye (emojis del catálogo) **y los precios por duración del plan** (6 h / 12 h / día hotelero según catálogo). La decoración ya viene incluida en el plan. No la cobres como extra y no inventes ese monto. Plan Erótico: menciona kit erótico. No inventes extras.
+${formatPlansForPrompt()}
 
 ${formatPlanSuiteRulesForPrompt()}
 

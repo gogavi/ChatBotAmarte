@@ -81,14 +81,16 @@ function formatExtrasBlock(rows) {
       "## Extras (room_extras)",
       "No hay extras con tarifa para esta consulta.",
       "No inventes persona adicional, decoración ni hora suelta.",
-      "Los planes ya incluyen la decoración. No sumes ese extra ni inventes su monto.",
-      "Formulario o WhatsApp.",
+    "Los planes ya incluyen la decoración. No sumes ese extra encima de un plan ni inventes su monto.",
+    "Si no quiere plan y no hay fila de decoración, no inventes el monto.",
+    "Formulario o WhatsApp.",
     ].join("\n");
   }
   const lines = [
     "## Extras (room_extras)",
     "Cotiza solo estas filas. Si el extra no está, no inventes el monto.",
-    "Los planes ya incluyen la decoración. No sumes ese extra ni inventes su monto.",
+    "Los planes ya incluyen la decoración. No sumes ese extra encima de un plan.",
+    "Si no quiere plan, cotiza la fila de decoración que aplique a su suite. Si no está, no inventes el monto.",
   ];
   for (const row of rows) {
     const scope = row.appliesTo === "*" ? "cualquier suite" : row.appliesTo;
@@ -126,14 +128,41 @@ function decorationAmountsFrom(rows) {
 
 /**
  * @param {string} [userMessage]
- * @returns {boolean}
+ * @returns {string}
  */
-function asksPlan(userMessage) {
-  const norm = String(userMessage || "")
+function normalizeMessage(userMessage) {
+  return String(userMessage || "")
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
+}
+
+/**
+ * @param {string} [userMessage]
+ * @returns {boolean}
+ */
+function asksPlan(userMessage) {
+  const norm = normalizeMessage(userMessage);
   return /(?:^|[^a-z0-9])plan(?:es)?(?:[^a-z0-9]|$)/.test(norm);
+}
+
+/**
+ * Rechazó el plan y pide la decoración suelta. En ese caso el monto de
+ * room_extras sí se puede decir.
+ * @param {string} [userMessage]
+ * @returns {boolean}
+ */
+function wantsLooseDecoration(userMessage) {
+  const norm = normalizeMessage(userMessage);
+  if (!/decor/.test(norm)) return false;
+  const refusesPlan =
+    /\bno\b(?:\s+(?!plan(?:es)?\b)\w+){0,4}\s+\bplan(?:es)?\b/.test(norm) ||
+    /\bsin\b(?:\s+(?:el|un|ese|ningun))?\s+\bplan(?:es)?\b/.test(norm) ||
+    (/\b(aparte|suelta)\b/.test(norm) && /\bplan(?:es)?\b/.test(norm));
+  if (!refusesPlan) return false;
+  const switchesPlan = /\bquiero\s+el\s+plan\b/.test(norm);
+  if (switchesPlan && !/\b(aparte|suelta)\b/.test(norm)) return false;
+  return true;
 }
 
 function amountsFromExtras(rows) {
@@ -155,14 +184,41 @@ const MONEY_RE =
  * @param {Set<number>} [allow]
  * @returns {string}
  */
+function amountInToken(token) {
+  const digits = String(token).replace(/mil/i, "000").replace(/\D/g, "");
+  return Number(digits);
+}
+
 function stripUntrustedCopAmounts(text, allow) {
   const allowed = allow instanceof Set ? allow : canonicalAmounts();
+  MONEY_RE.lastIndex = 0;
   return String(text || "").replace(MONEY_RE, (token) => {
-    const digits = token.replace(/mil/i, "000").replace(/\D/g, "");
-    const amount = Number(digits);
+    const amount = amountInToken(token);
     if (allowed.has(amount)) return token;
     return "tarifa no disponible";
   });
+}
+
+/**
+ * En una pregunta de plan, un monto de decoración se cae aunque ese mismo
+ * número también sea una celda de room_rates. La celda de la suite, en otra
+ * línea, se queda.
+ * @param {string} text
+ * @param {Set<number>} decorationAmounts
+ * @returns {string}
+ */
+function stripPlanDecorationSentences(text, decorationAmounts) {
+  return String(text || "")
+    .split("\n")
+    .map((line) => {
+      if (!/decor/i.test(line)) return line;
+      MONEY_RE.lastIndex = 0;
+      return line.replace(MONEY_RE, (token) => {
+        if (decorationAmounts.has(amountInToken(token))) return "tarifa no disponible";
+        return token;
+      });
+    })
+    .join("\n");
 }
 
 /**
@@ -562,7 +618,11 @@ function replyAmountAllowlist(turn, userMessage) {
   if (turn.allowedAmounts instanceof Set) allow = new Set(turn.allowedAmounts);
   else if (!turn.pricesAvailable) allow = new Set();
   if (!(allow instanceof Set)) return null;
-  if (asksPlan(userMessage) && turn.decorationAmounts instanceof Set) {
+  if (
+    asksPlan(userMessage) &&
+    !wantsLooseDecoration(userMessage) &&
+    turn.decorationAmounts instanceof Set
+  ) {
     const rates = turn.rateAmounts instanceof Set ? turn.rateAmounts : new Set();
     for (const amount of turn.decorationAmounts) {
       if (!rates.has(amount)) allow.delete(amount);
@@ -574,6 +634,13 @@ function replyAmountAllowlist(turn, userMessage) {
 function finishLandingReply(turn, reply, userMessage) {
   if (!turn) return reply;
   let text = String(reply || "");
+  if (
+    asksPlan(userMessage) &&
+    !wantsLooseDecoration(userMessage) &&
+    turn.decorationAmounts instanceof Set
+  ) {
+    text = stripPlanDecorationSentences(text, turn.decorationAmounts);
+  }
   const allow = replyAmountAllowlist(turn, userMessage);
   if (allow) {
     text = stripPaymentPromoBlocks(stripUntrustedCopAmounts(text, allow));
