@@ -57,6 +57,18 @@
   var DEFAULT_QUICK_WHATSAPP =
     "https://wa.me/573007416683?text=" + encodeURIComponent(DEFAULT_WHATSAPP_MESSAGE);
   var DEFAULT_QUICK_RESERVE = "https://reservas.amartesuite.com";
+  var ATTRIBUTION_KEYS = [
+    "utm_source",
+    "utm_medium",
+    "utm_campaign",
+    "utm_content",
+    "utm_term",
+    "gclid",
+    "gbraid",
+    "wbraid",
+    "fbclid",
+  ];
+  var ATTRIBUTION_STORAGE_KEY = "amarte-reservation-attribution";
   var DEFAULT_QUICK_PROMOS = "https://promojacuzzi.amartesuite.com";
   var DEFAULT_QUICK_TEL = "tel:+573013307909";
 
@@ -72,6 +84,98 @@
       }
     } catch (e0) {}
     return fallback;
+  }
+
+  /**
+   * @param {string} search
+   * @returns {Record<string, string>}
+   */
+  function attributionFromSearch(search) {
+    var out = {};
+    var params;
+    try {
+      var raw = String(search || "");
+      params = new URLSearchParams(raw.charAt(0) === "?" ? raw.slice(1) : raw);
+    } catch (e0) {
+      return out;
+    }
+    for (var i = 0; i < ATTRIBUTION_KEYS.length; i++) {
+      var key = ATTRIBUTION_KEYS[i];
+      var value = params.get(key);
+      if (value) out[key] = value;
+    }
+    return out;
+  }
+
+  /**
+   * JSON o query string. Solo las claves de atribución, sin vacíos.
+   * @returns {Record<string, string>}
+   */
+  function attributionFromStorage() {
+    try {
+      var raw = sessionStorage.getItem(ATTRIBUTION_STORAGE_KEY);
+      if (!raw || !String(raw).trim()) return {};
+      var text = String(raw).trim();
+      if (text.charAt(0) === "{") {
+        var parsed = JSON.parse(text);
+        if (!parsed || typeof parsed !== "object") return {};
+        var out = {};
+        for (var i = 0; i < ATTRIBUTION_KEYS.length; i++) {
+          var key = ATTRIBUTION_KEYS[i];
+          var value = parsed[key];
+          if (typeof value === "string" && value.trim()) out[key] = value.trim();
+        }
+        return out;
+      }
+      return attributionFromSearch(text);
+    } catch (e1) {
+      return {};
+    }
+  }
+
+  /**
+   * La página gana. sessionStorage completa las claves que la página no trae.
+   * @returns {Record<string, string>}
+   */
+  function reservationAttribution() {
+    var page = {};
+    try {
+      page = attributionFromSearch(window.location.search || "");
+    } catch (e0) {}
+    var stored = attributionFromStorage();
+    var bag = {};
+    for (var i = 0; i < ATTRIBUTION_KEYS.length; i++) {
+      var key = ATTRIBUTION_KEYS[i];
+      if (page[key]) bag[key] = page[key];
+      else if (stored[key]) bag[key] = stored[key];
+    }
+    return bag;
+  }
+
+  /**
+   * Añade la atribución al enlace de reservas. No repite una clave que ya viene.
+   * @param {string} href
+   * @returns {string}
+   */
+  function withReservationAttribution(href) {
+    var url;
+    try {
+      url = new URL(href);
+    } catch (e0) {
+      return href;
+    }
+    if (url.hostname !== "reservas.amartesuite.com") return href;
+    var bag = reservationAttribution();
+    var changed = false;
+    for (var i = 0; i < ATTRIBUTION_KEYS.length; i++) {
+      var key = ATTRIBUTION_KEYS[i];
+      if (!bag[key]) continue;
+      if (url.searchParams.get(key)) continue;
+      url.searchParams.set(key, bag[key]);
+      changed = true;
+    }
+    if (!changed) return href;
+    return url.toString();
   }
 
   /**
@@ -2990,7 +3094,9 @@
     quickRow.className = "amarte-widget-quick-row";
 
     var urlWa = pickQuickUrl("AMARTE_QUICK_WHATSAPP_URL", DEFAULT_QUICK_WHATSAPP);
-    var urlRes = pickQuickUrl("AMARTE_QUICK_RESERVATIONS_URL", DEFAULT_QUICK_RESERVE);
+    var urlRes = withReservationAttribution(
+      pickQuickUrl("AMARTE_QUICK_RESERVATIONS_URL", DEFAULT_QUICK_RESERVE)
+    );
     var urlPromos = pickQuickUrl("AMARTE_PROMOCIONES_URL", DEFAULT_QUICK_PROMOS);
     var urlWompi = pickQuickUrl("AMARTE_QUICK_WOMPI_URL", WOMPI_CHECKOUT_URL);
     var telHref = pickQuickUrl("AMARTE_QUICK_CALL_TEL", DEFAULT_QUICK_TEL);
