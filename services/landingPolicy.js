@@ -4,7 +4,7 @@
  * Sin `landing`, las tres funciones de servidor no cambian el turno.
  */
 
-const { formatCop } = require("../config/amarteCatalog");
+const { formatCop, promoJacuzzi } = require("../config/amarteCatalog");
 const {
   LANDINGS,
   resolveLanding,
@@ -238,7 +238,72 @@ function unavailablePriceSentence(landing) {
  * @param {{ weekday?: Record<string, number>; weekend?: Record<string, number>; name: string }} entry
  * @returns {string}
  */
-function formatRateEntry(entry) {
+/**
+ * @param {import("../config/landings").Landing} landing
+ * @returns {number | null}
+ */
+function offerAmount(landing) {
+  switch (landing.offer) {
+    case null:
+      return null;
+    case "promo-jacuzzi":
+      return promoJacuzzi.price;
+    default: {
+      const unknown = landing.offer;
+      throw new Error(`oferta de landing no reconocida: ${unknown}`);
+    }
+  }
+}
+
+/**
+ * Packs de room_rates que esta oferta reemplaza. El resto de la matriz sigue.
+ * @param {import("../config/landings").Landing} landing
+ * @returns {Set<string>}
+ */
+function durationsReplacedByOffer(landing) {
+  switch (landing.offer) {
+    case null:
+      return new Set();
+    case "promo-jacuzzi": {
+      const key =
+        promoJacuzzi.hours === 24 ? "diaHotelero" : `h${promoJacuzzi.hours}`;
+      return new Set([key]);
+    }
+    default: {
+      const unknown = landing.offer;
+      throw new Error(`oferta de landing no reconocida: ${unknown}`);
+    }
+  }
+}
+
+/**
+ * @param {import("../config/landings").Landing} landing
+ * @returns {string[]}
+ */
+function promoQuoteLines(landing) {
+  switch (landing.offer) {
+    case null:
+      return [];
+    case "promo-jacuzzi":
+      return [
+        `Oferta de esta landing (${landing.offer}): **${promoJacuzzi.name}**, ${promoJacuzzi.hours} h: ${formatCop(promoJacuzzi.price)}. Incluye: ${promoJacuzzi.includes}.`,
+        `Cotiza esas ${promoJacuzzi.hours} h con este monto. No uses la tarifa de lista de ${promoJacuzzi.hours} h.`,
+        "Si piden más tiempo, usa las tarifas de lista de abajo.",
+      ];
+    default: {
+      const unknown = landing.offer;
+      throw new Error(`oferta de landing no reconocida: ${unknown}`);
+    }
+  }
+}
+
+/**
+ * @param {{ weekday?: Record<string, number>; weekend?: Record<string, number>; name: string }} entry
+ * @param {Set<string>} [skipDurations]
+ * @returns {string}
+ */
+function formatRateEntry(entry, skipDurations) {
+  const skip = skipDurations instanceof Set ? skipDurations : new Set();
   const lines = [`**${entry.name}**`];
   const bands = [
     ["weekday", "Domingo–jueves"],
@@ -247,6 +312,7 @@ function formatRateEntry(entry) {
   for (const [key, title] of bands) {
     const table = entry[key] || {};
     const rows = DURATION_ROWS.filter(([duration]) => {
+      if (skip.has(duration)) return false;
       const price = table[duration];
       return Number.isFinite(price) && price > 0;
     });
@@ -256,6 +322,7 @@ function formatRateEntry(entry) {
       lines.push(`- ${label}: ${formatCop(table[duration])}`);
     }
   }
+  if (lines.length === 1) return "";
   return lines.join("\n");
 }
 
@@ -266,7 +333,15 @@ function formatRateEntry(entry) {
  */
 function formatLandingPriceBlock(landing, rates) {
   assertKnownKind(landing.kind);
-  if (!(rates instanceof Map)) return unavailablePriceSentence(landing);
+  const quote = promoQuoteLines(landing);
+  const skip = durationsReplacedByOffer(landing);
+  if (!(rates instanceof Map)) {
+    if (!quote.length) return unavailablePriceSentence(landing);
+    return [
+      ...quote,
+      "Las otras tarifas de lista no están disponibles en este momento. No inventes montos de otros packs.",
+    ].join("\n");
+  }
 
   if (landing.kind === "form") {
     const lines = [
@@ -275,12 +350,15 @@ function formatLandingPriceBlock(landing, rates) {
     for (const name of VALID_TIPOS) {
       const entry = rates.get(name);
       if (!entry) continue;
-      lines.push(formatRateEntry(entry));
+      const text = formatRateEntry(entry);
+      if (text) lines.push(text);
     }
     return lines.join("\n");
   }
 
-  const lines = ["Tarifas de lista de esta landing (room_rates):"];
+  const lines = quote.length
+    ? [...quote, "Tarifas de lista para más tiempo (sin el pack de la oferta):"]
+    : ["Tarifas de lista de esta landing (room_rates):"];
   for (const suite of landing.suites) {
     const entry = rates.get(suite.roomTypeName);
     if (!entry) {
@@ -289,7 +367,8 @@ function formatLandingPriceBlock(landing, rates) {
       );
       continue;
     }
-    lines.push(formatRateEntry(entry));
+    const text = formatRateEntry(entry, skip);
+    if (text) lines.push(text);
   }
   return lines.join("\n");
 }
@@ -368,8 +447,11 @@ async function beginLandingTurn(raw) {
  */
 function collectLandingAmounts(landing, rates) {
   const allow = new Set();
+  const quoted = offerAmount(landing);
+  if (Number.isFinite(quoted) && quoted > 0) allow.add(quoted);
   if (!(rates instanceof Map)) return allow;
   assertKnownKind(landing.kind);
+  const skip = durationsReplacedByOffer(landing);
   const names =
     landing.kind === "form"
       ? VALID_TIPOS
@@ -380,6 +462,7 @@ function collectLandingAmounts(landing, rates) {
     for (const band of ["weekday", "weekend"]) {
       const table = entry[band] || {};
       for (const [duration] of DURATION_ROWS) {
+        if (skip.has(duration)) continue;
         const price = table[duration];
         if (Number.isFinite(price) && price > 0) allow.add(price);
       }

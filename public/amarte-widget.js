@@ -1328,6 +1328,7 @@
       "background:rgba(255,255,255,0.15);display:flex;align-items:center;justify-content:center;}" +
       ".amarte-widget-root.amarte-chat-open .amarte-widget-launcher{opacity:0;visibility:hidden;pointer-events:none;transform:scale(0.92);}" +
       ".amarte-widget-root.amarte-page-dialog .amarte-widget-launcher{opacity:0;visibility:hidden;pointer-events:none;transform:scale(0.92);}" +
+      ".amarte-widget-root.amarte-page-dialog .amarte-widget-panel{opacity:0;visibility:hidden;pointer-events:none;}" +
       ".amarte-widget-panel{position:fixed;right:24px;left:auto;bottom:96px;width:min(380px,calc(100vw - 32px));" +
       "max-height:min(560px,calc(100vh - 120px));background:rgba(255,255,255,0.92);border:1px solid #fff;" +
       "border-radius:25px;box-shadow:0 12px 40px rgba(0,0,0,0.1);backdrop-filter:blur(15px);-webkit-backdrop-filter:blur(15px);" +
@@ -3143,9 +3144,10 @@
     var widgetRoot = rootEl;
 
     /**
-     * Un modal de la landing (role=dialog o aria-modal) tapa menos que el
-     * lanzador (z-index 99998). Mientras ese diálogo está visible, el botón
-     * se oculta. Los diálogos del propio widget no cuentan.
+     * Un modal de la landing (role=dialog o aria-modal) queda debajo del
+     * lanzador (z-index 99998) y del panel (z-index 99999). Mientras ese
+     * diálogo está visible, se ocultan los dos. Los diálogos del propio
+     * widget no cuentan.
      */
     function pageDialogCoversLauncher(el) {
       if (!el || el.nodeType !== 1) return false;
@@ -3178,17 +3180,22 @@
             break;
           }
         }
+        function setHidden(el, hidden) {
+          if (hidden) {
+            if (!el.hasAttribute("hidden")) el.setAttribute("hidden", "");
+          } else if (el.hasAttribute("hidden")) {
+            el.removeAttribute("hidden");
+          }
+        }
         if (open) {
           if (!widgetRoot.classList.contains("amarte-page-dialog")) {
             widgetRoot.classList.add("amarte-page-dialog");
           }
-          if (!launcher.hasAttribute("hidden")) launcher.setAttribute("hidden", "");
-        } else {
-          if (widgetRoot.classList.contains("amarte-page-dialog")) {
-            widgetRoot.classList.remove("amarte-page-dialog");
-          }
-          if (launcher.hasAttribute("hidden")) launcher.removeAttribute("hidden");
+        } else if (widgetRoot.classList.contains("amarte-page-dialog")) {
+          widgetRoot.classList.remove("amarte-page-dialog");
         }
+        setHidden(launcher, open);
+        setHidden(panel, open);
       } finally {
         syncingPageDialog = false;
       }

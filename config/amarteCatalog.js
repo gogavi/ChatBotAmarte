@@ -255,8 +255,9 @@ const pricing = {
 };
 
 /**
- * Promo Jacuzzi. `price` solo clasifica la prerreserva para no apilar el 25%.
- * El chat no lo cita: el monto sale de `room_rates` o no se dice.
+ * Promo Jacuzzi. `price` es la tarifa de esas horas en la landing promo-suite-jacuzzi.
+ * En las demás landings no se cita: ahí manda room_rates.
+ * También clasifica la prerreserva para no apilar el 25%.
  */
 const promoJacuzzi = Object.freeze({
   name: "Promo Jacuzzi",

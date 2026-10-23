@@ -103,6 +103,18 @@ function flush() {
   await flush();
   assert.strictEqual(launcher.hidden, false, "data-state=closed devuelve el botón");
 
+  const panel = document.querySelector(".amarte-widget-panel");
+  launcher.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  assert.ok(panel.classList.contains("amarte-open"));
+  sheet.removeAttribute("data-state");
+  await flush();
+  assert.strictEqual(panel.hidden, true, "el panel abierto se oculta con el modal");
+  assert.strictEqual(launcher.hidden, true);
+  sheet.remove();
+  await flush();
+  assert.strictEqual(panel.hidden, false, "al cerrar el modal el panel abierto vuelve");
+  assert.ok(panel.classList.contains("amarte-open"));
+
   console.log("widgetPageDialog.test.js ok");
 })().catch((err) => {
   console.error(err);

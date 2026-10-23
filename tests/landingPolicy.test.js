@@ -3,7 +3,7 @@
  * No abre red. La matriz V2 no entra en este camino.
  */
 const assert = require("assert");
-const { formatCop } = require("../config/amarteCatalog");
+const { formatCop, promoJacuzzi } = require("../config/amarteCatalog");
 const { resolveLanding } = require("../config/landings");
 const { setRoomRatesCacheForTests, resetRoomRatesCache } = require("../services/roomRatesCatalog");
 const {
@@ -46,9 +46,38 @@ assert.ok(!missing.includes(formatCop(78000)));
 assert.ok(!missing.includes("pricing"));
 
 const promo = formatLandingPriceBlock(resolveLanding("promo-suite-jacuzzi"), null);
+assert.ok(promo.includes(formatCop(promoJacuzzi.price)));
 assert.match(promo, /no están disponibles|no inventes/i);
-assert.ok(!promo.includes("150.000"));
-assert.ok(!promo.includes(formatCop(150000)));
+assert.ok(!promo.includes(formatCop(200000)));
+
+const jacuzziList = new Map([
+  [
+    "Suite Jacuzzi",
+    entry(
+      "Suite Jacuzzi",
+      { h4: 200000, h8: 280000 },
+      { h4: 240000, h8: 320000 }
+    ),
+  ],
+]);
+const promoOn = formatLandingPriceBlock(
+  resolveLanding("promo-suite-jacuzzi"),
+  jacuzziList
+);
+assert.ok(
+  promoOn.includes(formatCop(promoJacuzzi.price)),
+  "la oferta no entra al prompt: falta el precio de promoJacuzzi"
+);
+assert.ok(
+  !promoOn.includes(formatCop(200000)) && !promoOn.includes(formatCop(240000)),
+  "el prompt sigue ofreciendo la tarifa de lista de 4 h"
+);
+assert.ok(promoOn.includes(formatCop(280000)));
+assert.ok(promoOn.includes(formatCop(320000)));
+const listOn = formatLandingPriceBlock(resolveLanding("suite-jacuzzi"), jacuzziList);
+assert.ok(listOn.includes(formatCop(200000)));
+assert.ok(listOn.includes(formatCop(240000)));
+assert.ok(!listOn.includes(formatCop(promoJacuzzi.price)));
 
 const scrubbed = stripUntrustedCopAmounts(
   `Lista ${formatCop(240000)} y promo ${formatCop(150000)} y hora ${formatCop(30000)}.`
@@ -244,6 +273,31 @@ assert.deepStrictEqual(untouched.pendingReservation, { tipo: "Suite Amarte" });
     "precio"
   );
   assert.ok(!inventedGamer.includes("175.000"));
+
+  setRoomRatesCacheForTests(jacuzziList);
+  const promoTurn = await beginLandingTurn("promo-suite-jacuzzi");
+  assert.ok(promoTurn.addendum.includes(formatCop(promoJacuzzi.price)));
+  assert.ok(!promoTurn.addendum.includes(formatCop(200000)));
+  assert.ok(!promoTurn.addendum.includes(formatCop(240000)));
+  const keptPromo = finishLandingReply(
+    promoTurn,
+    `Promo Jacuzzi 4 h: ${formatCop(promoJacuzzi.price)}.`,
+    "precio"
+  );
+  assert.ok(keptPromo.includes(formatCop(promoJacuzzi.price)));
+  const strippedList = finishLandingReply(
+    promoTurn,
+    `4 h domingo a jueves ${formatCop(200000)} y viernes ${formatCop(240000)}.`,
+    "precio"
+  );
+  assert.ok(!strippedList.includes(formatCop(200000)));
+  assert.ok(!strippedList.includes(formatCop(240000)));
+  const keptLong = finishLandingReply(
+    promoTurn,
+    `8 h: ${formatCop(280000)}.`,
+    "más tiempo"
+  );
+  assert.ok(keptLong.includes(formatCop(280000)));
 
   setRoomRatesCacheForTests(null);
   const siteDown = await beginPriceTurn(undefined);
