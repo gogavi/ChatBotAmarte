@@ -2324,6 +2324,7 @@
       var payload = {
         conversationId: getConversationId(),
         pageUrl: window.location.href || "",
+        landing: readAmarteLanding(),
         roomName: document.title || "",
         nombre: nombre,
         whatsapp: whatsapp,

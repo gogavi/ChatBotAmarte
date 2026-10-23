@@ -91,6 +91,8 @@ app.use(
         filePath.endsWith("amarte-widget.js") ||
         filePath.endsWith("amarte-live-agent.bundle.js")
       ) {
+        // Sin hash en el nombre. no-cache revalida en cada carga: un deploy
+        // de este archivo cambia en el acto las landings que lo enlazan.
         res.setHeader("Cache-Control", "no-cache, must-revalidate");
       }
     },
@@ -430,6 +432,7 @@ async function runChat(input) {
   ) {
     const created = await createPendingReservation(pendingReservation, {
       conversationId,
+      landingId: chatLanding ? chatLanding.id : "",
     });
     if (created.ok) {
       reservationId = created.id;
@@ -713,9 +716,12 @@ app.post("/reservations/pending", async (req, res) => {
       precio: body.precio,
       abono: body.abono || "",
     };
+    const pageUrl = typeof body.pageUrl === "string" ? body.pageUrl : "";
+    const pendingLanding = resolveChatLanding(body.landing, pageUrl);
 
     const created = await createPendingReservation(payload, {
       conversationId,
+      landingId: pendingLanding ? pendingLanding.id : "",
     });
     if (!created.ok) {
       return res.status(400).json({
@@ -729,8 +735,6 @@ app.post("/reservations/pending", async (req, res) => {
     if (histStore) {
       await histStore.linkReservation(conversationId, created.id);
       try {
-        const pageUrl =
-          typeof body.pageUrl === "string" ? body.pageUrl : "";
         const roomName =
           typeof body.roomName === "string" ? body.roomName : "";
         await histStore.appendTurn(
