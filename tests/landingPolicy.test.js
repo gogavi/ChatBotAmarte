@@ -274,6 +274,14 @@ assert.deepStrictEqual(untouched.pendingReservation, { tipo: "Suite Amarte" });
   );
   assert.ok(!inventedGamer.includes("175.000"));
 
+  const reservasTurn = await beginLandingTurn("reservas");
+  assert.ok(reservasTurn.addendum.includes("no muestra el botón Wompi"));
+  assert.ok(reservasTurn.addendum.includes("no inventes una URL de pago"));
+  assert.ok(!reservasTurn.addendum.includes("checkout.wompi.co"));
+  assert.ok(!reservasTurn.addendum.includes("VPOS_RXJqnz"));
+  const suiteTurn = await beginLandingTurn("suite-jacuzzi");
+  assert.ok(!suiteTurn.addendum.includes("no muestra el botón Wompi"));
+
   setRoomRatesCacheForTests(jacuzziList);
   const promoTurn = await beginLandingTurn("promo-suite-jacuzzi");
   assert.ok(promoTurn.addendum.includes(formatCop(promoJacuzzi.price)));

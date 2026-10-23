@@ -384,6 +384,10 @@ function buildLandingAddendum(landing, rates) {
     landing.kind === "form"
       ? "Esta página es el formulario general de pre-reserva, no una sola suite."
       : `Enfócate en ${landing.suites.map((suite) => suite.label).join(", ")}.`;
+  const wompiFoot =
+    landing.kind === "form"
+      ? "En esta landing el pie del chat no muestra el botón Wompi. Ese enlace fijo es un checkout genérico y no es el link de pago de cada reserva. Ese link lo crea la página y no está en este catálogo: no inventes una URL de pago. Invita a los botones del formulario."
+      : "";
   const others = LANDINGS.filter((item) => item.id !== landing.id)
     .map((item) => `- ${item.nombre} (${item.id})`)
     .join("\n");
@@ -393,11 +397,16 @@ function buildLandingAddendum(landing, rates) {
     `nombre: ${landing.nombre}`,
     focus,
     "No abras el formulario del chat: showReservationForm false, showDateTimePicker false, pendingReservation null. Invita al formulario de esta página o a WhatsApp del pie.",
+    wompiFoot,
     "Si preguntan por otra suite, nómbrala. El servidor añade el enlace oficial. No inventes URLs ni enlaces a amartesuite.com/producto.",
     "Otras landings:",
     others,
     formatLandingPriceBlock(landing, rates),
-  ].join("\n");
+  ]
+    .filter(function (line) {
+      return line !== "";
+    })
+    .join("\n");
 }
 
 /**

@@ -1329,6 +1329,9 @@
       ".amarte-widget-root.amarte-chat-open .amarte-widget-launcher{opacity:0;visibility:hidden;pointer-events:none;transform:scale(0.92);}" +
       ".amarte-widget-root.amarte-page-dialog .amarte-widget-launcher{opacity:0;visibility:hidden;pointer-events:none;transform:scale(0.92);}" +
       ".amarte-widget-root.amarte-page-dialog .amarte-widget-panel{opacity:0;visibility:hidden;pointer-events:none;}" +
+      ".amarte-widget-root.amarte-clear-reserve .amarte-widget-launcher{" +
+      "bottom:calc(24px + 64px + env(safe-area-inset-bottom,0px));z-index:99998;}" +
+      ".amarte-widget-root.amarte-clear-reserve .amarte-widget-panel{z-index:99999;}" +
       ".amarte-widget-panel{position:fixed;right:24px;left:auto;bottom:96px;width:min(380px,calc(100vw - 32px));" +
       "max-height:min(560px,calc(100vh - 120px));background:rgba(255,255,255,0.92);border:1px solid #fff;" +
       "border-radius:25px;box-shadow:0 12px 40px rgba(0,0,0,0.1);backdrop-filter:blur(15px);-webkit-backdrop-filter:blur(15px);" +
@@ -1486,7 +1489,11 @@
       "bottom:calc(16px + env(safe-area-inset-bottom,0px));}" +
       ".amarte-widget-launcher-icon{width:36px;height:36px;}" +
       ".amarte-widget-launcher-icon svg{width:18px;height:18px;}" +
-      ".amarte-widget-panel{right:16px;bottom:calc(80px + env(safe-area-inset-bottom,0px));}}" +
+      ".amarte-widget-panel{right:16px;bottom:calc(80px + env(safe-area-inset-bottom,0px));}" +
+      ".amarte-widget-root.amarte-clear-reserve .amarte-widget-launcher{right:16px;" +
+      "bottom:calc(16px + 64px + env(safe-area-inset-bottom,0px));z-index:99998;}" +
+      ".amarte-widget-root.amarte-clear-reserve .amarte-widget-panel{right:16px;" +
+      "bottom:calc(80px + 64px + env(safe-area-inset-bottom,0px));z-index:99999;}}" +
       "@media (min-width:769px){.amarte-widget-panel{width:min(420px,calc(100vw - 48px));" +
       "max-height:min(720px,calc(100vh - 140px));}.amarte-widget-messages{min-height:0;}}" +
       /* Live voice */
@@ -2993,7 +3000,12 @@
     quickRow.appendChild(callLink);
     quickRow.appendChild(buildQuickLink(urlPromos, "🎁 PROMOCIONES", ""));
     quickRow.appendChild(buildQuickLink(urlRes, "📅 Reservar", ""));
-    quickRow.appendChild(buildQuickLink(urlWompi, "💳 Wompi", ""));
+    // reservas es la única landing kind form. Su pago por reserva lo crea la
+    // página (create-wompi-payment-link). Este href es el checkout genérico y
+    // no hay otra URL en este repo: el pie no lo muestra.
+    if (readAmarteLanding().toLowerCase() !== "reservas") {
+      quickRow.appendChild(buildQuickLink(urlWompi, "💳 Wompi", ""));
+    }
 
     var liveBtn = document.createElement("button");
     liveBtn.type = "button";
@@ -3148,7 +3160,61 @@
      * lanzador (z-index 99998) y del panel (z-index 99999). Mientras ese
      * diálogo está visible, se ocultan los dos. Los diálogos del propio
      * widget no cuentan.
+     *
+     * «Reservar sin Pago» no es un diálogo: es un botón del formulario
+     * (min-height 52px). Si su rectángulo pisa la esquina fija del lanzador,
+     * la clase amarte-clear-reserve lo sube 64px (52 del botón + 12 de aire)
+     * y conserva z-index 99998 / 99999. El hueco es el de reposo, no el rect
+     * ya desplazado, para no oscilar.
      */
+    var LAUNCHER_REST = {
+      desktop: { right: 24, bottom: 24, width: 220, height: 56 },
+      mobile: { right: 16, bottom: 16, width: 180, height: 52 },
+    };
+
+    function launcherRestSlot() {
+      var viewportWidth = window.innerWidth || 0;
+      var viewportHeight = window.innerHeight || 0;
+      var spec = viewportWidth <= 768 ? LAUNCHER_REST.mobile : LAUNCHER_REST.desktop;
+      var right = viewportWidth - spec.right;
+      var bottom = viewportHeight - spec.bottom;
+      return {
+        left: right - spec.width,
+        top: bottom - spec.height,
+        right: right,
+        bottom: bottom,
+        width: spec.width,
+        height: spec.height,
+      };
+    }
+
+    function rectsOverlap(a, b) {
+      return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+    }
+
+    function isReserveWithoutPayControl(el) {
+      if (!el || el.nodeType !== 1) return false;
+      var tag = el.tagName;
+      if (tag !== "BUTTON" && tag !== "A" && el.getAttribute("role") !== "button") return false;
+      var text = String(el.textContent || "").replace(/\s+/g, " ").trim();
+      return /reservar\s+sin\s+pago/i.test(text);
+    }
+
+    function reserveWithoutPayBlocksLauncher() {
+      var slot = launcherRestSlot();
+      if (slot.width <= 0 || slot.height <= 0 || slot.right <= 0 || slot.bottom <= 0) return false;
+      var nodes = document.querySelectorAll("button, a, [role='button']");
+      for (var i = 0; i < nodes.length; i++) {
+        var el = nodes[i];
+        if (!isReserveWithoutPayControl(el) || !pageDialogCoversLauncher(el)) continue;
+        if (typeof el.getBoundingClientRect !== "function") continue;
+        var rect = el.getBoundingClientRect();
+        if (!rect || rect.width <= 0 || rect.height <= 0) continue;
+        if (rectsOverlap(rect, slot)) return true;
+      }
+      return false;
+    }
+
     function pageDialogCoversLauncher(el) {
       if (!el || el.nodeType !== 1) return false;
       if (el.closest("[data-amarte-widget-dialog], .amarte-widget-root")) return false;
@@ -3196,12 +3262,21 @@
         }
         setHidden(launcher, open);
         setHidden(panel, open);
+        if (reserveWithoutPayBlocksLauncher()) {
+          if (!widgetRoot.classList.contains("amarte-clear-reserve")) {
+            widgetRoot.classList.add("amarte-clear-reserve");
+          }
+        } else if (widgetRoot.classList.contains("amarte-clear-reserve")) {
+          widgetRoot.classList.remove("amarte-clear-reserve");
+        }
       } finally {
         syncingPageDialog = false;
       }
     }
 
     syncPageDialogLauncher();
+    window.addEventListener("scroll", syncPageDialogLauncher, true);
+    window.addEventListener("resize", syncPageDialogLauncher);
     var pageDialogObserver = new MutationObserver(syncPageDialogLauncher);
     pageDialogObserver.observe(document.documentElement, {
       subtree: true,
