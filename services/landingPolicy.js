@@ -9,6 +9,7 @@ const {
   LANDINGS,
   resolveLanding,
   landingsAskedInMessage,
+  promoAmarteAmounts,
 } = require("../config/landings");
 const { VALID_TIPOS } = require("../reservationService");
 const {
@@ -296,23 +297,17 @@ function promoQuoteLines(landing) {
       ];
     case "promo-amarte": {
       const terms = landing.promoAmarte;
-      const lines = [
-        `Oferta de esta landing (promo-amarte): la hora se paga a ${formatCop(terms.hourPrice)}.`,
-        "Si pagan parcial o el total de las 3 horas, hay descuento.",
+      const amounts = promoAmarteAmounts(terms);
+      const discount = terms.threeHourDiscount;
+      return [
+        `Oferta de esta landing (promo-amarte): la hora suelta se paga a ${formatCop(terms.hourPrice)}.`,
+        `1 hora y 2 horas se pagan completas, sin el descuento de 3 horas. 2 horas: ${formatCop(amounts.twoHours)}.`,
+        `Si reservan ${amounts.hours} horas, la base es ${amounts.hours} × ${formatCop(terms.hourPrice)} = ${formatCop(amounts.base)}.`,
+        `Si abonan el ${discount.depositSharePercent}% (${formatCop(amounts.depositPayNow)} ahora), el descuento es del ${discount.depositDiscountPercent}% y el total queda en ${formatCop(amounts.depositTotal)}. El resto (${formatCop(amounts.depositPayAtHotel)}) se paga en el hotel.`,
+        `Si pagan el total, el descuento es del ${discount.fullDiscountPercent}% y pagan ${formatCop(amounts.fullTotal)}.`,
+        "Esos montos salen solo de la hora y de esos porcentajes. No uses otra base de 3 horas ni otro descuento.",
+        "Los packs de 4 h en adelante salen de room_rates. Si no hay fila, no inventes el monto.",
       ];
-      if (terms.threeHourDiscount == null) {
-        lines.push(
-          "El monto de ese descuento no está confirmado. No des un monto de descuento, ni un porcentaje, ni un total de 3 horas. Di que hay descuento y remite al formulario de esta página."
-        );
-      } else {
-        lines.push(
-          `Descuento confirmado de 3 horas: ${formatCop(terms.threeHourDiscount)}.`
-        );
-      }
-      lines.push(
-        "Los packs de 4 h en adelante salen de room_rates. Si no hay fila, no inventes el monto."
-      );
-      return lines;
     }
     default: {
       const unknown = landing.offer;
@@ -483,8 +478,17 @@ function collectLandingAmounts(landing, rates) {
   const quoted = offerAmount(landing);
   if (Number.isFinite(quoted) && quoted > 0) allow.add(quoted);
   if (landing.offer === "promo-amarte") {
-    const discount = landing.promoAmarte.threeHourDiscount;
-    if (Number.isFinite(discount) && discount > 0) allow.add(discount);
+    const amounts = promoAmarteAmounts(landing.promoAmarte);
+    for (const amount of [
+      amounts.twoHours,
+      amounts.base,
+      amounts.depositPayNow,
+      amounts.depositPayAtHotel,
+      amounts.depositTotal,
+      amounts.fullTotal,
+    ]) {
+      if (Number.isFinite(amount) && amount > 0) allow.add(amount);
+    }
   }
   if (!(rates instanceof Map)) return allow;
   assertKnownKind(landing.kind);

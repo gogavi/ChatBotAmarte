@@ -15,9 +15,24 @@ const { PLAN_SUITE_RULES, PLAN_CHOICE_GROUP } = require("./planSuites");
  * @typedef {"promo-jacuzzi"|"promo-amarte"|null} LandingOffer
  * @typedef {"tematicas"|"deluxe"|null} LandingGrupo
  * @typedef {{
+ *   hours: number;
+ *   depositSharePercent: number;
+ *   depositDiscountPercent: number;
+ *   fullDiscountPercent: number;
+ * }} PromoAmarteThreeHourDiscount
+ * @typedef {{
  *   hourPrice: number;
- *   threeHourDiscount: number | null;
+ *   threeHourDiscount: PromoAmarteThreeHourDiscount;
  * }} PromoAmarteTerms
+ * @typedef {{
+ *   hours: number;
+ *   twoHours: number;
+ *   base: number;
+ *   depositPayNow: number;
+ *   depositPayAtHotel: number;
+ *   depositTotal: number;
+ *   fullTotal: number;
+ * }} PromoAmarteAmounts
  * @typedef {{
  *   label: string;
  *   roomTypeName: string;
@@ -81,12 +96,17 @@ const LANDINGS = Object.freeze([
     url: "https://microservicio-promo-suite-amarte.vercel.app",
     aliasUrls: Object.freeze(["https://promoamarte.amartesuite.com"]),
     kind: "product",
-    // Beneficio confirmado por Guillermo: la hora a 30000.
-    // El descuento de 3 horas (pago parcial o total) sigue sin monto.
+    // Hora suelta a 30000. Las 3 h de la landing son hours * PRICE_PER_HOUR.
+    // Abono 50%: total base * 0.9. Pago total: base * 0.8.
     offer: "promo-amarte",
     promoAmarte: Object.freeze({
       hourPrice: 30000,
-      threeHourDiscount: null,
+      threeHourDiscount: Object.freeze({
+        hours: 3,
+        depositSharePercent: 50,
+        depositDiscountPercent: 10,
+        fullDiscountPercent: 20,
+      }),
     }),
     distinctPhrases: Object.freeze([]),
     suites: Object.freeze([
@@ -199,6 +219,30 @@ const LANDINGS = Object.freeze([
  * @param {unknown} raw
  * @returns {Landing | null}
  */
+/**
+ * Montos de promo-amarte. Salen de la hora y de los porcentajes.
+ * La base de 3 h es hourPrice * hours, la misma cuenta que getBasePrice
+ * de la landing (3 * 30000 = 90000).
+ * @param {PromoAmarteTerms} terms
+ * @returns {PromoAmarteAmounts}
+ */
+function promoAmarteAmounts(terms) {
+  const discount = terms.threeHourDiscount;
+  const base = terms.hourPrice * discount.hours;
+  const depositTotal = Math.round(base * (1 - discount.depositDiscountPercent / 100));
+  const fullTotal = Math.round(base * (1 - discount.fullDiscountPercent / 100));
+  const depositPayNow = Math.round(base * (discount.depositSharePercent / 100));
+  return {
+    hours: discount.hours,
+    twoHours: terms.hourPrice * 2,
+    base,
+    depositPayNow,
+    depositPayAtHotel: depositTotal - depositPayNow,
+    depositTotal,
+    fullTotal,
+  };
+}
+
 function resolveLanding(raw) {
   if (typeof raw !== "string") return null;
   const id = raw.trim().toLowerCase();
@@ -440,4 +484,5 @@ module.exports = {
   normalizeLandingText,
   landingsAskedInMessage,
   landingsForRoomTypes,
+  promoAmarteAmounts,
 };

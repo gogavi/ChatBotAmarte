@@ -4,7 +4,7 @@
  */
 const assert = require("assert");
 const { formatCop, promoJacuzzi } = require("../config/amarteCatalog");
-const { resolveLanding } = require("../config/landings");
+const { resolveLanding, promoAmarteAmounts } = require("../config/landings");
 const { setRoomRatesCacheForTests, resetRoomRatesCache } = require("../services/roomRatesCatalog");
 const {
   beginLandingTurn,
@@ -80,27 +80,35 @@ assert.ok(listOn.includes(formatCop(240000)));
 assert.ok(!listOn.includes(formatCop(promoJacuzzi.price)));
 
 const promoAmarteLanding = resolveLanding("promo-suite-amarte");
-assert.strictEqual(promoAmarteLanding.promoAmarte.threeHourDiscount, null);
+const promoAmarteQuote = promoAmarteAmounts(promoAmarteLanding.promoAmarte);
+assert.strictEqual(promoAmarteQuote.base, 90000);
+assert.strictEqual(promoAmarteQuote.depositTotal, 81000);
+assert.strictEqual(promoAmarteQuote.fullTotal, 72000);
 const amarteRates = new Map([
   [
     "Suite Amarte",
-    entry("Suite Amarte", { h4: 90000, h8: 120000 }, { h4: 110000 }),
+    entry("Suite Amarte", { h4: 95000, h8: 120000 }, { h4: 110000 }),
   ],
 ]);
 const promoAmarteBlock = formatLandingPriceBlock(promoAmarteLanding, amarteRates);
 assert.ok(promoAmarteBlock.includes(formatCop(promoAmarteLanding.promoAmarte.hourPrice)));
-assert.ok(promoAmarteBlock.includes("hay descuento"));
-assert.ok(promoAmarteBlock.includes("formulario"));
-assert.ok(promoAmarteBlock.includes(`4 h: ${formatCop(90000)}`));
-assert.ok(!promoAmarteBlock.includes(formatCop(60000)));
-assert.ok(!promoAmarteBlock.includes("60.000"));
-assert.ok(!/descuento de \$\d/.test(promoAmarteBlock));
-assert.ok(!promoAmarteBlock.includes("%"));
+assert.ok(promoAmarteBlock.includes(formatCop(promoAmarteQuote.twoHours)));
+assert.ok(promoAmarteBlock.includes(formatCop(promoAmarteQuote.base)));
+assert.ok(promoAmarteBlock.includes(formatCop(promoAmarteQuote.depositTotal)));
+assert.ok(promoAmarteBlock.includes(formatCop(promoAmarteQuote.fullTotal)));
+assert.ok(promoAmarteBlock.includes(formatCop(promoAmarteQuote.depositPayNow)));
+assert.ok(promoAmarteBlock.includes(formatCop(promoAmarteQuote.depositPayAtHotel)));
+assert.ok(promoAmarteBlock.includes("10%"));
+assert.ok(promoAmarteBlock.includes("20%"));
+assert.ok(promoAmarteBlock.includes("50%"));
+assert.ok(promoAmarteBlock.includes(`4 h: ${formatCop(95000)}`));
+assert.ok(!promoAmarteBlock.includes(formatCop(75000)));
 const promoAmarteBare = formatLandingPriceBlock(promoAmarteLanding, null);
 assert.ok(promoAmarteBare.includes(formatCop(30000)));
-assert.ok(promoAmarteBare.includes("formulario"));
-assert.ok(!promoAmarteBare.includes("60.000"));
-assert.ok(!promoAmarteBare.includes("90.000"));
+assert.ok(promoAmarteBare.includes(formatCop(90000)));
+assert.ok(promoAmarteBare.includes(formatCop(81000)));
+assert.ok(promoAmarteBare.includes(formatCop(72000)));
+assert.ok(!promoAmarteBare.includes(formatCop(95000)));
 
 const scrubbed = stripUntrustedCopAmounts(
   `Lista ${formatCop(240000)} y promo ${formatCop(150000)} y hora ${formatCop(30000)}.`
@@ -356,15 +364,19 @@ assert.deepStrictEqual(untouched.pendingReservation, { tipo: "Suite Amarte" });
   setRoomRatesCacheForTests(amarteRates);
   const amarteTurn = await beginLandingTurn("promo-suite-amarte");
   assert.ok(amarteTurn.addendum.includes(formatCop(30000)));
-  assert.ok(amarteTurn.addendum.includes("hay descuento"));
-  assert.ok(amarteTurn.addendum.includes("formulario"));
-  assert.ok(!amarteTurn.addendum.includes("60.000"));
+  assert.ok(amarteTurn.addendum.includes(formatCop(81000)));
+  assert.ok(amarteTurn.addendum.includes(formatCop(72000)));
+  assert.ok(amarteTurn.addendum.includes("10%"));
+  assert.ok(amarteTurn.addendum.includes("20%"));
   const keptHour = finishLandingReply(
     amarteTurn,
-    `La hora sale a ${formatCop(30000)}.`,
-    "cuánto vale la hora"
+    `La hora sale a ${formatCop(30000)}. 3 horas ${formatCop(90000)}. Con 10% quedan ${formatCop(81000)} y con 20% quedan ${formatCop(72000)}.`,
+    "cuánto vale la hora y las 3 horas"
   );
   assert.ok(keptHour.includes(formatCop(30000)));
+  assert.ok(keptHour.includes(formatCop(90000)));
+  assert.ok(keptHour.includes(formatCop(81000)));
+  assert.ok(keptHour.includes(formatCop(72000)));
   const strippedDiscount = finishLandingReply(
     amarteTurn,
     `Hay descuento de ${formatCop(9000)} y 3 horas quedan en ${formatCop(75000)}.`,
@@ -375,10 +387,10 @@ assert.deepStrictEqual(untouched.pendingReservation, { tipo: "Suite Amarte" });
   assert.ok(strippedDiscount.includes("tarifa no disponible"));
   const keptList = finishLandingReply(
     amarteTurn,
-    `4 h: ${formatCop(90000)}.`,
+    `4 h: ${formatCop(95000)}.`,
     "pack de 4 horas"
   );
-  assert.ok(keptList.includes(formatCop(90000)));
+  assert.ok(keptList.includes(formatCop(95000)));
 
   setRoomRatesCacheForTests(null);
   const siteDown = await beginPriceTurn(undefined);

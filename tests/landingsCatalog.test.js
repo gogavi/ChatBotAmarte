@@ -8,6 +8,7 @@ const {
   resolveLandingByPageUrl,
   resolveChatLanding,
   landingBrowserOrigins,
+  promoAmarteAmounts,
 } = require("../config/landings");
 
 const EXPECTED = [
@@ -111,7 +112,18 @@ assert.strictEqual(resolveLanding("promo-suite-jacuzzi").offer, "promo-jacuzzi")
 const promoAmarte = resolveLanding("promo-suite-amarte");
 assert.strictEqual(promoAmarte.offer, "promo-amarte");
 assert.strictEqual(promoAmarte.promoAmarte.hourPrice, 30000);
-assert.strictEqual(promoAmarte.promoAmarte.threeHourDiscount, null);
+assert.strictEqual(promoAmarte.promoAmarte.threeHourDiscount.hours, 3);
+assert.strictEqual(promoAmarte.promoAmarte.threeHourDiscount.depositSharePercent, 50);
+assert.strictEqual(promoAmarte.promoAmarte.threeHourDiscount.depositDiscountPercent, 10);
+assert.strictEqual(promoAmarte.promoAmarte.threeHourDiscount.fullDiscountPercent, 20);
+const promoAmarteMath = promoAmarteAmounts(promoAmarte.promoAmarte);
+assert.strictEqual(promoAmarteMath.base, promoAmarte.promoAmarte.hourPrice * 3);
+assert.strictEqual(promoAmarteMath.base, 90000);
+assert.strictEqual(promoAmarteMath.depositTotal, 81000);
+assert.strictEqual(promoAmarteMath.fullTotal, 72000);
+assert.strictEqual(promoAmarteMath.depositPayNow, 45000);
+assert.strictEqual(promoAmarteMath.depositPayAtHotel, 36000);
+assert.strictEqual(promoAmarteMath.twoHours, 60000);
 assert.deepStrictEqual(
   LANDINGS.filter((landing) => landing.offer === null).map((landing) => landing.id),
   [
