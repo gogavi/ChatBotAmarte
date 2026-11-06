@@ -1404,7 +1404,7 @@
     liveState.liveBtn.classList.add("amarte-live-soon");
     liveState.liveBtn.setAttribute("aria-label", "Hablar en vivo con Martina — Próximamente");
     liveState.liveBtn.setAttribute("title", "Próximamente");
-    var label = liveState.liveBtn.querySelector("span:not(.amarte-live-dot)");
+    var label = liveState.liveBtn.querySelector(".amarte-live-txt");
     if (label) label.textContent = "Próximamente";
   }
 
@@ -1437,30 +1437,36 @@
       "bottom:calc(24px + 64px + env(safe-area-inset-bottom,0px));z-index:99998;}" +
       ".amarte-widget-root.amarte-clear-reserve .amarte-widget-panel{z-index:99999;}" +
       ".amarte-widget-panel{position:fixed;right:24px;left:auto;bottom:96px;width:min(380px,calc(100vw - 32px));" +
-      "max-height:min(560px,calc(100vh - 120px));background:rgba(255,255,255,0.92);border:1px solid #fff;" +
-      "border-radius:25px;box-shadow:0 12px 40px rgba(0,0,0,0.1);backdrop-filter:blur(15px);-webkit-backdrop-filter:blur(15px);" +
+      "max-height:min(560px,calc(100vh - 120px));background:rgba(11,11,18,0.96);border:1px solid rgba(0,178,255,0.55);" +
+      "border-radius:20px;box-shadow:0 12px 40px rgba(0,0,0,0.5),0 0 18px rgba(0,178,255,0.18);backdrop-filter:blur(15px);-webkit-backdrop-filter:blur(15px);" +
       "z-index:99999;display:flex;flex-direction:column;overflow:hidden;opacity:0;" +
-      "transform:translateY(12px) scale(0.98);pointer-events:none;color:#1a1a1a;color-scheme:light;" +
+      "transform:translateY(12px) scale(0.98);pointer-events:none;color:#f2f2f5;color-scheme:dark;" +
       "transition:opacity 0.25s ease,transform 0.25s ease;}" +
       ".amarte-widget-panel.amarte-open{opacity:1;transform:translateY(0) scale(1);pointer-events:auto;}" +
-      ".amarte-widget-header{background:transparent;padding:16px 18px 12px;" +
+      ".amarte-widget-header{background:transparent;padding:12px 12px 12px 14px;gap:10px;" +
+      "border-bottom:1px solid rgba(255,255,255,0.08);" +
       "display:flex;align-items:center;justify-content:space-between;}" +
+      ".amarte-widget-head-id{display:flex;align-items:center;gap:10px;min-width:0;}" +
+      ".amarte-widget-avatar{width:38px;height:38px;border-radius:50%;flex-shrink:0;background:#D81B60;color:#fff;" +
+      "display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 2px rgba(0,178,255,0.55);}" +
       ".amarte-widget-title{font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;" +
-      "font-size:1.1rem;font-weight:600;letter-spacing:0.02em;color:#D81B60;}" +
-      ".amarte-widget-sub{color:#9e9e9e;font-size:0.75rem;margin-top:4px;}" +
-      ".amarte-widget-close{background:transparent;border:none;color:#9e9e9e;cursor:pointer;" +
-      "padding:4px;line-height:1;font-size:1.5rem;}" +
-      ".amarte-widget-close:hover{color:#D81B60;}" +
+      "font-size:0.98rem;font-weight:700;letter-spacing:0.01em;color:#fff;line-height:1.2;}" +
+      ".amarte-widget-sub{color:rgba(255,255,255,0.62);font-size:0.72rem;margin-top:2px;display:flex;align-items:center;gap:5px;}" +
+      ".amarte-widget-sub::before{content:'';width:7px;height:7px;border-radius:50%;background:#33d17a;flex-shrink:0;}" +
+      ".amarte-widget-head-actions{display:flex;align-items:center;gap:4px;flex-shrink:0;}" +
+      ".amarte-widget-close{background:transparent;border:none;color:rgba(255,255,255,0.65);cursor:pointer;" +
+      "padding:4px 8px;line-height:1;font-size:1.5rem;}" +
+      ".amarte-widget-close:hover{color:#fff;}" +
       ".amarte-widget-messages{flex:1;min-height:0;overflow-y:auto;padding:16px;background:transparent;}" +
       ".amarte-msg{margin-bottom:12px;display:flex;flex-direction:column;align-items:flex-start;}" +
       ".amarte-msg-user{align-items:flex-end;}" +
-      ".amarte-bubble-inner{max-width:85%;padding:10px 14px;border-radius:14px;font-size:0.95rem;line-height:1.45;" +
+      ".amarte-bubble-inner{max-width:88%;padding:9px 13px;border-radius:14px;font-size:0.88rem;line-height:1.45;" +
       "word-break:break-word;font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI','Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji',sans-serif;}" +
-      ".amarte-msg-bot .amarte-inline-link{color:#AD1457;text-decoration:underline;font-weight:600;}" +
-      ".amarte-msg-bot .amarte-inline-link:hover{color:#1A1A3D;}" +
+      ".amarte-msg-bot .amarte-inline-link{color:#FF6FA8;text-decoration:underline;font-weight:600;}" +
+      ".amarte-msg-bot .amarte-inline-link:hover{color:#fff;}" +
       ".amarte-suite-video-btn{display:inline;margin:0;padding:0;border:none;background:none;" +
-      "color:#AD1457;text-decoration:underline;font-weight:600;font:inherit;cursor:pointer;}" +
-      ".amarte-suite-video-btn:hover{color:#1A1A3D;}" +
+      "color:#FF6FA8;text-decoration:underline;font-weight:600;font:inherit;cursor:pointer;}" +
+      ".amarte-suite-video-btn:hover{color:#fff;}" +
       ".amarte-suite-video-cta{display:inline-flex;align-items:center;gap:6px;margin-top:10px;" +
       "padding:10px 14px;border-radius:999px;border:none;cursor:pointer;font-weight:600;font-size:0.85rem;" +
       "background:#D81B60;color:#fff;}" +
@@ -1492,12 +1498,12 @@
       "background:rgba(0,0,0,0.55);color:#fff;font-size:1.35rem;cursor:pointer;line-height:1;" +
       "padding:6px 10px;border-radius:999px;}" +
       ".amarte-plan-image-full{display:block;width:100%;max-height:min(92vh,1280px);object-fit:contain;background:#000;}" +
-      ".amarte-msg-bot .amarte-bubble-inner{background:#fff;border:1px solid #e0e0e0;color:#1a1a1a;}" +
-      ".amarte-msg-bot .amarte-promo-title{display:block;margin:12px 0 6px;color:#D81B60;" +
+      ".amarte-msg-bot .amarte-bubble-inner{background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);color:#f2f2f5;}" +
+      ".amarte-msg-bot .amarte-promo-title{display:block;margin:12px 0 6px;color:#FF6FA8;" +
       "font-weight:800;font-size:1.05rem;letter-spacing:0.01em;line-height:1.3;}" +
       ".amarte-msg-bot .amarte-promo-title:first-child{margin-top:2px;}" +
       ".amarte-msg-user .amarte-bubble-inner{background:linear-gradient(145deg,#E91E63,#D81B60);color:#ffffff;}" +
-      ".amarte-typing{font-size:0.85rem;color:#666;font-style:italic;padding:4px 0 8px;}" +
+      ".amarte-typing{font-size:0.85rem;color:rgba(255,255,255,0.6);font-style:italic;padding:4px 0 8px;}" +
       ".amarte-options{margin-top:8px;display:flex;flex-wrap:wrap;gap:8px;}" +
       ".amarte-opt-link{display:inline-block;padding:10px 16px;border-radius:30px;border:none;" +
       "color:#fff;text-decoration:none;font-size:0.85rem;font-weight:600;background:#D81B60;" +
@@ -1523,34 +1529,44 @@
       ".amarte-dt-submit:disabled{opacity:0.55;cursor:not-allowed;}" +
       ".amarte-dt-error{margin:0 0 8px;font-size:0.78rem;color:#c62828;}" +
       ".amarte-widget-footer-wrap{flex-shrink:0;display:flex;flex-direction:column;background:transparent;}" +
-      ".amarte-widget-footer-row{display:flex;gap:8px;padding:12px 16px 8px;background:transparent;align-items:center;}" +
-      ".amarte-widget-mic-hint{margin:0;padding:0 16px 8px;font-size:0.75rem;line-height:1.35;" +
-      "color:rgba(0,0,0,0.55);text-align:center;}" +
-      ".amarte-widget-quick-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;" +
-      "padding:0 16px 16px;background:transparent;margin-top:4px;}" +
-      ".amarte-widget-quick-row .amarte-opt-link{text-align:center;width:100%;box-sizing:border-box;}" +
+      ".amarte-widget-footer-row{display:flex;gap:6px;padding:8px 14px 6px;background:transparent;align-items:center;}" +
+      ".amarte-widget-mic-hint{margin:0;padding:0 14px 8px;font-size:0.68rem;line-height:1.3;" +
+      "color:rgba(255,255,255,0.5);text-align:center;}" +
+      /* Chips de acceso rápido (una fila, con scroll horizontal) */
+      ".amarte-quick-chips{display:flex;gap:8px;padding:8px 14px 0;overflow-x:auto;scrollbar-width:none;}" +
+      ".amarte-quick-chips::-webkit-scrollbar{display:none;}" +
+      ".amarte-quick-chips .amarte-opt-link{flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;" +
+      "padding:7px 12px;border-radius:12px;background:rgba(255,255,255,0.06);" +
+      "border:1px solid rgba(0,178,255,0.45);color:#fff;font-size:0.78rem;font-weight:600;white-space:nowrap;}" +
+      ".amarte-quick-chips .amarte-opt-link:hover{background:rgba(0,178,255,0.16);color:#fff;}" +
+      /* Contacto: WhatsApp (principal) + Llamar, mismo ancho */
+      ".amarte-quick-cta{display:flex;gap:8px;padding:8px 14px 14px;background:transparent;}" +
+      ".amarte-quick-cta .amarte-opt-link{flex:1 1 0;min-width:0;display:inline-flex;align-items:center;justify-content:center;" +
+      "gap:7px;padding:11px 12px;border-radius:12px;font-size:0.88rem;box-sizing:border-box;}" +
+      ".amarte-quick-cta .amarte-quick-call{background:transparent;border:1px solid rgba(255,255,255,0.28);color:#fff;}" +
+      ".amarte-quick-cta .amarte-quick-call:hover{background:rgba(255,255,255,0.1);color:#fff;}" +
+      ".amarte-opt-link svg{width:16px;height:16px;flex-shrink:0;}" +
+      ".amarte-opt-lbl{text-transform:lowercase;}.amarte-opt-lbl::first-letter{text-transform:uppercase;}" +
       "@media (min-width:769px){.amarte-widget-root:not(.amarte-show-desktop-call) .amarte-quick-call{display:none !important;}}" +
-      "@media (max-width:768px){.amarte-widget-quick-row{grid-template-columns:1fr 1fr;}" +
-      ".amarte-widget-quick-row .amarte-quick-call{grid-column:1 / -1;}}" +
-      ".amarte-widget-input{flex:1;border:1px solid rgba(0,0,0,0.12);border-radius:999px;" +
-      "padding:12px 16px;font-size:0.95rem;outline:none;background:#fff !important;" +
-      "box-shadow:none;color:#0D0D11 !important;caret-color:#0D0D11 !important;" +
+      ".amarte-widget-input{flex:1;min-width:0;border:1px solid rgba(255,255,255,0.16);border-radius:999px;" +
+      "padding:11px 16px;font-size:0.92rem;outline:none;background:rgba(255,255,255,0.07) !important;" +
+      "box-shadow:none;color:#fff !important;caret-color:#fff !important;" +
       "font-family:'Jost',system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;" +
-      "font-weight:400;-webkit-text-fill-color:#0D0D11 !important;opacity:1 !important;color-scheme:light;}" +
-      ".amarte-widget-input::placeholder{color:#929095 !important;opacity:1;-webkit-text-fill-color:#929095 !important;}" +
-      ".amarte-widget-input:focus{border-color:#D81B60;}" +
+      "font-weight:400;-webkit-text-fill-color:#fff !important;opacity:1 !important;color-scheme:dark;}" +
+      ".amarte-widget-input::placeholder{color:rgba(255,255,255,0.5) !important;opacity:1;-webkit-text-fill-color:rgba(255,255,255,0.5) !important;}" +
+      ".amarte-widget-input:focus{border-color:#00B2FF;}" +
       ".amarte-widget-input:-webkit-autofill,.amarte-widget-input:-webkit-autofill:hover," +
-      ".amarte-widget-input:-webkit-autofill:focus{-webkit-text-fill-color:#0D0D11 !important;" +
-      "box-shadow:0 0 0 1000px #fff inset !important;transition:background-color 9999s ease-out 0s;}" +
-      ".amarte-widget-mic{background:transparent;color:#D81B60;border:none;border-radius:50%;" +
+      ".amarte-widget-input:-webkit-autofill:focus{-webkit-text-fill-color:#fff !important;" +
+      "box-shadow:0 0 0 1000px #1a1a26 inset !important;transition:background-color 9999s ease-out 0s;}" +
+      ".amarte-widget-mic{background:transparent;color:#FF6FA8;border:none;border-radius:50%;" +
       "width:40px;height:40px;padding:0;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;" +
       "transition:background 0.2s ease,color 0.2s ease;}" +
-      ".amarte-widget-mic:hover{background:rgba(216,27,96,0.08);}" +
+      ".amarte-widget-mic:hover{background:rgba(255,255,255,0.08);}" +
       ".amarte-widget-mic:disabled{opacity:0.5;cursor:not-allowed;}" +
       ".amarte-widget-mic.amarte-recording{background:#2E7D32;color:#fff;}" +
       ".amarte-widget-mic.amarte-recording:hover{background:#1B5E20;}" +
       ".amarte-widget-audio{width:100%;max-width:100%;margin-top:8px;height:40px;}" +
-      ".amarte-widget-send{width:44px;height:44px;min-width:44px;padding:0;border:none;border-radius:50%;" +
+      ".amarte-widget-send{width:42px;height:42px;min-width:42px;padding:0;border:none;border-radius:50%;" +
       "background:#D81B60;color:#fff;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;" +
       "box-shadow:0 4px 12px rgba(216,27,96,0.35);transition:background 0.2s ease,transform 0.15s ease;}" +
       ".amarte-widget-send:hover{background:#AD1457;transform:scale(1.05);}" +
@@ -1609,6 +1625,15 @@
       ".amarte-live-btn.amarte-live-soon{opacity:0.9;cursor:not-allowed;background:#17172a;color:rgba(255,255,255,0.78);" +
       "padding:6px 12px;font-size:0.75rem;margin-bottom:4px;}" +
       ".amarte-live-btn.amarte-live-soon:hover{background:#17172a;}" +
+      /* Variante icono (encabezado): sin texto visible; la raya cruzada marca “desactivado” */
+      ".amarte-live-btn.amarte-live-icon{width:34px;height:34px;margin:0;padding:0;border-radius:50%;" +
+      "background:transparent;color:rgba(255,255,255,0.75);position:relative;}" +
+      ".amarte-live-btn.amarte-live-icon:hover{background:rgba(255,255,255,0.08);}" +
+      ".amarte-live-btn.amarte-live-icon.amarte-live-soon{background:transparent;color:rgba(255,255,255,0.4);padding:0;margin:0;}" +
+      ".amarte-live-btn.amarte-live-icon .amarte-live-dot,.amarte-live-btn.amarte-live-icon .amarte-live-txt{" +
+      "position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;padding:0;margin:-1px;border:0;background:none;}" +
+      ".amarte-live-btn .amarte-live-slash{display:none;}" +
+      ".amarte-live-btn.amarte-live-soon .amarte-live-slash{display:block;}" +
       ".amarte-live-btn .amarte-live-dot{width:8px;height:8px;border-radius:50%;background:#e53935;flex-shrink:0;}" +
       ".amarte-live-btn.amarte-live-soon .amarte-live-dot{background:#9e9e9e;}" +
       ".amarte-widget-footer-wrap>.amarte-live-btn{align-self:center;}" +
@@ -3017,23 +3042,33 @@
     // Cabecera del panel
     var header = document.createElement("div");
     header.className = "amarte-widget-header";
+    var headId = document.createElement("div");
+    headId.className = "amarte-widget-head-id";
+    var avatar = document.createElement("span");
+    avatar.className = "amarte-widget-avatar";
+    avatar.setAttribute("aria-hidden", "true");
+    avatar.innerHTML = launcherIcon.innerHTML;
     var titleWrap = document.createElement("div");
     var title = document.createElement("div");
     title.className = "amarte-widget-title";
-    title.textContent = "Amarte Suite";
+    title.textContent = "Martina IA";
     var sub = document.createElement("div");
     sub.className = "amarte-widget-sub";
-    sub.textContent = "Martina IA";
+    sub.textContent = "En línea · Amarte Suite";
     titleWrap.appendChild(title);
     titleWrap.appendChild(sub);
+    headId.appendChild(avatar);
+    headId.appendChild(titleWrap);
+    var headActions = document.createElement("div");
+    headActions.className = "amarte-widget-head-actions";
 
     var closeBtn = document.createElement("button");
     closeBtn.type = "button";
     closeBtn.className = "amarte-widget-close";
     closeBtn.setAttribute("aria-label", "Cerrar chat");
     closeBtn.innerHTML = "&times;";
-    header.appendChild(titleWrap);
-    header.appendChild(closeBtn);
+    header.appendChild(headId);
+    header.appendChild(headActions);
 
     // Área de mensajes con scroll
     messagesEl = document.createElement("div");
@@ -3090,8 +3125,30 @@
     micHint.textContent =
       "Presiona el micrófono para hablar y nuevamente para finalizar";
 
+    /* Dos filas de accesos: chips (arriba del campo) y contacto (WhatsApp + Llamar, abajo).
+       Ambas conservan la clase amarte-widget-quick-row (la usan las pruebas y el CSS base). */
+    var chipsRow = document.createElement("div");
+    chipsRow.className = "amarte-widget-quick-row amarte-quick-chips";
     var quickRow = document.createElement("div");
-    quickRow.className = "amarte-widget-quick-row";
+    quickRow.className = "amarte-widget-quick-row amarte-quick-cta";
+    var QUICK_ICONS = {
+      wa: '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>',
+      call: '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.12.9.33 1.78.62 2.62a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.46-1.19a2 2 0 0 1 2.11-.45c.84.29 1.72.5 2.62.62A2 2 0 0 1 22 16.92z"/></svg>',
+      promo: '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7M7.5 8a2.5 2.5 0 0 1 0-5C11 3 12 8 12 8s1-5 4.5-5a2.5 2.5 0 0 1 0 5"/></svg>',
+      book: '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>',
+      pay: '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>',
+    };
+    /** Enlace rápido con icono de línea; el texto visible queda en un span (textContent = solo la etiqueta). */
+    function iconQuickLink(href, label, extraClass, iconKey) {
+      var a = buildQuickLink(href, "", extraClass);
+      a.innerHTML = QUICK_ICONS[iconKey];
+      var lbl = document.createElement("span");
+      /* Solo las etiquetas en MAYÚSCULAS (PROMOCIONES) se muestran en formato oración */
+      lbl.className = label === label.toUpperCase() ? "amarte-opt-lbl" : "";
+      lbl.textContent = label;
+      a.appendChild(lbl);
+      return a;
+    }
 
     var urlWa = pickQuickUrl("AMARTE_QUICK_WHATSAPP_URL", DEFAULT_QUICK_WHATSAPP);
     var urlRes = withReservationAttribution(
@@ -3101,17 +3158,17 @@
     var urlWompi = pickQuickUrl("AMARTE_QUICK_WOMPI_URL", WOMPI_CHECKOUT_URL);
     var telHref = pickQuickUrl("AMARTE_QUICK_CALL_TEL", DEFAULT_QUICK_TEL);
 
-    quickRow.appendChild(buildQuickLink(urlWa, "💬 WhatsApp", ""));
-    var callLink = buildQuickLink(telHref, "📞 Llamar", "amarte-quick-call");
+    quickRow.appendChild(iconQuickLink(urlWa, "WhatsApp", "", "wa"));
+    var callLink = iconQuickLink(telHref, "Llamar", "amarte-quick-call", "call");
     callLink.setAttribute("aria-label", "Llamar por teléfono");
     quickRow.appendChild(callLink);
-    quickRow.appendChild(buildQuickLink(urlPromos, "🎁 PROMOCIONES", ""));
-    quickRow.appendChild(buildQuickLink(urlRes, "📅 Reservar", ""));
+    chipsRow.appendChild(iconQuickLink(urlPromos, "PROMOCIONES", "", "promo"));
+    chipsRow.appendChild(iconQuickLink(urlRes, "Reservar", "", "book"));
     // reservas es la única landing kind form. Su pago por reserva lo crea la
     // página (create-wompi-payment-link). Este href es el checkout genérico y
     // no hay otra URL en este repo: el pie no lo muestra.
     if (readAmarteLanding().toLowerCase() !== "reservas") {
-      quickRow.appendChild(buildQuickLink(urlWompi, "💳 Wompi", ""));
+      chipsRow.appendChild(iconQuickLink(urlWompi, "Wompi", "", "pay"));
     }
 
     var liveBtn = document.createElement("button");
@@ -3119,12 +3176,22 @@
     liveBtn.className = "amarte-live-btn";
     liveBtn.style.display = "none";
     liveBtn.setAttribute("aria-label", "Hablar en vivo con Martina");
+    liveBtn.classList.add("amarte-live-icon");
     var liveDot = document.createElement("span");
     liveDot.className = "amarte-live-dot";
     liveDot.setAttribute("aria-hidden", "true");
+    var liveIco = document.createElement("span");
+    liveIco.setAttribute("aria-hidden", "true");
+    liveIco.style.display = "flex";
+    liveIco.innerHTML =
+      '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+      '<path d="M3 10v4M7 7v10M11 4v16M15 8v8M19 10v4"/>' +
+      '<path class="amarte-live-slash" d="M3 3l18 18" stroke-width="2.4"/></svg>';
     var liveBtnLabel = document.createElement("span");
+    liveBtnLabel.className = "amarte-live-txt";
     liveBtnLabel.textContent = "Hablar en vivo con Martina";
     liveBtn.appendChild(liveDot);
+    liveBtn.appendChild(liveIco);
     liveBtn.appendChild(liveBtnLabel);
     liveState.liveBtn = liveBtn;
 
@@ -3204,10 +3271,12 @@
     liveOverlay.appendChild(liveCard);
     liveState.overlayEl = liveOverlay;
 
+    headActions.appendChild(liveBtn);
+    headActions.appendChild(closeBtn);
+    footerWrap.appendChild(livePanel);
+    footerWrap.appendChild(chipsRow);
     footerWrap.appendChild(footerRow);
     footerWrap.appendChild(micHint);
-    footerWrap.appendChild(liveBtn);
-    footerWrap.appendChild(livePanel);
     footerWrap.appendChild(quickRow);
 
     panel.appendChild(header);
