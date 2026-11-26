@@ -114,11 +114,13 @@ for (const suite of SAUNA_MENTION_SUITES) {
 }
 assert.deepStrictEqual([...SAUNA_MENTION_SUITES], [
   "Suite Gold",
+  "Suite Rubí",
   "Suite Gótica",
   "Suite Zafiro",
 ]);
-assert.ok(!saunaText.includes("Suite Rubí"));
+assert.ok(saunaText.includes("Suite Rubí"));
 assert.ok(!saunaText.includes("Suite Jacuzzi"));
+assert.ok(!saunaText.includes("Suite Amarte"));
 assert.ok(!/sauna/i.test(includesText));
 
 const decoration = formatDecorationPolicyForPrompt();

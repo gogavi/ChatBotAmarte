@@ -1,10 +1,12 @@
 /**
  * Sauna ilimitado por suite, no por plan.
- * No es la landing suite-sauna-jacuzzi (esa incluye Suite Rubí).
+ * Suites con sauna y jacuzzi: Gold, Rubí (308), Gótica y Zafiro.
+ * No es la landing suite-sauna-jacuzzi (Gold, Rubí y Zafiro; no incluye Gótica).
  */
 
 const SAUNA_MENTION_SUITES = Object.freeze([
   "Suite Gold",
+  "Suite Rubí",
   "Suite Gótica",
   "Suite Zafiro",
 ]);

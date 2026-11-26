@@ -97,13 +97,14 @@ for (const plan of canonicalPlanNames()) {
 }
 
 assert.ok(saunaMentionApplies("Suite Gold"));
+assert.ok(saunaMentionApplies("Suite Rubí"));
 assert.ok(saunaMentionApplies("Suite Gótica"));
 assert.ok(saunaMentionApplies("Suite Zafiro"));
-assert.ok(!saunaMentionApplies("Suite Rubí"));
 assert.ok(!saunaMentionApplies("Suite Jacuzzi"));
+assert.ok(!saunaMentionApplies("Suite Amarte"));
 assert.deepStrictEqual(
   [...SAUNA_MENTION_SUITES],
-  ["Suite Gold", "Suite Gótica", "Suite Zafiro"]
+  ["Suite Gold", "Suite Rubí", "Suite Gótica", "Suite Zafiro"]
 );
 
 console.log("planReplyImage.test.js ok");
