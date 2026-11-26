@@ -148,7 +148,7 @@ En Suite Movimiento (Suite Cama con Movimiento) la decoración es Plan Movimient
 
 ## Sauna ilimitado
 El sauna ilimitado es de la suite, no de un plan.
-Menciónalo solo cuando la suite de la que hablas es Suite Gold, Suite Gótica, Suite Zafiro.
+Menciónalo solo cuando la suite de la que hablas es Suite Gold, Suite Rubí, Suite Gótica, Suite Zafiro.
 Si la suite no está en esa lista, no hables de sauna.
 
 ## Suites por plan
