@@ -325,6 +325,21 @@ async function getRoomRatesCatalog(opts = {}) {
  * @param {Map<string, any> | null} catalog
  * @returns {{ name: string; kind: "suite"|"plan"; weekday: Record<string, number>; weekend: Record<string, number> } | null}
  */
+/**
+ * Plan Cama Movimiento no se ofrece. Si la fila vieja sigue en room_rates,
+ * la cotización usa Plan Movimiento (sus precios, o los de esa fila si es la única).
+ * @param {Map<string, any>} catalog
+ * @param {{ name: string } | null | undefined} entry
+ */
+function offerPlanEntry(catalog, entry) {
+  if (!entry) return null;
+  if (entry.name === "Plan Movimiento" || resolveTipo(entry.name) !== "Plan Movimiento") {
+    return entry;
+  }
+  if (catalog.has("Plan Movimiento")) return catalog.get("Plan Movimiento");
+  return { ...entry, name: "Plan Movimiento" };
+}
+
 function findDbCatalogEntry(suiteQuery, catalog) {
   if (!catalog || !suiteQuery || typeof suiteQuery !== "string") {
     return null;
@@ -335,6 +350,14 @@ function findDbCatalogEntry(suiteQuery, catalog) {
   const resolved = resolveTipo(q);
   if (resolved && catalog.has(resolved)) {
     return catalog.get(resolved);
+  }
+  if (resolved === "Plan Movimiento") {
+    for (const entry of catalog.values()) {
+      const offered = offerPlanEntry(catalog, entry);
+      if (offered && offered.name === "Plan Movimiento" && entry.name !== "Plan Movimiento") {
+        return offered;
+      }
+    }
   }
 
   const qNorm = q
@@ -354,7 +377,7 @@ function findDbCatalogEntry(suiteQuery, catalog) {
       qNorm.includes(nameNorm.replace(/^suite\s+/, "")) ||
       qNorm.includes(nameNorm.replace(/^plan\s+/, ""))
     ) {
-      return entry;
+      return offerPlanEntry(catalog, entry);
     }
   }
 
@@ -371,7 +394,7 @@ function findDbCatalogEntry(suiteQuery, catalog) {
       short.includes(qNorm)
     ) {
       if (catalog.has(tipo)) {
-        return catalog.get(tipo);
+        return offerPlanEntry(catalog, catalog.get(tipo));
       }
     }
   }

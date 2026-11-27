@@ -1,6 +1,6 @@
 /**
  * Una fila por plan. Las viñetas salen de los pósters.
- * Plan Cama Movimiento no tiene póster: conserva la lista anterior.
+ * «Plan Cama Movimiento» no es un plan: las frases alias apuntan a Plan Movimiento.
  * La ruta /plans/<slug>.webp nace solo en planImageForReply.
  */
 
@@ -17,7 +17,7 @@ const AMARTE_SIX = Object.freeze([
 ]);
 
 /**
- * @typedef {"Plan Amarte"|"Plan Cabaña"|"Plan Cama Movimiento"|"Plan Cumpleaños"|"Plan Erótico"|"Plan Húmedo"|"Plan Movimiento"|"Plan Romántico"} PlanName
+ * @typedef {"Plan Amarte"|"Plan Cabaña"|"Plan Cumpleaños"|"Plan Erótico"|"Plan Húmedo"|"Plan Movimiento"|"Plan Romántico"} PlanName
  * @typedef {{ plan: PlanName; includes: readonly string[]; posterSlug: string | null }} PlanRow
  * @typedef {{ plan: PlanName; src: string; alt: string }} PlanImage
  */
@@ -26,17 +26,6 @@ const AMARTE_SIX = Object.freeze([
 const PLAN_ROWS = Object.freeze([
   Object.freeze({ plan: "Plan Amarte", includes: AMARTE_SIX, posterSlug: "plan-amarte" }),
   Object.freeze({ plan: "Plan Cabaña", includes: AMARTE_SIX, posterSlug: "plan-cabana" }),
-  Object.freeze({
-    plan: "Plan Cama Movimiento",
-    includes: Object.freeze([
-      "Pétalos de rosas",
-      "Globos",
-      "Champaña",
-      "Chocolates (2)",
-      "Crispetas (80gr)",
-    ]),
-    posterSlug: null,
-  }),
   Object.freeze({
     plan: "Plan Cumpleaños",
     includes: Object.freeze([
@@ -124,12 +113,6 @@ function assertCatalog() {
         throw new Error(`viñeta de plan no permitida en ${row.plan}: ${label}`);
       }
     }
-    if (row.plan === "Plan Cama Movimiento") {
-      if (row.posterSlug != null) {
-        throw new Error("Plan Cama Movimiento no tiene póster");
-      }
-      continue;
-    }
     if (!row.posterSlug || slugs.has(row.posterSlug)) {
       throw new Error(`slug de póster inválido: ${row.plan}`);
     }
@@ -137,21 +120,32 @@ function assertCatalog() {
   }
 }
 
+/** El cliente aún dice estos nombres. No son filas del catálogo. */
+const PLAN_PHRASE_ALIASES = Object.freeze([
+  Object.freeze({ plan: "Plan Movimiento", phrase: "plan cama movimiento" }),
+  Object.freeze({ plan: "Plan Movimiento", phrase: "plan cama con movimiento" }),
+]);
+
 /** @type {readonly { plan: PlanName; phrase: string }[]} */
 const NAME_INDEX = Object.freeze(
-  [...PLAN_ROWS]
-    .map((row) => ({ plan: row.plan, phrase: fold(row.plan) }))
-    .sort((a, b) => b.phrase.length - a.phrase.length)
+  [
+    ...PLAN_ROWS.map((row) => ({ plan: row.plan, phrase: fold(row.plan) })),
+    ...PLAN_PHRASE_ALIASES.map((alias) => ({ plan: alias.plan, phrase: alias.phrase })),
+  ].sort((a, b) => b.phrase.length - a.phrase.length)
 );
 
-/** Cola sin «Plan », la más larga primero. «cama movimiento» gana a «movimiento». */
+/** Cola sin «Plan », la más larga primero. «cama movimiento» es Plan Movimiento. */
 const PLAN_TAILS = Object.freeze(
-  [...PLAN_ROWS]
-    .map((row) => ({
+  [
+    ...PLAN_ROWS.map((row) => ({
       plan: row.plan,
       phrase: fold(row.plan).replace(/^plan /, ""),
-    }))
-    .sort((a, b) => b.phrase.length - a.phrase.length)
+    })),
+    ...PLAN_PHRASE_ALIASES.map((alias) => ({
+      plan: alias.plan,
+      phrase: alias.phrase.replace(/^plan /, ""),
+    })),
+  ].sort((a, b) => b.phrase.length - a.phrase.length)
 );
 
 /**
@@ -200,7 +194,7 @@ function includesForPlan(plan) {
 
 /**
  * Un solo plan con póster nombrado en el texto, o null.
- * «Plan Cama Movimiento» ocupa su propio tramo y no es «Plan Movimiento».
+ * «Plan Cama Movimiento» se lee como Plan Movimiento.
  * @param {string} text
  * @returns {PlanName | null}
  */

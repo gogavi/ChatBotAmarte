@@ -286,7 +286,7 @@ Nota: cuando el cliente pregunta por jacuzzi / promo, priorizar **Promo Jacuzzi 
 • 12 Horas: $280.000
 • DÍA Hotelero: $320.000
 
-🌿 Plan Cabaña o Plan Cama Movimiento
+🌿 Plan Cabaña o Plan Movimiento
 
 🗓 Domingo a Jueves
 • 6 Horas: $200.000

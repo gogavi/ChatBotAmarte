@@ -208,9 +208,10 @@ function findCatalogEntry(suiteQuery) {
 
   for (const [key, entry] of Object.entries(pricing.plans)) {
     const name = String(entry.name || "").toLowerCase();
-    if (name === q || name.includes(q) || q.includes(name)) {
-      return { key, name: entry.name, kind: "plan", entry };
-    }
+    if (!(name === q || name.includes(q) || q.includes(name))) continue;
+    const resolved = resolveTipo(suiteQuery);
+    if (resolved && resolved !== entry.name && name !== q) continue;
+    return { key, name: entry.name, kind: "plan", entry };
   }
 
   for (const cat of suiteCategories) {

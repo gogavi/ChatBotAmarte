@@ -570,7 +570,6 @@
       "Suite Zafiro",
       "Plan Amarte",
       "Plan Cabaña",
-      "Plan Cama Movimiento",
       "Plan Cumpleaños",
       "Plan Erótico",
       "Plan Húmedo",
