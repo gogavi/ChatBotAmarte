@@ -107,13 +107,6 @@ const PLAN_SUITE_RULES = Object.freeze([
     exclude: Object.freeze([]),
     suppressPhrases: Object.freeze([]),
   }),
-  Object.freeze({
-    plan: "Plan Cama Movimiento",
-    mode: "only",
-    suites: Object.freeze(["Suite Movimiento"]),
-    exclude: Object.freeze([]),
-    suppressPhrases: Object.freeze([]),
-  }),
 ]);
 
 /**

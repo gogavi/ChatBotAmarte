@@ -1,4 +1,6 @@
 const assert = require("assert");
+const fs = require("fs");
+const path = require("path");
 const {
   resolveTipo,
   resolvePack,
@@ -10,12 +12,24 @@ const {
   isPromoJacuzziBooking,
   isPromoJacuzziQuoteText,
   firstNameUpper,
+  VALID_TIPOS,
 } = require("../reservationService");
 const { payment } = require("../config/amarteCatalog");
 
 assert.strictEqual(resolveTipo("Suite VIP Jacuzzi"), "Suite Jacuzzi");
 assert.strictEqual(resolveTipo("suite diamante"), "Suite Diamante");
 assert.strictEqual(resolveTipo("Plan Húmedo"), "Plan Húmedo");
+assert.strictEqual(resolveTipo("Plan Movimiento"), "Plan Movimiento");
+assert.strictEqual(resolveTipo("Plan Cama Movimiento"), "Plan Movimiento");
+assert.strictEqual(resolveTipo("plan cama con movimiento"), "Plan Movimiento");
+assert.ok(!VALID_TIPOS.includes("Plan Cama Movimiento"));
+assert.ok(VALID_TIPOS.includes("Plan Movimiento"));
+const widgetSource = fs.readFileSync(
+  path.join(__dirname, "../public/amarte-widget.js"),
+  "utf8"
+);
+assert.ok(!widgetSource.includes('"Plan Cama Movimiento"'));
+assert.ok(widgetSource.includes('"Plan Movimiento"'));
 assert.strictEqual(resolveTipo("No existe"), null);
 
 assert.strictEqual(resolvePack("4 h"), "Pack 4 horas");
@@ -56,6 +70,22 @@ if (ok.ok) {
   assert.strictEqual(ok.data.hora_reserva, "14:00");
   assert.strictEqual(ok.data.abono, "120000");
   assert.strictEqual(ok.data.documento, "1234567890");
+}
+
+const cama = validatePendingPayload({
+  nombre: "Ana Pérez",
+  whatsapp: "3001234567",
+  correo: "ana@example.com",
+  documento: "1234567890",
+  tipo: "Plan Cama Movimiento",
+  fecha_reserva: "2026-07-20",
+  hora_reserva: "14:00",
+  pack_tiempo: "Pack 6 horas",
+  precio: "200000",
+});
+assert.strictEqual(cama.ok, true);
+if (cama.ok) {
+  assert.strictEqual(cama.data.tipo, "Plan Movimiento");
 }
 
 const noDoc = validatePendingPayload({

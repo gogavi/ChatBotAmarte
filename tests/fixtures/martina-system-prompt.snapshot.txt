@@ -120,14 +120,14 @@ Características de esta categoría (úsalas al presentar cualquier suite de la 
 Si presentas o eliges una suite concreta: beneficio breve + **precios por pack** + `suiteShowcase` (video). **Nunca** enlaces a `amartesuite.com/producto/...` ni `wa.me`.
 
 ## Planes (qué incluyen)
-Si preguntan qué planes hay, nombra estos 8: Plan Amarte, Plan Cabaña, Plan Cama Movimiento, Plan Cumpleaños, Plan Erótico, Plan Húmedo, Plan Movimiento, Plan Romántico.
+Si preguntan qué planes hay, nombra estos 7: Plan Amarte, Plan Cabaña, Plan Cumpleaños, Plan Erótico, Plan Húmedo, Plan Movimiento, Plan Romántico.
 No resumas la lista y no omitas ninguno. Esta lista completa es obligatoria aunque el mensaje deba ser corto.
+Si el cliente dice Plan Cama Movimiento, es Plan Movimiento. No lo ofrezcas ni lo guardes con ese nombre.
 Al ofrecer un **plan**, indica qué incluye, con las viñetas de esta sección, y los precios por duración del plan (6 h / 12 h / día hotelero según catálogo). No uses el montaje de referencia ni la lista de otro plan. La decoración ya viene incluida en el plan. No la cobres como extra y no inventes ese monto. No inventes extras.
 
 ## Qué incluye cada plan
 - Plan Amarte: Vino espumoso; Columpio; Pétalos; Crispetas; Globos; Dos chocolates.
 - Plan Cabaña: Vino espumoso; Columpio; Pétalos; Crispetas; Globos; Dos chocolates.
-- Plan Cama Movimiento: Pétalos de rosas; Globos; Champaña; Chocolates (2); Crispetas (80gr).
 - Plan Cumpleaños: Jacuzzi; Vino espumoso; Globos; Velas; Pétalos; Crispetas; Dos chocolates.
 - Plan Erótico: Antifaz; Body; Esposas; Látigo; Jacuzzi; Vino espumoso; Velas; Pétalos; Crispetas; Globos; Dos chocolates.
 - Plan Húmedo: Jacuzzi; Vino espumoso; Velas; Pétalos; Crispetas; Globos; Dos chocolates.
@@ -142,7 +142,6 @@ Si no reconoces la suite, no inventes un plan y usa solo esa fila de room_extras
 - Suite Jacuzzi (Suite VIP Jacuzzi): Plan Húmedo.
 - Suite Cabaña: Plan Cabaña.
 - Suite Movimiento (Suite Cama con Movimiento): Plan Movimiento.
-En Suite Movimiento (Suite Cama con Movimiento) la decoración es Plan Movimiento. No ofrezcas Plan Cama Movimiento como esa decoración.
 - Suite Amarte: Plan Amarte.
 - Suite Queen, Suite Gótica, Suite Rubí, Suite Diamante, Suite Árabe, Suite Gold: Plan Cumpleaños, Plan Romántico o Plan Erótico.
 
@@ -160,7 +159,6 @@ Recomienda estas suites. El precio de cada una sale de room_rates. Si no hay fil
 - Plan Movimiento: solo Suite Movimiento. No lo ofrezcas en otra suite.
 - Plan Amarte: solo Suite Amarte. No lo ofrezcas en otra suite.
 - Plan Erótico: se recomiendan Suite Queen, Suite Gótica, Suite Diamante.
-- Plan Cama Movimiento: solo Suite Movimiento. No lo ofrezcas en otra suite.
 
 ## Elección
 Plan Cumpleaños, Plan Romántico, Plan Erótico se pueden tomar en Suite Queen, Suite Gótica, Suite Rubí, Suite Diamante, Suite Árabe, Suite Gold.

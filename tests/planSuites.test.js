@@ -59,9 +59,7 @@ assert.deepStrictEqual(
 assert.ok(!erotico.suites.includes("Suite Árabe"));
 assert.deepStrictEqual([...erotico.exclude], []);
 
-const cama = ruleForPlan("Plan Cama Movimiento");
-assert.strictEqual(cama.mode, "only");
-assert.deepStrictEqual([...cama.suites], ["Suite Movimiento"]);
+assert.strictEqual(ruleForPlan("Plan Cama Movimiento"), null);
 
 const rulesText = formatPlanSuiteRulesForPrompt();
 assert.ok(rulesText.includes("Plan Húmedo"));
@@ -75,7 +73,7 @@ assert.ok(rulesText.includes("Plan Amarte"));
 assert.ok(rulesText.includes("solo Suite Amarte"));
 assert.ok(rulesText.includes("Plan Erótico"));
 assert.ok(rulesText.includes("Suite Queen, Suite Gótica, Suite Diamante"));
-assert.ok(rulesText.includes("Plan Cama Movimiento"));
+assert.ok(!rulesText.includes("Plan Cama Movimiento"));
 assert.ok(rulesText.includes("solo Suite Movimiento"));
 assert.ok(!/\$\s*\d/.test(rulesText));
 assert.ok(!rulesText.includes("120"));
@@ -174,7 +172,7 @@ assert.deepStrictEqual(
 );
 assert.deepStrictEqual(
   landingsAskedInMessage("Plan Cama Movimiento", gamer).map((landing) => landing.id),
-  []
+  landingsAskedInMessage("Plan Movimiento", gamer).map((landing) => landing.id)
 );
 
 const romQueen = landingsAskedInMessage(
@@ -356,10 +354,70 @@ assert.ok(!linked.includes("https://microservicio-suite-sauna-jacuzzi.vercel.app
     date: "2026-10-21",
     duration: "6 horas",
   });
+  assert.strictEqual(camaQuote.suite, "Plan Movimiento");
   assert.strictEqual(camaQuote.suiteAdvice.mode, "only");
   assert.strictEqual(camaQuote.suiteAdvice.suites[0].name, "Suite Movimiento");
   assert.strictEqual(camaQuote.suiteAdvice.suites[0].landingUrl, null);
   assert.strictEqual(camaQuote.suiteAdvice.suites[0].priceCop, null);
+
+  setRoomRatesCacheForTests(
+    new Map([
+      [
+        "Plan Movimiento",
+        {
+          name: "Plan Movimiento",
+          kind: "plan",
+          weekday: { h6: 200000 },
+          weekend: {},
+        },
+      ],
+      [
+        "Plan Cama Movimiento",
+        {
+          name: "Plan Cama Movimiento",
+          kind: "plan",
+          weekday: { h6: 111 },
+          weekend: {},
+        },
+      ],
+    ])
+  );
+  const aliasQuote = await lookupCatalogPrice({
+    suite: "Plan Cama Movimiento",
+    date: "2026-10-21",
+    duration: "6 horas",
+  });
+  assert.strictEqual(aliasQuote.suite, "Plan Movimiento");
+  assert.strictEqual(aliasQuote.priceCop, 200000);
+  assert.strictEqual(aliasQuote.suiteAdvice.suites[0].name, "Suite Movimiento");
+
+  setRoomRatesCacheForTests(
+    new Map([
+      [
+        "Plan Cama Movimiento",
+        {
+          name: "Plan Cama Movimiento",
+          kind: "plan",
+          weekday: { h6: 200000 },
+          weekend: {},
+        },
+      ],
+    ])
+  );
+  const onlyRetired = await lookupCatalogPrice({
+    suite: "Plan Movimiento",
+    date: "2026-10-21",
+    duration: "6 horas",
+  });
+  assert.strictEqual(onlyRetired.suite, "Plan Movimiento");
+  assert.strictEqual(onlyRetired.priceCop, 200000);
+  const onlyRetiredAlias = await lookupCatalogPrice({
+    suite: "plan cama con movimiento",
+    date: "2026-10-21",
+    duration: "6 horas",
+  });
+  assert.strictEqual(onlyRetiredAlias.suite, "Plan Movimiento");
+  assert.strictEqual(onlyRetiredAlias.priceCop, 200000);
 
   setRoomRatesCacheForTests(
     new Map([

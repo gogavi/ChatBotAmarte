@@ -1,5 +1,5 @@
 /**
- * El prompt nombra los 8 planes, copia lo que incluye cada uno y,
+ * El prompt nombra los 7 planes, copia lo que incluye cada uno y,
  * si piden decoración, ofrece primero el plan y después el extra suelto.
  */
 const assert = require("assert");
@@ -22,10 +22,9 @@ const {
   rowsToExtrasMap,
 } = require("../services/roomRatesCatalog");
 
-const EIGHT = [
+const SEVEN = [
   "Plan Amarte",
   "Plan Cabaña",
-  "Plan Cama Movimiento",
   "Plan Cumpleaños",
   "Plan Erótico",
   "Plan Húmedo",
@@ -33,8 +32,9 @@ const EIGHT = [
   "Plan Romántico",
 ];
 
-assert.deepStrictEqual(canonicalPlanNames(), EIGHT);
-assert.strictEqual(new Set(PLAN_SUITE_RULES.map((rule) => rule.plan)).size, 8);
+assert.deepStrictEqual(canonicalPlanNames(), SEVEN);
+assert.strictEqual(new Set(PLAN_SUITE_RULES.map((rule) => rule.plan)).size, 7);
+assert.ok(!SEVEN.includes("Plan Cama Movimiento"));
 
 const prompt = buildMartinaSystemPrompt({
   roomName: "Amarte Suite",
@@ -48,11 +48,17 @@ const plansText = formatPlansForPrompt();
 assert.ok(prompt.includes(plansText));
 assert.ok(
   prompt.includes(
-    `Si preguntan qué planes hay, nombra estos 8: ${EIGHT.join(", ")}.`
+    `Si preguntan qué planes hay, nombra estos 7: ${SEVEN.join(", ")}.`
   )
 );
 assert.ok(prompt.includes("No resumas la lista y no omitas ninguno."));
-for (const name of EIGHT) {
+assert.ok(
+  prompt.includes(
+    "Si el cliente dice Plan Cama Movimiento, es Plan Movimiento. No lo ofrezcas ni lo guardes con ese nombre."
+  )
+);
+assert.ok(!prompt.includes("- Plan Cama Movimiento:"));
+for (const name of SEVEN) {
   assert.ok(prompt.includes(name), name);
 }
 
@@ -72,7 +78,7 @@ function assertLabels(plan, labels) {
   assert.ok(!/sauna/i.test(line), plan);
 }
 
-for (const plan of EIGHT) {
+for (const plan of SEVEN) {
   assertLabels(plan, includesForPlan(plan));
 }
 assert.deepStrictEqual(
@@ -99,10 +105,8 @@ assert.ok(erotico.includes("Body"));
 assert.ok(!erotico.includes("Body en malla"));
 assert.ok(erotico.includes("Esposas"));
 assert.ok(erotico.includes("Látigo"));
-assert.deepStrictEqual(
-  [...includesForPlan("Plan Cama Movimiento")],
-  ["Pétalos de rosas", "Globos", "Champaña", "Chocolates (2)", "Crispetas (80gr)"]
-);
+assert.throws(() => includesForPlan("Plan Cama Movimiento"), /fuera del catálogo/);
+assert.ok(!includesText.includes("Pétalos de rosas"));
 assert.ok(!lineFor("Plan Movimiento").includes("Champaña"));
 assert.ok(!lineFor("Plan Movimiento").toLowerCase().includes("confirma"));
 assert.ok(!/\$\s*\d/.test(includesText));
@@ -140,7 +144,7 @@ assert.ok(decoration.includes("- Suite Cabaña: Plan Cabaña."));
 assert.ok(
   decoration.includes("Suite Movimiento (Suite Cama con Movimiento): Plan Movimiento.")
 );
-assert.ok(decoration.includes("No ofrezcas Plan Cama Movimiento como esa decoración."));
+assert.ok(!decoration.includes("Plan Cama Movimiento"));
 assert.ok(decoration.includes("- Suite Amarte: Plan Amarte."));
 
 const choiceLine = decoration

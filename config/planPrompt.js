@@ -16,7 +16,7 @@ function withoutPlanPrefix(plan) {
 }
 
 /**
- * Los 8 planes, en orden alfabético del nombre sin el prefijo.
+ * Los planes canónicos, en orden alfabético del nombre sin el prefijo.
  * @returns {string[]}
  */
 function canonicalPlanNames() {
@@ -32,6 +32,7 @@ function formatCanonicalPlansForPrompt() {
   return [
     `Si preguntan qué planes hay, nombra estos ${plans.length}: ${plans.join(", ")}.`,
     "No resumas la lista y no omitas ninguno. Esta lista completa es obligatoria aunque el mensaje deba ser corto.",
+    "Si el cliente dice Plan Cama Movimiento, es Plan Movimiento. No lo ofrezcas ni lo guardes con ese nombre.",
   ].join("\n");
 }
 
@@ -55,8 +56,7 @@ function suiteNameTail(suite) {
  * Plan que se ofrece al pedir decoración.
  * El grupo de elección ofrece sus tres planes.
  * Una suite exclusiva usa su plan `only`.
- * Si varios planes `only` comparten suite, queda el que se llama como la suite
- * (Suite Movimiento → Plan Movimiento, no Plan Cama Movimiento).
+ * Si varios planes `only` comparten suite, queda el que se llama como la suite.
  * @returns {Array<{ suites: string[]; plans: string[] }>}
  */
 function exclusivePlansBySuite() {

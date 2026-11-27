@@ -262,7 +262,7 @@ const pricing = {
       name: "Plan Amarte",
     },
     plan_cabana_movimiento: {
-      name: "Plan Cabaña o Plan Cama Movimiento",
+      name: "Plan Cabaña o Plan Movimiento",
     },
     plan_humedo: {
       name: "Plan Húmedo",

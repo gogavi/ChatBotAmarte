@@ -15,14 +15,26 @@ const {
   SAUNA_MENTION_SUITES,
 } = require("../config/saunaMention");
 
-assert.strictEqual(plansNamedInReply("El Plan Cama Movimiento trae crispetas"), null);
+assert.strictEqual(
+  plansNamedInReply("El Plan Cama Movimiento trae crispetas"),
+  "Plan Movimiento"
+);
+assert.deepStrictEqual(planImageForReply("El Plan Cama Movimiento trae crispetas"), {
+  plan: "Plan Movimiento",
+  src: "/plans/plan-movimiento.webp",
+  alt: "Plan Movimiento",
+});
 assert.strictEqual(
   plansNamedInReply("El Plan Movimiento trae columpio"),
   "Plan Movimiento"
 );
 assert.strictEqual(
   plansNamedInReply("Plan Cama Movimiento no es Plan Movimiento"),
-  null
+  "Plan Movimiento"
+);
+assert.strictEqual(
+  plansNamedInReply("El Plan Cama con Movimiento trae columpio"),
+  "Plan Movimiento"
 );
 assert.strictEqual(
   plansNamedInReply("movimiento de la cama"),
@@ -81,11 +93,6 @@ for (const plan of canonicalPlanNames()) {
   const image = planImageForReply(plan);
   for (const label of includesForPlan(plan)) {
     assert.ok(!/sauna/i.test(label), `${plan} ${label}`);
-  }
-  if (plan === "Plan Cama Movimiento") {
-    assert.strictEqual(image, null);
-    assert.ok(!fs.existsSync(path.join(plansDir, "plan-cama-movimiento.webp")));
-    continue;
   }
   assert.ok(image, plan);
   assert.ok(image.src.startsWith("/plans/"));
